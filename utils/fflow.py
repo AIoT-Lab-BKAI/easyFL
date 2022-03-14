@@ -39,8 +39,8 @@ def read_option():
     # machine environment settings
     parser.add_argument('--seed', help='seed for random initialization;', type=int, default=0)
     parser.add_argument('--eval_interval', help='evaluate every __ rounds;', type=int, default=1)
-    parser.add_argument('--num_threads', help="the number of threads in the clients computing session", type=int, default=1)
-
+    parser.add_argument('--num_threads_per_gpu', help="the number of threads per gpu in the clients computing session", type=int, default=1)
+    parser.add_argument('--num_gpus', default=3, type=int)
     # the simulating system settings of clients
     # constructing the heterogeity of the network
     parser.add_argument('--net_drop', help="controlling the dropout of clients after being selected in each communication round according to distribution Beta(drop,1)", type=float, default=0)

@@ -18,7 +18,9 @@ class BasicServer():
         self.model = model
         self.test_data = test_data
         self.eval_interval = option['eval_interval']
-        self.num_threads = option['num_threads']
+        self.gpus = option['num_gpus']
+        self.num_threads = option['num_threads_per_gpu'] * self.gpus
+       
         # clients settings
         self.clients = clients
         self.num_clients = len(self.clients)
@@ -46,7 +48,7 @@ class BasicServer():
         """
         Start the federated learning symtem where the global model is trained iteratively.
         """
-        pool = mp.Pool(9)
+        pool = mp.Pool(self.num_threads)
         logger.time_start('Total Time Cost')
         for round in range(self.num_rounds+1):
             print("--------------Round {}--------------".format(round))
@@ -127,7 +129,7 @@ class BasicServer():
         """
         
         gpu_id = int(mp.current_process().name[-1]) - 1
-        gpu_id = gpu_id % 3
+        gpu_id = gpu_id % self.gpus
         # print(gpu_id)
         # dist.init_process_group(
         # backend='nccl',
