@@ -46,7 +46,7 @@ class BasicServer():
         """
         Start the federated learning symtem where the global model is trained iteratively.
         """
-        pool = mp.Pool(3)
+        pool = mp.Pool(9)
         logger.time_start('Total Time Cost')
         for round in range(self.num_rounds+1):
             print("--------------Round {}--------------".format(round))
@@ -127,6 +127,7 @@ class BasicServer():
         """
         
         gpu_id = int(mp.current_process().name[-1]) - 1
+        gpu_id = gpu_id % 3
         # print(gpu_id)
         # dist.init_process_group(
         # backend='nccl',
