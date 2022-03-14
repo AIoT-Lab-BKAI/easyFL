@@ -15,7 +15,7 @@ imbalance:
     iid:            6 Vol: only the vol of local dataset varies.
     niid:           7 Vol: for generating synthetic data
 """
-
+import torch
 import ujson
 import numpy as np
 import os.path
@@ -369,12 +369,12 @@ class BasicTaskCalculator:
         raise NotImplementedError
 
     def get_optimizer(self, name="sgd", model=None, lr=0.1, weight_decay=0, momentum=0):
-        if self._OPTIM == None:
-            raise RuntimeError("TaskCalculator._OPTIM Not Initialized.")
+        # if self._OPTIM == None:
+        #     raise RuntimeError("TaskCalculator._OPTIM Not Initialized.")
         if name.lower() == 'sgd':
-            return self._OPTIM(model.parameters(), lr=lr, momentum=momentum, weight_decay=weight_decay)
+            return torch.optim.SGD(model.parameters(), lr=lr, momentum=momentum, weight_decay=weight_decay)
         elif name.lower() == 'adam':
-            return self._OPTIM(filter(lambda p: p.requires_grad, model.parameters()), lr=lr, weight_decay=weight_decay, amsgrad=True)
+            return torch.optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=lr, weight_decay=weight_decay, amsgrad=True)
         else:
             raise RuntimeError("Invalid Optimizer.")
 
@@ -388,8 +388,8 @@ class ClassifyCalculator(BasicTaskCalculator):
         self.lossfunc = torch.nn.CrossEntropyLoss()
         self.DataLoader = DataLoader
 
-    def get_loss(self, model, data):
-        tdata = self.data_to_device(data)
+    def get_loss(self, model, data,device):
+        tdata = self.data_to_device(data,device)
         outputs = model(tdata[0])
         loss = self.lossfunc(outputs, tdata[1])
         return loss
@@ -403,17 +403,17 @@ class ClassifyCalculator(BasicTaskCalculator):
         return (1.0 * correct / len(tdata[1])).item()
 
     @torch.no_grad()
-    def test(self, model, data):
+    def test(self, model, data,device):
         """Metric = Accuracy"""
-        tdata = self.data_to_device(data)
+        tdata = self.data_to_device(data,device)
         outputs = model(tdata[0])
         loss = self.lossfunc(outputs, tdata[-1])
         y_pred = outputs.data.max(1, keepdim=True)[1]
         correct = y_pred.eq(tdata[1].data.view_as(y_pred)).long().cpu().sum()
         return (1.0 * correct / len(tdata[1])).item(), loss.item()
 
-    def data_to_device(self, data):
-        return data[0].to(self.device), data[1].to(self.device)
+    def data_to_device(self, data,device):
+        return data[0].to(device), data[1].to(device)
 
     def get_data_loader(self, dataset, batch_size=64, shuffle=True):
         if self.DataLoader == None:

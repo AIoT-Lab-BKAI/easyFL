@@ -1,3 +1,4 @@
+from builtins import breakpoint
 import numpy as np
 from utils import fmodule
 import copy
@@ -5,7 +6,10 @@ from multiprocessing import Pool as ThreadPool
 from main import logger
 import os
 import utils.fflow as flw
-
+import torch.distributed as dist
+import torch.multiprocessing as mp
+import torch
+import time
 class BasicServer():
     def __init__(self, option, model, clients, test_data = None):
         # basic setting
@@ -88,23 +92,25 @@ class BasicServer():
             :the unpacked response from clients that is created ny self.unpack()
         """
         packages_received_from_clients = []
-        if self.num_threads <= 1:
-            # computing iteratively
-            for client_id in selected_clients:
-                response_from_client_id = self.communicate_with(client_id)
-                packages_received_from_clients.append(response_from_client_id)
-        else:
-            # computing in parallel
-            pool = ThreadPool(min(self.num_threads, len(selected_clients)))
-            packages_received_from_clients = pool.map(self.communicate_with, selected_clients)
-            pool.close()
-            pool.join()
+        process = [mp.spawn(self.communicate_with, nprocs=3, args=(client_id,)) for client_id in selected_clients]
+        # if self.num_threads <= 1:
+        #     # computing iteratively
+        #     for client_id in selected_clients:
+        #         response_from_client_id = self.communicate_with(client_id)
+        #         packages_received_from_clients.append(response_from_client_id)
+        # else:
+        #     # computing in parallel
+        #     pool = ThreadPool(min(self.num_threads, len(selected_clients)))
+        #     packages_received_from_clients = pool.map(self.communicate_with, selected_clients)
+        #     pool.close()
+        #     pool.join()
         # count the clients not dropping
+        breakpoint()
         self.selected_clients = [selected_clients[i] for i in range(len(selected_clients)) if packages_received_from_clients[i]]
         packages_received_from_clients = [pi for pi in packages_received_from_clients if pi]
         return self.unpack(packages_received_from_clients)
 
-    def communicate_with(self, client_id):
+    def communicate_with(self,gpu_id,client_id):
         """
         Pack the information that is needed for client_id to improve the global model
         :param
@@ -112,11 +118,21 @@ class BasicServer():
         :return
             client_package: the reply from the client and will be 'None' if losing connection
         """
+        dist.init_process_group(
+        backend='nccl',
+        init_method='env://',
+        world_size=3,
+        rank=gpu_id
+        )
+        torch.manual_seed(0)
+        torch.cuda.set_device(gpu_id)
+        print(gpu_id)
+        device = torch.device('cuda')
         # package the necessary information
         svr_pkg = self.pack(client_id)
         # listen for the client's response and return None if the client drops out
         if self.clients[client_id].is_drop(): return None
-        return self.clients[client_id].reply(svr_pkg)
+        return self.clients[client_id].reply(svr_pkg,device)
 
     def pack(self, client_id):
         """
@@ -287,25 +303,27 @@ class BasicClient():
         self.drop_rate = 0 if option['net_drop']<0.01 else np.random.beta(option['net_drop'], 1, 1).item()
         self.active_rate = 1 if option['net_active']>99998 else np.random.beta(option['net_active'], 1, 1).item()
 
-    def train(self, model):
+    def train(self, model,device):
         """
         Standard local training procedure. Train the transmitted model with local training dataset.
         :param
             model: the global model
         :return
         """
+        model = model.to(device)
         model.train()
+        
         data_loader = self.calculator.get_data_loader(self.train_data, batch_size=self.batch_size)
         optimizer = self.calculator.get_optimizer(self.optimizer_name, model, lr = self.learning_rate, weight_decay=self.weight_decay, momentum=self.momentum)
         for iter in range(self.epochs):
             for batch_id, batch_data in enumerate(data_loader):
                 model.zero_grad()
-                loss = self.calculator.get_loss(model, batch_data)
+                loss = self.calculator.get_loss(model, batch_data,device)
                 loss.backward()
                 optimizer.step()
         return
 
-    def test(self, model, dataflag='valid'):
+    def test(self, model, dataflag='valid',device='cpu'):
         """
         Evaluate the model with local data (e.g. training data or validating data).
         :param
@@ -316,12 +334,13 @@ class BasicClient():
             loss: task specified loss
         """
         dataset = self.train_data if dataflag=='train' else self.valid_data
+        model = model.to(device)
         model.eval()
         loss = 0
         eval_metric = 0
         data_loader = self.calculator.get_data_loader(dataset, batch_size=64)
         for batch_id, batch_data in enumerate(data_loader):
-            bmean_eval_metric, bmean_loss = self.calculator.test(model, batch_data)
+            bmean_eval_metric, bmean_loss = self.calculator.test(model, batch_data,device)
             loss += bmean_loss * len(batch_data[1])
             eval_metric += bmean_eval_metric * len(batch_data[1])
         eval_metric =1.0 * eval_metric / len(dataset)
@@ -339,7 +358,7 @@ class BasicClient():
         # unpack the received package
         return received_pkg['model']
 
-    def reply(self, svr_pkg):
+    def reply(self, svr_pkg,device):
         """
         Reply to server with the transmitted package.
         The whole local procedure should be planned here.
@@ -353,8 +372,8 @@ class BasicClient():
             client_pkg: the package to be send to the server
         """
         model = self.unpack(svr_pkg)
-        loss = self.train_loss(model)
-        self.train(model)
+        loss = self.train_loss(model,device)
+        self.train(model,device)
         cpkg = self.pack(model, loss)
         return cpkg
 
@@ -393,13 +412,13 @@ class BasicClient():
         if self.drop_rate==0: return False
         else: return (np.random.rand() < self.drop_rate)
 
-    def train_loss(self, model):
+    def train_loss(self, model,device):
         """
         Get the task specified loss of the model on local training data
         :param model:
         :return:
         """
-        return self.test(model,'train')[1]
+        return self.test(model,'train',device)[1]
 
     def valid_loss(self, model):
         """

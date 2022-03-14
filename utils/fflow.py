@@ -38,7 +38,6 @@ def read_option():
 
     # machine environment settings
     parser.add_argument('--seed', help='seed for random initialization;', type=int, default=0)
-    parser.add_argument('--gpu', help='GPU ID, -1 for CPU', type=int, default=-1)
     parser.add_argument('--eval_interval', help='evaluate every __ rounds;', type=int, default=1)
     parser.add_argument('--num_threads', help="the number of threads in the clients computing session", type=int, default=1)
 
@@ -77,7 +76,7 @@ def initialize(option):
     bmk_name = option['task'][:option['task'].find('cnum')-1].lower()
     bmk_model_path = '.'.join(['benchmark', bmk_name, 'model', option['model']])
     bmk_core_path = '.'.join(['benchmark', bmk_name, 'core'])
-    utils.fmodule.device = torch.device('cuda:{}'.format(option['gpu']) if torch.cuda.is_available() and option['gpu'] != -1 else 'cpu')
+    # utils.fmodule.device = torch.device('cuda:{}'.format(option['gpu']) if torch.cuda.is_available() and option['gpu'] != -1 else 'cpu')
     utils.fmodule.TaskCalculator = getattr(importlib.import_module(bmk_core_path), 'TaskCalculator')
     utils.fmodule.TaskCalculator.setOP(getattr(importlib.import_module('torch.optim'), option['optimizer']))
     utils.fmodule.Model = getattr(importlib.import_module(bmk_model_path), 'Model')

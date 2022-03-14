@@ -34,12 +34,16 @@ class MyLogger(flw.Logger):
         print(self.temp.format("Validating Accuracy:", self.output['mean_valid_accs'][-1]))
         print(self.temp.format("Mean of Client Accuracy:", self.output['mean_curve'][-1]))
         print(self.temp.format("Std of Client Accuracy:", self.output['var_curve'][-1]))
-
+import os
 logger = MyLogger()
-
+import multiprocessing
 def main():
+    multiprocessing.set_start_method('spawn')
     # read options
     option = flw.read_option()
+    os.environ['MASTER_ADDR'] = "localhost"
+    os.environ['MASTER_PORT'] = '8888'
+    os.environ['WORLD_SIZE'] = str(3)
     # set random seed
     flw.setup_seed(option['seed'])
     # initialize server
