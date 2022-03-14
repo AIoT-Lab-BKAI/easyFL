@@ -406,6 +406,7 @@ class ClassifyCalculator(BasicTaskCalculator):
     def test(self, model, data,device):
         """Metric = Accuracy"""
         tdata = self.data_to_device(data,device)
+        model = model.to(device)
         outputs = model(tdata[0])
         loss = self.lossfunc(outputs, tdata[-1])
         y_pred = outputs.data.max(1, keepdim=True)[1]

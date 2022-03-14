@@ -46,13 +46,14 @@ class BasicServer():
         """
         Start the federated learning symtem where the global model is trained iteratively.
         """
+        pool = mp.Pool(3)
         logger.time_start('Total Time Cost')
         for round in range(self.num_rounds+1):
             print("--------------Round {}--------------".format(round))
             logger.time_start('Time Cost')
 
             # federated train
-            self.iterate(round)
+            self.iterate(round,pool)
             # decay learning rate
             self.global_lr_scheduler(round)
 
@@ -65,7 +66,7 @@ class BasicServer():
         logger.save(os.path.join('fedtask', self.option['task'], 'record', flw.output_filename(self.option, self)))
 
 
-    def iterate(self, t):
+    def iterate(self, t,pool):
         """
         The standard iteration of each federated round that contains three
         necessary procedure in FL: client selection, communication and model aggregation.
@@ -75,14 +76,16 @@ class BasicServer():
         # sample clients: MD sampling as default but with replacement=False
         self.selected_clients = self.sample()
         # training
-        models, train_losses = self.communicate(self.selected_clients)
+        models, train_losses = self.communicate(self.selected_clients,pool)
         # check whether all the clients have dropped out, because the dropped clients will be deleted from self.selected_clients
         if not self.selected_clients: return
         # aggregate: pk = 1/K as default where K=len(selected_clients)
+        device0 = torch.device("cuda:0")
+        models = [i.to(device0) for i in models]
         self.model = self.aggregate(models, p = [1.0 * self.client_vols[cid]/self.data_vol for cid in self.selected_clients])
         return
 
-    def communicate(self, selected_clients):
+    def communicate(self, selected_clients,pool):
         """
         The whole simulating communication procedure with the selected clients.
         This part supports for simulating the client dropping out.
@@ -92,7 +95,10 @@ class BasicServer():
             :the unpacked response from clients that is created ny self.unpack()
         """
         packages_received_from_clients = []
-        process = [mp.spawn(self.communicate_with, nprocs=3, args=(client_id,)) for client_id in selected_clients]
+        
+        # process = [mp.spawn(self.communicate_with, nprocs=3, args=(client_id,)) for client_id in selected_clients]
+        
+        packages_received_from_clients = pool.map(self.communicate_with, selected_clients)
         # if self.num_threads <= 1:
         #     # computing iteratively
         #     for client_id in selected_clients:
@@ -105,12 +111,13 @@ class BasicServer():
         #     pool.close()
         #     pool.join()
         # count the clients not dropping
-        breakpoint()
+        # breakpoint()
         self.selected_clients = [selected_clients[i] for i in range(len(selected_clients)) if packages_received_from_clients[i]]
+        
         packages_received_from_clients = [pi for pi in packages_received_from_clients if pi]
         return self.unpack(packages_received_from_clients)
 
-    def communicate_with(self,gpu_id,client_id):
+    def communicate_with(self,client_id):
         """
         Pack the information that is needed for client_id to improve the global model
         :param
@@ -118,15 +125,17 @@ class BasicServer():
         :return
             client_package: the reply from the client and will be 'None' if losing connection
         """
-        dist.init_process_group(
-        backend='nccl',
-        init_method='env://',
-        world_size=3,
-        rank=gpu_id
-        )
+        
+        gpu_id = int(mp.current_process().name[-1]) - 1
+        # print(gpu_id)
+        # dist.init_process_group(
+        # backend='nccl',
+        # init_method='env://',
+        # world_size=3,
+        # rank=gpu_id
+        # )
         torch.manual_seed(0)
         torch.cuda.set_device(gpu_id)
-        print(gpu_id)
         device = torch.device('cuda')
         # package the necessary information
         svr_pkg = self.pack(client_id)
@@ -256,7 +265,7 @@ class BasicServer():
             losses.append(loss)
         return evals, losses
 
-    def test(self, model=None):
+    def test(self, model=None,device=None):
         """
         Evaluate the model on the test dataset owned by the server.
         :param
@@ -271,7 +280,7 @@ class BasicServer():
             eval_metric = 0
             data_loader = self.calculator.get_data_loader(self.test_data, batch_size=64)
             for batch_id, batch_data in enumerate(data_loader):
-                bmean_eval_metric, bmean_loss = self.calculator.test(model, batch_data)
+                bmean_eval_metric, bmean_loss = self.calculator.test(model, batch_data,device)
                 loss += bmean_loss * len(batch_data[1])
                 eval_metric += bmean_eval_metric * len(batch_data[1])
             eval_metric /= len(self.test_data)

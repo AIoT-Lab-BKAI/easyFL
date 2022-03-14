@@ -1,6 +1,6 @@
 import utils.fflow as flw
 import numpy as np
-
+import torch
 class MyLogger(flw.Logger):
     def log(self, server=None):
         if server==None: return
@@ -16,7 +16,7 @@ class MyLogger(flw.Logger):
                 "client_accs":{},
                 "mean_valid_accs":[],
             }
-        test_metric, test_loss = server.test()
+        test_metric, test_loss = server.test(device= torch.device('cuda:0'))
         valid_metrics, valid_losses = server.test_on_clients(self.current_round, 'valid')
         train_metrics, train_losses = server.test_on_clients(self.current_round, 'train')
         self.output['train_losses'].append(1.0*sum([ck * closs for ck, closs in zip(server.client_vols, train_losses)])/server.data_vol)
