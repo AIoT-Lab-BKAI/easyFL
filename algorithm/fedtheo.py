@@ -23,10 +23,6 @@ class Server(BasicServer):
         super(Server, self).__init__(option, model, clients, test_data)
         self.optim_ratio = None
     
-    def run(self):
-        super().run()
-        return
-    
     def unpack(self, packages_received_from_clients):
         models = [cp["model"] for cp in packages_received_from_clients]
         insights = [cp["insight"] for cp in packages_received_from_clients]
@@ -39,6 +35,9 @@ class Server(BasicServer):
 
         if self.optim_ratio is None:
             self.optim_ratio = self.process_insight(insights)
+            
+        device0 = torch.device(f"cuda:{self.server_gpu_id}")
+        models = [i.to(device0) for i in models]
         self.model = self.aggregate(models, p = self.optim_ratio)
         return
     
@@ -85,10 +84,10 @@ class Client(BasicClient):
         super(Client, self).__init__(option, name, train_data, valid_data)
         self.insight = None
 
-    def reply(self, svr_pkg):
+    def reply(self, svr_pkg, device):
         model = self.unpack(svr_pkg)
-        loss = self.train_loss(model)
-        self.train(model)
+        loss = self.train_loss(model, device)
+        self.train(model, device)
 
         if self.insight is None:
             self.insight = self.get_insight()

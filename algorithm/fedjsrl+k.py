@@ -4,6 +4,8 @@ from utils import fmodule
 from algorithm.fedrl_utils.ddpg_agent.ddpg import DDPG_Agent
 from datetime import datetime
 
+import torch
+
 
 class Server(BasicServer):
     def __init__(self, option, model, clients, test_data=None):
@@ -18,7 +20,8 @@ class Server(BasicServer):
         self.buff_file = dt_string
 
         self.prev_reward = None
-        self.warmup_length = 20
+        self.warmup_length = 50
+        self.last_acc = 0
 
 
     def unpack(self, packages_received_from_clients):
@@ -30,9 +33,9 @@ class Server(BasicServer):
         return models, train_losses
 
 
-    def iterate(self, t):
+    def iterate(self, t, pool):
         self.selected_clients = self.sample()
-        models, train_losses = self.communicate(self.selected_clients)
+        models, train_losses = self.communicate(self.selected_clients,pool)
         if not self.selected_clients:
             return
 
@@ -40,12 +43,16 @@ class Server(BasicServer):
             "done": 0,
             "models": models
         }
+        
+        device0 = torch.device(f"cuda:{self.server_gpu_id}")
+        models = [i.to(device0) for i in models]
 
         if t > self.warmup_length:
             priority = self.ddpg_agent.get_action(observation, prev_reward=self.prev_reward).tolist()
             self.model = self.aggregate(models, p=priority)
             fedrl_test_acc, _ = self.test(model=self.model)
-            self.prev_reward = fedrl_test_acc
+            self.prev_reward = fedrl_test_acc - self.last_acc
+            self.last_acc = self.prev_reward
         else:
             self.model = self.aggregate(models, p = [1.0 * self.client_vols[cid]/self.data_vol for cid in self.selected_clients])
         
@@ -67,16 +74,3 @@ class Server(BasicServer):
 class Client(BasicClient):
     def __init__(self, option, name='', train_data=None, valid_data=None):
         super(Client, self).__init__(option, name, train_data, valid_data)
-
-    def pack(self, model, loss):
-        return {
-            "model" : model,
-            "train_loss": loss
-        }
-
-    def reply(self, svr_pkg):
-        model = self.unpack(svr_pkg)
-        loss = self.train_loss(model)
-        self.train(model)
-        cpkg = self.pack(model, loss)
-        return cpkg

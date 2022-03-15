@@ -1,5 +1,6 @@
 from algorithm.fedbase import BasicServer, BasicClient
 from utils import fmodule
+import torch.multiprocessing as mp
 import torch
 import copy
 
@@ -24,13 +25,22 @@ class Server(BasicServer):
         self.rival_list = None
         self.rival_thr = 0.3
         self.model_list = None
+        self.server_gpu_id = 1
         
     
     def communicate_with(self, client_id):
+        gpu_id = int(mp.current_process().name[-1]) - 1
+        gpu_id = gpu_id % self.gpus
+
+        torch.manual_seed(0)
+        torch.cuda.set_device(gpu_id)
+        device = torch.device(f'cuda:{self.server_gpu_id}')
+        
+        # package the necessary information
         svr_pkg = self.pack(client_id)
-        if self.clients[client_id].is_drop(): 
-            return None
-        return self.clients[client_id].reply(svr_pkg)
+        # listen for the client's response and return None if the client drops out
+        if self.clients[client_id].is_drop(): return None
+        return self.clients[client_id].reply(svr_pkg, device)
     
     
     def pack(self, client_id):
@@ -40,15 +50,18 @@ class Server(BasicServer):
         }
 
     
-    def iterate(self, t):
+    def iterate(self, t, pool):
         self.selected_clients = self.sample()
-        self.model_list, train_losses = self.communicate(self.selected_clients)
+        self.model_list, train_losses = self.communicate(self.selected_clients, pool)
         
         self.create_rival_list(self.model_list)
         self.rival_thr = max(self.rival_thr * 1.15, 0.85)
         
         if not self.selected_clients:
             return
+        
+        device0 = torch.device(f"cuda:{self.server_gpu_id}")
+        self.model_list = [i.to(device0) for i in self.model_list]
         self.model = self.aggregate(self.model_list, p = [1.0 * self.client_vols[cid]/self.data_vol for cid in self.selected_clients])
         return
 
@@ -66,6 +79,8 @@ class Server(BasicServer):
         
         Note: this threshold must be somewhat decayable
         """
+        device0 = torch.device("cpu")
+        model_list = [i.to(device0) for i in model_list]
         models = []
         for model in model_list:
             for p, q in zip(model.parameters(), self.model.parameters()):
@@ -104,16 +119,18 @@ class Client(BasicClient):
         return received_pkg['model'], received_pkg['rival_models']
 
 
-    def reply(self, svr_pkg):
+    def reply(self, svr_pkg, device):
         model, rival_list = self.unpack(svr_pkg)
-        loss = self.train_loss(model)
-        self.train(model, rival_list)
+        loss = self.train_loss(model, device)
+        self.train(model, device, rival_list)
         cpkg = self.pack(model, loss)
         return cpkg
 
 
-    def train(self, model, rival_list):
+    def train(self, model, device, rival_list):
+        model = model.to(device)
         model.train()
+        
         data_loader = self.calculator.get_data_loader(self.train_data, batch_size=self.batch_size)
         optimizer = self.calculator.get_optimizer(self.optimizer_name, model, lr = self.learning_rate, weight_decay=self.weight_decay, momentum=self.momentum)
         for iter in range(self.epochs):
@@ -125,9 +142,9 @@ class Client(BasicClient):
                     for pm, ps in zip(model.parameters(), rival.parameters()):
                         divergence_loss += torch.sum(torch.pow(pm-ps,2))
                 if len(rival_list) > 0:
-                    loss = self.calculator.get_loss(model, batch_data) + 0.005 * 1 / len(rival_list) * divergence_loss
+                    loss = self.calculator.get_loss(model, batch_data, device) + 0.005 * 1 / len(rival_list) * divergence_loss
                 else:
-                    loss = self.calculator.get_loss(model, batch_data)
+                    loss = self.calculator.get_loss(model, batch_data, device)
                 loss.backward()
                 optimizer.step()
         return
