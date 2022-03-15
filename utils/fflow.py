@@ -58,6 +58,10 @@ def read_option():
     parser.add_argument('--beta', help='beta in FedFA',type=float, default='1.0')
     parser.add_argument('--gamma', help='gamma in FedFA', type=float, default='0')
     parser.add_argument('--mu', help='mu in fedprox', type=float, default='0.1')
+    
+    # server gpu
+    parser.add_argument('--server_gpu_id', help='server process on this gpu', type=int, default=0)
+    
     try: option = vars(parser.parse_args())
     except IOError as msg: parser.error(str(msg))
     return option
