@@ -1,5 +1,8 @@
 /__pycache__/
 */__pycache__/
 /algorithm/fedrl_utils/ddpg_agent/__pycache__/
+/algorithm/fedrl_utils/buffers
 /benchmark/
 /fedtask/
+.vscode*
+/utils/figures/

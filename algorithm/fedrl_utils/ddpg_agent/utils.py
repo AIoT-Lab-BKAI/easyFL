@@ -5,7 +5,9 @@ import numpy as np
 from datetime import datetime
 import torch
 import os
+from sklearn.manifold import MDS
 
+mds = MDS(n_components=10)
 
 def plot(frame_idx, rewards):
     now = datetime.now()
@@ -21,12 +23,19 @@ def plot(frame_idx, rewards):
     plt.show()
 
 
-def get_state(losses, n_samples, n_epochs):
-    # print("Losses: ", len(losses), losses)
-    # print("N_samples: ", len(n_samples), n_samples)
-    # print("N_epochs: ", len(n_epochs), n_epochs)
+def get_state(models):
+    
+    last_layers = []
+    for model in models:
+        last_layers.append(torch.flatten(list(model.parameters())[-2]).detach().cpu())
+    
+    retval = torch.vstack(last_layers)
+    retval = retval.view(len(models), -1)
+    
+    retval = mds.fit_transform(retval)
+    
+    retval = torch.from_numpy(retval).double()
 
-    retval = torch.Tensor(losses + n_samples + n_epochs).double()
     return retval.flatten()
 
 
