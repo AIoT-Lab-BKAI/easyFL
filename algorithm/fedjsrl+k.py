@@ -52,17 +52,11 @@ class Server(BasicServer):
             self.model = self.aggregate(models, p=priority)
             fedrl_test_acc, _ = self.test(model=self.model, device=device0)
             self.prev_reward = fedrl_test_acc - self.last_acc
-            self.last_acc = self.prev_reward
+            self.last_acc = fedrl_test_acc
         else:
             self.model = self.aggregate(models, p = [1.0 * self.client_vols[cid]/self.data_vol for cid in self.selected_clients])
         
         models.clear()
-        return
-
-    
-    def run(self):
-        super().run()
-        # self.ddpg_agent.dump_buffer(f"algorithm/fedrl_utils/buffers/{self.buff_folder}", self.buff_file)
         return
     
     
