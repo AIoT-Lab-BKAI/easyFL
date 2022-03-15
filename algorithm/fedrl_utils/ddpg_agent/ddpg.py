@@ -29,11 +29,12 @@ class DDPG_Agent(nn.Module):
         log_dir="./log/epochs",
         gamma = 0.99,
         soft_tau = 2e-2,
+        gpu_id = 0
     ):
         super(DDPG_Agent, self).__init__()
         self.gamma = gamma
         self.soft_tau = soft_tau
-        self.device = torch.device("cuda:3" if torch.cuda.is_available() else "cpu")
+        self.device = torch.device(f"cuda:{gpu_id}" if torch.cuda.is_available() else "cpu")
 
         print("\nInit State dim", state_dim)    # K x K
         print("Init Action dim", action_dim)    # K x 3

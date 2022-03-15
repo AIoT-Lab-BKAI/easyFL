@@ -265,7 +265,7 @@ class BasicServer():
             eval_metric = 0
             data_loader = self.calculator.get_data_loader(self.test_data, batch_size=64)
             for batch_id, batch_data in enumerate(data_loader):
-                bmean_eval_metric, bmean_loss = self.calculator.test(model, batch_data,device)
+                bmean_eval_metric, bmean_loss = self.calculator.test(model, batch_data, device)
                 loss += bmean_loss * len(batch_data[1])
                 eval_metric += bmean_eval_metric * len(batch_data[1])
             eval_metric /= len(self.test_data)

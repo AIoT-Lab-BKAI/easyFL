@@ -12,7 +12,7 @@ class Server(BasicServer):
         super(Server, self).__init__(option, model, clients, test_data)
         K = self.clients_per_round
         
-        self.ddpg_agent = DDPG_Agent(state_dim= K * K, action_dim= K * 3, hidden_dim=256)
+        self.ddpg_agent = DDPG_Agent(state_dim= K * K, action_dim= K * 3, hidden_dim=256, gpu_id=self.server_gpu_id)
         self.buff_folder = f"state{K * K * 3}-action{K*3}"
 
         now = datetime.now()
@@ -50,18 +50,19 @@ class Server(BasicServer):
         if t > self.warmup_length:
             priority = self.ddpg_agent.get_action(observation, prev_reward=self.prev_reward).tolist()
             self.model = self.aggregate(models, p=priority)
-            fedrl_test_acc, _ = self.test(model=self.model)
+            fedrl_test_acc, _ = self.test(model=self.model, device=device0)
             self.prev_reward = fedrl_test_acc - self.last_acc
             self.last_acc = self.prev_reward
         else:
             self.model = self.aggregate(models, p = [1.0 * self.client_vols[cid]/self.data_vol for cid in self.selected_clients])
         
+        models.clear()
         return
 
     
     def run(self):
         super().run()
-        self.ddpg_agent.dump_buffer(f"algorithm/fedrl_utils/buffers/{self.buff_folder}", self.buff_file)
+        # self.ddpg_agent.dump_buffer(f"algorithm/fedrl_utils/buffers/{self.buff_folder}", self.buff_file)
         return
     
     
