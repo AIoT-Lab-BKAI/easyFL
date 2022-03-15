@@ -28,9 +28,9 @@ class Server(BasicServer):
         insights = [cp["insight"] for cp in packages_received_from_clients]
         return models, insights
 
-    def iterate(self, t):
+    def iterate(self, t, pool):
         self.selected_clients = self.sample()
-        models, insights = self.communicate(self.selected_clients)
+        models, insights = self.communicate(self.selected_clients, pool)
         if not self.selected_clients: return
 
         if self.optim_ratio is None:
@@ -48,7 +48,7 @@ class Server(BasicServer):
 
     def process_insight(self, insights):
         sample_distribution_array = converge_to_array(insights)
-        print(sample_distribution_array)
+        # print(sample_distribution_array)
 
         def f(w):
             e = np.exp(w)/ np.sum(np.exp(w))

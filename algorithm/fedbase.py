@@ -119,7 +119,7 @@ class BasicServer():
 
         torch.manual_seed(0)
         torch.cuda.set_device(gpu_id)
-        device = torch.device(f'cuda{self.server_gpu_id}')
+        device = torch.device('cuda') # This is only 'cuda' so its can find the propriate cuda id to train
         # package the necessary information
         svr_pkg = self.pack(client_id)
         # listen for the client's response and return None if the client drops out
