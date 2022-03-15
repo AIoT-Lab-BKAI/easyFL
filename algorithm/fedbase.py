@@ -43,6 +43,9 @@ class BasicServer():
         self.option = option
         # server calculator
         self.calculator = fmodule.TaskCalculator(fmodule.device)
+        
+        # server gpu
+        self.server_gpu_id = option['server_gpu_id']
 
     def run(self):
         """
@@ -55,7 +58,7 @@ class BasicServer():
             logger.time_start('Time Cost')
 
             # federated train
-            self.iterate(round,pool)
+            self.iterate(round, pool)
             # decay learning rate
             self.global_lr_scheduler(round)
 
@@ -67,7 +70,7 @@ class BasicServer():
         # save results as .json file
         logger.save(os.path.join('fedtask', self.option['task'], 'record', flw.output_filename(self.option, self)))
 
-    def iterate(self, t,pool):
+    def iterate(self, t, pool):
         """
         The standard iteration of each federated round that contains three
         necessary procedure in FL: client selection, communication and model aggregation.
@@ -81,12 +84,12 @@ class BasicServer():
         # check whether all the clients have dropped out, because the dropped clients will be deleted from self.selected_clients
         if not self.selected_clients: return
         # aggregate: pk = 1/K as default where K=len(selected_clients)
-        device0 = torch.device("cuda:0")
+        device0 = torch.device(f"cuda:{self.server_gpu_id}")
         models = [i.to(device0) for i in models]
         self.model = self.aggregate(models, p = [1.0 * self.client_vols[cid]/self.data_vol for cid in self.selected_clients])
         return
 
-    def communicate(self, selected_clients,pool):
+    def communicate(self, selected_clients, pool):
         """
         The whole simulating communication procedure with the selected clients.
         This part supports for simulating the client dropping out.
@@ -95,30 +98,14 @@ class BasicServer():
         :return
             :the unpacked response from clients that is created ny self.unpack()
         """
-        packages_received_from_clients = []
-        
-        # process = [mp.spawn(self.communicate_with, nprocs=3, args=(client_id,)) for client_id in selected_clients]
-        
+        packages_received_from_clients = []        
         packages_received_from_clients = pool.map(self.communicate_with, selected_clients)
-        # if self.num_threads <= 1:
-        #     # computing iteratively
-        #     for client_id in selected_clients:
-        #         response_from_client_id = self.communicate_with(client_id)
-        #         packages_received_from_clients.append(response_from_client_id)
-        # else:
-        #     # computing in parallel
-        #     pool = ThreadPool(min(self.num_threads, len(selected_clients)))
-        #     packages_received_from_clients = pool.map(self.communicate_with, selected_clients)
-        #     pool.close()
-        #     pool.join()
-        # count the clients not dropping
-        # breakpoint()
         self.selected_clients = [selected_clients[i] for i in range(len(selected_clients)) if packages_received_from_clients[i]]
         
         packages_received_from_clients = [pi for pi in packages_received_from_clients if pi]
         return self.unpack(packages_received_from_clients)
 
-    def communicate_with(self,client_id):
+    def communicate_with(self, client_id):
         """
         Pack the information that is needed for client_id to improve the global model
         :param
@@ -129,21 +116,15 @@ class BasicServer():
         
         gpu_id = int(mp.current_process().name[-1]) - 1
         gpu_id = gpu_id % self.gpus
-        # print(gpu_id)
-        # dist.init_process_group(
-        # backend='nccl',
-        # init_method='env://',
-        # world_size=3,
-        # rank=gpu_id
-        # )
+
         torch.manual_seed(0)
         torch.cuda.set_device(gpu_id)
-        device = torch.device('cuda')
+        device = torch.device(f'cuda{self.server_gpu_id}')
         # package the necessary information
         svr_pkg = self.pack(client_id)
         # listen for the client's response and return None if the client drops out
         if self.clients[client_id].is_drop(): return None
-        return self.clients[client_id].reply(svr_pkg,device)
+        return self.clients[client_id].reply(svr_pkg, device)
 
     def pack(self, client_id):
         """
@@ -268,7 +249,7 @@ class BasicServer():
             losses.append(loss)
         return evals, losses
 
-    def test(self, model=None,device=None):
+    def test(self, model=None, device=None):
         """
         Evaluate the model on the test dataset owned by the server.
         :param
@@ -276,7 +257,8 @@ class BasicServer():
         :return:
             the metric and loss of the model on the test data
         """
-        if model==None: model=self.model
+        if model==None: 
+            model=self.model
         if self.test_data:
             model.eval()
             loss = 0
@@ -315,7 +297,7 @@ class BasicClient():
         self.drop_rate = 0 if option['net_drop']<0.01 else np.random.beta(option['net_drop'], 1, 1).item()
         self.active_rate = 1 if option['net_active']>99998 else np.random.beta(option['net_active'], 1, 1).item()
 
-    def train(self, model,device):
+    def train(self, model, device):
         """
         Standard local training procedure. Train the transmitted model with local training dataset.
         :param
@@ -330,7 +312,7 @@ class BasicClient():
         for iter in range(self.epochs):
             for batch_id, batch_data in enumerate(data_loader):
                 model.zero_grad()
-                loss = self.calculator.get_loss(model, batch_data,device)
+                loss = self.calculator.get_loss(model, batch_data, device)
                 loss.backward()
                 optimizer.step()
         return
@@ -370,7 +352,7 @@ class BasicClient():
         # unpack the received package
         return received_pkg['model']
 
-    def reply(self, svr_pkg,device):
+    def reply(self, svr_pkg, device):
         """
         Reply to server with the transmitted package.
         The whole local procedure should be planned here.
@@ -385,7 +367,7 @@ class BasicClient():
         """
         model = self.unpack(svr_pkg)
         loss = self.train_loss(model,device)
-        self.train(model,device)
+        self.train(model, device)
         cpkg = self.pack(model, loss)
         return cpkg
 
