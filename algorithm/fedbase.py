@@ -6,10 +6,9 @@ from multiprocessing import Pool as ThreadPool
 from main import logger
 import os
 import utils.fflow as flw
-import torch.distributed as dist
 import torch.multiprocessing as mp
 import torch
-import time
+
 class BasicServer():
     def __init__(self, option, model, clients, test_data = None):
         # basic setting

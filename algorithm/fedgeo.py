@@ -3,6 +3,7 @@ from benchmark.toolkits import XYDataset
 from torch.utils.data import DataLoader
 import torch.nn as nn
 import numpy as np
+import torch
 
 
 def separate_data(train_data):
@@ -54,17 +55,14 @@ class Client(BasicClient):
         model.train()
         optimizer = self.calculator.get_optimizer(self.optimizer_name, model, lr = self.learning_rate, weight_decay=self.weight_decay, momentum=self.momentum)                
         for iter in range(self.epochs):
-            total_loss = 0
             model.zero_grad()
-            for data_loader in self.separate_dataloaders:
-                loss = 0
-                count = 0
-                for batch_id, batch_data in enumerate(data_loader):
-                    loss += self.get_loss(model, batch_data, device)
-                    count += 1
-                total_loss += loss/count if count > 0 else 0
-                
-            total_loss.backward()
+            loss = torch.DoubleTensor([0]).to(device)
+            enumerate_list = [enumerate(data_loader) for data_loader in self.separate_dataloaders]
+            for batch_id_and_batch_data in zip(*enumerate_list):
+                for batch_id, batch_data in batch_id_and_batch_data:
+                    tempo_loss = 1/len(batch_data) * self.get_loss(model, batch_data, device)
+                    loss += tempo_loss
+            loss.backward()
             optimizer.step()
         return
 
@@ -77,4 +75,4 @@ class Client(BasicClient):
         tdata = self.data_to_device(data, device)
         outputs = model(tdata[0])
         loss = self.lossfunc(outputs, tdata[1])
-        return loss/len(data[1])
+        return loss
