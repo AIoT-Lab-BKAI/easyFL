@@ -226,7 +226,6 @@ class BasicServer():
             w = fmodule._model_sum([model_k * pk for model_k, pk in zip(models, p)])
             return (1.0-sum(p))*self.model + w
         else:
-            print("Aggregating with input priorities")
             sump = sum(p)
             p = [pk/sump for pk in p]
             return fmodule._model_sum([model_k * pk for model_k, pk in zip(models, p)])

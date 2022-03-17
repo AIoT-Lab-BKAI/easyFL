@@ -1,6 +1,7 @@
 from algorithm.fedbase import BasicServer, BasicClient
 from benchmark.toolkits import XYDataset
 from torch.utils.data import DataLoader
+from utils import fmodule
 import torch.nn as nn
 import numpy as np
 import torch
@@ -16,8 +17,12 @@ def separate_data(train_data):
     separate_datasets = []
     sample_lists, target_lists = (list(t) for t in zip(*sorted(zip(train_data.X, train_data.Y), key=lambda x: x[1])))
     
+    
+    # print("Here 0", len(sample_lists), len(target_lists), len(train_data.X), len(train_data.Y))
+    print("Here:", type(sample_lists), type(target_lists), train_data.X.shape, train_data.Y.shape)
+    
     unique_value = list(np.unique(target_lists))
-    print("unique_value", unique_value)
+    # print("unique_value", unique_value)
     data, target = [], []
     if len(unique_value) == 1:
         separate_datasets.append(train_data)
@@ -29,9 +34,15 @@ def separate_data(train_data):
             if i == len(unique_value) - 1:
                 data.append(sample_lists[target_lists.index(unique_value[i]):])
                 target.append(target_lists[target_lists.index(unique_value[i]):])    
-    
+
+        # print(len(data), len(target))
         for sample_list, target_list in zip(data, target):
-            separate_datasets.append(XYDataset(X=sample_list, Y=target_list))
+            # print("Here 2", len(sample_list), type(sample_list[0]), len(target_list), type(target_list[0]))
+
+            sample_list = torch.vstack(sample_list).unsqueeze(1)
+            target_list = torch.vstack(target_list).squeeze()
+            print(sample_list.shape, target_list.shape)
+            separate_datasets.append(XYDataset(X=sample_list, Y=target_list, totensor=False))
     
     return separate_datasets
 
@@ -39,6 +50,21 @@ def separate_data(train_data):
 class Server(BasicServer):
     def __init__(self, option, model, clients, test_data = None):
         super(Server, self).__init__(option, model, clients, test_data)
+    
+    def iterate(self, t, pool):
+        self.selected_clients = self.sample()
+        models, train_losses = self.communicate(self.selected_clients,pool)
+        if not self.selected_clients: 
+            return
+        device0 = torch.device(f"cuda:{self.server_gpu_id}")
+        models = [i.to(device0) for i in models]
+        self.model = self.aggregate(models, p = [1.0 for cid in self.selected_clients])
+        return
+
+    def aggregate(self, models, p=...):
+        sump = sum(p)
+        p = [pk/sump for pk in p]
+        return fmodule._model_sum([model_k * pk for model_k, pk in zip(models, p)])
         
 
 class Client(BasicClient):
