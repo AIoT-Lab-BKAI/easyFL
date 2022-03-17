@@ -164,7 +164,7 @@ if __name__ == '__main__':
     dicts = read_data_into_dicts(task, records)
 
     # print table
-    print_table(records, dicts)
+    # print_table(records, dicts)
 
     # draw curves
     curve_names = [

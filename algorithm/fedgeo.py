@@ -19,7 +19,7 @@ def separate_data(train_data):
     
     
     # print("Here 0", len(sample_lists), len(target_lists), len(train_data.X), len(train_data.Y))
-    print("Here:", type(sample_lists), type(target_lists), train_data.X.shape, train_data.Y.shape)
+    # print("Here:", type(sample_lists), type(target_lists), train_data.X.shape, train_data.Y.shape)
     
     unique_value = list(np.unique(target_lists))
     # print("unique_value", unique_value)
@@ -35,14 +35,10 @@ def separate_data(train_data):
                 data.append(sample_lists[target_lists.index(unique_value[i]):])
                 target.append(target_lists[target_lists.index(unique_value[i]):])    
 
-        # print(len(data), len(target))
         for sample_list, target_list in zip(data, target):
-            # print("Here 2", len(sample_list), type(sample_list[0]), len(target_list), type(target_list[0]))
-
-            sample_list = torch.vstack(sample_list).unsqueeze(1)
-            target_list = torch.vstack(target_list).squeeze()
-            print(sample_list.shape, target_list.shape)
-            separate_datasets.append(XYDataset(X=sample_list, Y=target_list, totensor=False))
+            sample_list_tensor = torch.vstack(sample_list).unsqueeze(1)
+            target_list_tensor = torch.vstack(target_list).squeeze(1)            
+            separate_datasets.append(XYDataset(X=sample_list_tensor, Y=target_list_tensor, totensor=False))
     
     return separate_datasets
 
