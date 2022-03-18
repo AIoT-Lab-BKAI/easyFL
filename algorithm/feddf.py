@@ -26,7 +26,11 @@ class MyXYDataset(Dataset):
 class Server(BasicServer):
     def __init__(self, option, model, clients, test_data = None):
         super(Server, self).__init__(option, model, clients, test_data)
-        self.data_loader = DataLoader(MyXYDataset(X=sample(self.test_data.X, 16)), batch_size=4, shuffle=True)
+        print(type(self.test_data.X), len(self.test_data.X), self.test_data.X.shape)
+        subset = sample(list(self.test_data.X), 16)
+        subset = torch.vstack(subset).unsqueeze(1)
+        print(type(subset), subset.shape)
+        self.data_loader = DataLoader(MyXYDataset(X=sample(list(self.test_data.X), 16), totensor=False), batch_size=4, shuffle=True)
         
     
     def iterate(self, t, pool):
@@ -48,15 +52,15 @@ class Server(BasicServer):
         
         fusion_model = fusion_model.to(device)
         fusion_model.train()
-        softmax = nn.Softmax(dim=0)
+        softmax = nn.Softmax(dim=1)
 
         optimizer = Adam(fusion_model.parameters())
-        for iter in range(self.epochs):
+        for iter in range(5):
             for batch_id, batch_data in enumerate(self.data_loader):
                 fusion_model.zero_grad()
                 batch_data = batch_data.to(device)
                 
-                logits = torch.vstack([model(batch_data) for model in models])
+                logits = torch.vstack([model(batch_data).unsqueeze(0) for model in models])
                 fused_logit = softmax(torch.mean(logits, dim=0))
                 model_logit = softmax(fusion_model(batch_data))
                 
@@ -68,7 +72,7 @@ class Server(BasicServer):
 
 
     def get_loss(self, pred, ground):
-        loss = ground.T @ (torch.log(ground) -torch.log(pred))
+        loss = torch.trace(ground @ (torch.log(ground) -torch.log(pred)).T)
         return loss
 
 
