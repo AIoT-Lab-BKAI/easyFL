@@ -10,7 +10,7 @@ def converge_to_array(dictionary_list):
         for key, value in dictionary.items():
             max_key = max(max_key, key)
     
-    output = np.zeros([len(dictionary_list), max_key+1])
+    output = np.zeros([len(dictionary_list), max_key+1]) # client x sample
     for i in range(len(dictionary_list)):
         dictionary = dictionary_list[i]
         for key, value in dictionary.items():
@@ -22,6 +22,7 @@ class Server(BasicServer):
     def __init__(self, option, model, clients, test_data=None):
         super(Server, self).__init__(option, model, clients, test_data)
         self.optim_ratio = None
+        self.sample_distribution_array = None
     
     def unpack(self, packages_received_from_clients):
         models = [cp["model"] for cp in packages_received_from_clients]
@@ -41,23 +42,27 @@ class Server(BasicServer):
         self.model = self.aggregate(models, p = self.optim_ratio)
         return
     
-    
     def aggregate(self, models, p=...):
         return fmodule._model_sum([model_k * pk for model_k, pk in zip(models, p)])
-    
+
+    def run(self):
+        super().run()
+        with open(f"fedtask/{self.option['task']}/{self.option['task']}_DataMatrix.csv", "w") as file:
+            np.savetxt(file, self.sample_distribution_array, delimiter=',', fmt='%.1e')
+        return
+
 
     def process_insight(self, insights):
-        sample_distribution_array = converge_to_array(insights)
-        # print(sample_distribution_array)
+        self.sample_distribution_array = converge_to_array(insights)
 
         def f(w):
             e = np.exp(w)/ np.sum(np.exp(w))
-            return -np.std(np.matmul(sample_distribution_array.T, e))
+            return -np.std(np.matmul(self.sample_distribution_array.T, e))
 
         npop = 100     # population size
         sigma = 0.1    # noise standard deviation
         alpha = 0.001  # learning rate
-        dim = sample_distribution_array.shape[0]
+        dim = self.sample_distribution_array.shape[0]
 
         w = np.random.randn(dim) # initial guess
         for i in range(500):
@@ -72,7 +77,7 @@ class Server(BasicServer):
             w = w + alpha/(npop*sigma) * np.dot(N.T, A)
 
         e = np.exp(w) / np.sum(np.exp(w))
-        res = np.matmul(sample_distribution_array.T, e)
+        res = np.matmul(self.sample_distribution_array.T, e)
         print("Final result:", res)
         print("Final std:", np.std(res))
         print("Final impact:", e)

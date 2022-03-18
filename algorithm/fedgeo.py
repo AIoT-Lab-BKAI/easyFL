@@ -17,12 +17,7 @@ def separate_data(train_data):
     separate_datasets = []
     sample_lists, target_lists = (list(t) for t in zip(*sorted(zip(train_data.X, train_data.Y), key=lambda x: x[1])))
     
-    
-    # print("Here 0", len(sample_lists), len(target_lists), len(train_data.X), len(train_data.Y))
-    # print("Here:", type(sample_lists), type(target_lists), train_data.X.shape, train_data.Y.shape)
-    
     unique_value = list(np.unique(target_lists))
-    # print("unique_value", unique_value)
     data, target = [], []
     if len(unique_value) == 1:
         separate_datasets.append(train_data)
