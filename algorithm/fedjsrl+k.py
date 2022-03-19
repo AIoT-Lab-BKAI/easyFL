@@ -1,3 +1,4 @@
+from pathlib import Path
 from algorithm.fedbase import BasicServer, BasicClient
 from utils import fmodule
 
@@ -11,9 +12,10 @@ class Server(BasicServer):
     def __init__(self, option, model, clients, test_data=None):
         super(Server, self).__init__(option, model, clients, test_data)
         K = self.clients_per_round
+        task = self.option['task']
         
         self.ddpg_agent = DDPG_Agent(state_dim= K * K, action_dim= K * 3, hidden_dim=256, gpu_id=self.server_gpu_id)
-        self.buff_folder = f"state{K * K * 3}-action{K*3}"
+        self.buff_folder = f"{task}"
 
         now = datetime.now()
         dt_string = now.strftime("%d:%m:%Y-%H:%M:%S")
@@ -22,6 +24,16 @@ class Server(BasicServer):
         self.prev_reward = None
         self.warmup_length = 50
         self.last_acc = 0
+        
+        self.load_model(f"algorithm/fedrl_utils/baseline/fedavg/fedavg_{self.warmup_length}_{task}.pth")
+
+        
+    def load_model(self, path):
+        if Path(path).exists():
+            baseline = path.split("/")[-1]
+            print(f"Loading {baseline}...", end=" ")
+            self.model.load_state_dict(torch.load(path))
+            print("done!")
 
 
     def unpack(self, packages_received_from_clients):
@@ -47,14 +59,12 @@ class Server(BasicServer):
         device0 = torch.device(f"cuda:{self.server_gpu_id}")
         models = [i.to(device0) for i in models]
 
-        if t > self.warmup_length:
-            priority = self.ddpg_agent.get_action(observation, prev_reward=self.prev_reward).tolist()
-            self.model = self.aggregate(models, p=priority)
-            fedrl_test_acc, _ = self.test(model=self.model, device=device0)
-            self.prev_reward = fedrl_test_acc - self.last_acc
-            self.last_acc = fedrl_test_acc
-        else:
-            self.model = self.aggregate(models, p = [1.0 * self.client_vols[cid]/self.data_vol for cid in self.selected_clients])
+
+        priority = self.ddpg_agent.get_action(observation, prev_reward=self.prev_reward).tolist()
+        self.model = self.aggregate(models, p=priority)
+        fedrl_test_acc, _ = self.test(model=self.model, device=device0)
+        self.prev_reward = 100 * (fedrl_test_acc - self.last_acc)
+        self.last_acc = fedrl_test_acc
         
         models.clear()
         return
@@ -64,6 +74,14 @@ class Server(BasicServer):
         sump = sum(p)
         p = [pk/sump for pk in p]
         return fmodule._model_sum([model_k * pk for model_k, pk in zip(models, p)])
+    
+    
+    def run(self):
+        super().run()
+        self.ddpg_agent.save_net("algorithm/fedrl_utils/models")
+        now = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        self.ddpg_agent.dump_buffer("algorithm/fedrl_utils/buffers", f"{now}.exp")
+        return
 
 
 class Client(BasicClient):

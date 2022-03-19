@@ -6,8 +6,8 @@ from algorithm.fedrl_utils.ddpg_agent.buffer import *
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from algorithm.fedrl_utils.ddpg_agent.policy import NormalizedActions
 import pickle
+import copy
 
 
 def transform_action(action):
@@ -42,24 +42,11 @@ class DDPG_Agent(nn.Module):
         self.value_net = ValueNetwork(num_inputs=state_dim + action_dim, hidden_size=hidden_dim).to(self.device).double()
         self.policy_net = PolicyNetwork(num_inputs=state_dim, num_outputs=action_dim, hidden_size=hidden_dim).to(self.device).double()
 
-        self.target_value_net = ValueNetwork(num_inputs=state_dim + action_dim, hidden_size=hidden_dim).to(self.device).double()
-        self.target_policy_net = PolicyNetwork(num_inputs=state_dim, num_outputs=action_dim, hidden_size=hidden_dim).to(self.device).double()
+        self.target_value_net = copy.deepcopy(self.value_net).to(self.device).double()
+        self.target_policy_net = copy.deepcopy(self.policy_net).to(self.device).double()
 
-
-        model_path = "../models"
-        if Path(f"{model_path}/policy_net.pth").exists():
-            print("Loaing policy_net...")
-            self.policy_net.load_state_dict(torch.load(f"{model_path}/policy_net.pth"))
-        if Path(f"{model_path}/value_net.pth").exists():
-            print("Loaing value_net...")
-            self.value_net.load_state_dict(torch.load(f"{model_path}/value_net.pth"))
-        if Path(f"{model_path}/target_policy_net.pth").exists():
-            print("Loaing target_policy_net...")
-            self.target_policy_net.load_state_dict(torch.load(f"{model_path}/target_policy_net.pth"))
-        if Path(f"{model_path}/target_value_net.pth").exists():
-            print("Loaing target_value_net...")
-            self.target_value_net.load_state_dict(torch.load(f"{model_path}/target_value_net.pth"))
-
+        model_path = "algorithm/fedrl_utils/models"
+        self.load_net(model_path)
 
         # store all the (s, a, s', r) during the transition process
         self.memory = Memory()
@@ -69,16 +56,11 @@ class DDPG_Agent(nn.Module):
         self.value_optimizer = optim.Adam(self.value_net.parameters(), lr=value_lr)
         self.policy_optimizer = optim.Adam(self.policy_net.parameters(), lr=policy_lr)
         self.value_criterion = nn.MSELoss()
+        
         self.step = 0
         self.max_steps = max_steps
         self.batch_size = batch_size
         self.log_dir = log_dir
-
-        for target_param, param in zip(self.target_value_net.parameters(), self.value_net.parameters()):
-            target_param.data.copy_(param.data)
-
-        for target_param, param in zip(self.target_policy_net.parameters(), self.policy_net.parameters()):
-            target_param.data.copy_(param.data)
 
 
     def get_action(self, observation, prev_reward=None):
@@ -154,3 +136,28 @@ class DDPG_Agent(nn.Module):
             
         with open(f"{buffer_path}/{run_name}.exp", "ab") as fp:
             pickle.dump(self.replay_buffer.buffer, fp)
+    
+    
+    def save_net(self, model_path="../models"):
+        if not Path(model_path).exists():
+            os.system(f"mkdir -p {model_path}")
+        print("Saving models...")
+        torch.save(self.policy_net.state_dict(), f"{model_path}/policy_net.pth")
+        torch.save(self.value_net.state_dict(), f"{model_path}/value_net.pth")
+        torch.save(self.target_policy_net.state_dict(), f"{model_path}/target_policy_net.pth")
+        torch.save(self.target_value_net.state_dict(), f"{model_path}/target_value_net.pth")
+        
+    
+    def load_net(self, model_path="../models"):
+        if Path(f"{model_path}/policy_net.pth").exists():
+            print("Loaing policy_net...")
+            self.policy_net.load_state_dict(torch.load(f"{model_path}/policy_net.pth"))
+        if Path(f"{model_path}/value_net.pth").exists():
+            print("Loaing value_net...")
+            self.value_net.load_state_dict(torch.load(f"{model_path}/value_net.pth"))
+        if Path(f"{model_path}/target_policy_net.pth").exists():
+            print("Loaing target_policy_net...")
+            self.target_policy_net.load_state_dict(torch.load(f"{model_path}/target_policy_net.pth"))
+        if Path(f"{model_path}/target_value_net.pth").exists():
+            print("Loaing target_value_net...")
+            self.target_value_net.load_state_dict(torch.load(f"{model_path}/target_value_net.pth"))

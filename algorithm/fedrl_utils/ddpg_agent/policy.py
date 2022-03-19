@@ -1,5 +1,4 @@
 import numpy as np
-import gym
 
 
 class OUNoise(object):
@@ -28,24 +27,3 @@ class OUNoise(object):
         ou_state = self.evolve_state()
         self.sigma = self.max_sigma - (self.max_sigma - self.min_sigma) * min(1.0, t / self.decay_period)
         return np.clip(action + ou_state, self.low, self.high)
-
-
-class NormalizedActions(gym.ActionWrapper):
-
-    def action(self, action):
-        low_bound   = self.action_space.low
-        upper_bound = self.action_space.high
-        
-        action = low_bound + (action + 1.0) * 0.5 * (upper_bound - low_bound)
-        action = np.clip(action, low_bound, upper_bound)
-        
-        return action
-
-    def reverse_action(self, action):
-        low_bound   = self.action_space.low
-        upper_bound = self.action_space.high
-        
-        action = 2 * (action - low_bound) / (upper_bound - low_bound) - 1
-        action = np.clip(action, low_bound, upper_bound)
-        
-        return action
