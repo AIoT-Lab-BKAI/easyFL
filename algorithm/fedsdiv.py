@@ -37,6 +37,7 @@ class Server(BasicServer):
 
 
     def get_impact_factor(self, model_list):
+        model_list = [model.to(torch.device("cpu")) for model in model_list]
         models = []
         for model in model_list:
             for p, q in zip(model.parameters(), self.model.parameters()):
@@ -54,7 +55,7 @@ class Server(BasicServer):
         similarity_matrix *= (1- torch.eye(similarity_matrix.shape[0]))
                 
         impact_factor = 1/(similarity_matrix.shape[0]-1) * torch.sum(similarity_matrix, dim=1).flatten()
-        return impact_factor.tolist()
+        return impact_factor.detach().cpu().tolist()
     
     
     def aggregate(self, models, p=...):

@@ -12,8 +12,9 @@ class Client(BasicClient):
         super(Client, self).__init__(option, name, train_data, valid_data)
         self.mu = option['mu']
 
-    def train(self, model):
+    def train(self, model, device):
         # global parameters
+        model = model.to(device)
         src_model = copy.deepcopy(model)
         src_model.freeze_grad()
         model.train()
@@ -22,7 +23,7 @@ class Client(BasicClient):
         for iter in range(self.epochs):
             for batch_idx, batch_data in enumerate(data_loader):
                 model.zero_grad()
-                original_loss = self.calculator.get_loss(model, batch_data)
+                original_loss = self.calculator.get_loss(model, batch_data, device)
                 # proximal term
                 loss_proximal = 0
                 for pm, ps in zip(model.parameters(), src_model.parameters()):

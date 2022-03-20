@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 from algorithm.fedbase import BasicServer, BasicClient
 from utils import fmodule
@@ -14,12 +15,7 @@ class Server(BasicServer):
         K = self.clients_per_round
         task = self.option['task']
         
-        self.ddpg_agent = DDPG_Agent(state_dim= K * K, action_dim= K * 3, hidden_dim=256, gpu_id=self.server_gpu_id)
-        self.buff_folder = f"{task}"
-
-        now = datetime.now()
-        dt_string = now.strftime("%d:%m:%Y-%H:%M:%S")
-        self.buff_file = dt_string
+        self.ddpg_agent = DDPG_Agent(state_dim= K * K, action_dim= K * 3, hidden_dim=256, gpu_id=self.server_gpu_id, task=task)
 
         self.prev_reward = None
         self.warmup_length = 50
@@ -30,8 +26,9 @@ class Server(BasicServer):
         
     def load_model(self, path):
         if Path(path).exists():
+            print("====================< Load baseline model for warmup >====================")
             baseline = path.split("/")[-1]
-            print(f"Loading {baseline}...", end=" ")
+            print(f"Loading baseline {baseline}...", end=" ")
             self.model.load_state_dict(torch.load(path))
             print("done!")
 
@@ -78,9 +75,18 @@ class Server(BasicServer):
     
     def run(self):
         super().run()
-        self.ddpg_agent.save_net("algorithm/fedrl_utils/models")
-        now = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-        self.ddpg_agent.dump_buffer("algorithm/fedrl_utils/buffers", f"{now}.exp")
+        now = datetime.now().strftime("%d-%m-%Y_%H:%M:%S")
+        task = self.option['task']
+        
+        if not Path(f"algorithm/fedrl_utils/models/{task}").exists():
+            os.system(f"mkdir -p algorithm/fedrl_utils/models/{task}")
+            
+        self.ddpg_agent.save_net(f"algorithm/fedrl_utils/models/{task}")
+        
+        if not Path(f"algorithm/fedrl_utils/buffers/{task}").exists():
+            os.system(f"mkdir -p algorithm/fedrl_utils/buffers/{task}")
+            
+        self.ddpg_agent.dump_buffer(f"algorithm/fedrl_utils/buffers/{task}", f"{now}.exp")
         return
 
 

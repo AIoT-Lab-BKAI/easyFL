@@ -29,7 +29,8 @@ class DDPG_Agent(nn.Module):
         log_dir="./log/epochs",
         gamma = 0.99,
         soft_tau = 2e-2,
-        gpu_id = 0
+        gpu_id = 0,
+        task = None
     ):
         super(DDPG_Agent, self).__init__()
         self.gamma = gamma
@@ -45,7 +46,7 @@ class DDPG_Agent(nn.Module):
         self.target_value_net = copy.deepcopy(self.value_net).to(self.device).double()
         self.target_policy_net = copy.deepcopy(self.policy_net).to(self.device).double()
 
-        model_path = "algorithm/fedrl_utils/models"
+        model_path = f"algorithm/fedrl_utils/models/{task}"
         self.load_net(model_path)
 
         # store all the (s, a, s', r) during the transition process
@@ -134,7 +135,7 @@ class DDPG_Agent(nn.Module):
         if not Path(buffer_path).exists():
             os.system(f"mkdir -p {buffer_path}")
             
-        with open(f"{buffer_path}/{run_name}.exp", "ab") as fp:
+        with open(f"{buffer_path}/{run_name}", "wb") as fp:
             pickle.dump(self.replay_buffer.buffer, fp)
     
     
@@ -149,6 +150,7 @@ class DDPG_Agent(nn.Module):
         
     
     def load_net(self, model_path="../models"):
+        print("====================< Load ddpg components >====================")
         if Path(f"{model_path}/policy_net.pth").exists():
             print("Loaing policy_net...")
             self.policy_net.load_state_dict(torch.load(f"{model_path}/policy_net.pth"))

@@ -1,6 +1,7 @@
 from pathlib import Path
 from ddpg_agent.networks import *
 from ddpg_agent.buffer import *
+import copy
 import os
 import torch
 import torch.nn as nn
@@ -16,21 +17,22 @@ device = torch.device("cuda")
 clients_per_round=10
 value_lr=0.005
 policy_lr=0.005
-state_dim=clients_per_round * (4 + clients_per_round)
-action_dim=clients_per_round
+state_dim=clients_per_round * clients_per_round
+action_dim=clients_per_round * 3
 hidden_dim=256
 
 gamma=0.95
 soft_tau=0.01
 
-value_net = ValueNetwork(state_dim, action_dim * 3, hidden_dim).to(device).double()
-policy_net = PolicyNetwork(state_dim, action_dim, hidden_dim).to(device).double()
-target_value_net = ValueNetwork(state_dim, action_dim * 3, hidden_dim).to(device).double()
-target_policy_net = PolicyNetwork(state_dim, action_dim, hidden_dim).to(device).double()
+value_net = ValueNetwork(num_inputs=state_dim + action_dim, hidden_size=hidden_dim).to(device).double()
+policy_net = PolicyNetwork(num_inputs=state_dim, num_outputs=action_dim, hidden_size=hidden_dim).to(device).double()
+
+target_value_net = copy.deepcopy(value_net).to(device).double()
+target_policy_net = copy.deepcopy(policy_net).to(device).double()
 
 
 # Buffer training
-replay_buffer_size=1000000
+replay_buffer_size=10000
 replay_buffer = ReplayBuffer(replay_buffer_size)
 
 
@@ -55,7 +57,7 @@ def load_net(model_path):
 # Save network
 def save_net(model_path):
     if not Path(model_path).exists():
-        os.system(f"mkdir -R {model_path}")
+        os.system(f"mkdir -p {model_path}")
     print("Saving models...")
     torch.save(policy_net.state_dict(), f"{model_path}/policy_net.pth")
     torch.save(value_net.state_dict(), f"{model_path}/value_net.pth")
@@ -127,8 +129,11 @@ def ddpg_update(experience_folder_path, epochs=1, batch_size=16, min_value=-np.i
     priority = init_priority(replay_buffer)
 
     # Training with experience buffer
-    for _ in tqdm(range(epochs)):
-        for _ in range(int(len(replay_buffer)/batch_size)):
+    for e in range(epochs):
+        total_policy_loss = 0
+        total_value_loss = 0
+        
+        for _ in tqdm(range(int(len(replay_buffer)/batch_size))):
             batch_idx = np.random.choice(len(replay_buffer), size=batch_size, p=priority)
             batch = get_batch_list(replay_buffer.buffer, batch_idx)
             state, action, reward, next_state, done = map(np.stack, zip(*batch))
@@ -166,6 +171,13 @@ def ddpg_update(experience_folder_path, epochs=1, batch_size=16, min_value=-np.i
             for target_param, param in zip(target_policy_net.parameters(), policy_net.parameters()):
                 target_param.data.copy_(target_param.data * (1.0 - soft_tau) + param.data * soft_tau)
 
+            total_policy_loss += policy_loss
+            total_value_loss += value_loss
+
+        total_value_loss /= int(len(replay_buffer)/batch_size)
+        total_policy_loss /= int(len(replay_buffer)/batch_size)
+        print(f"Epoch {e}:\nTotal value loss: {total_value_loss}\nTotal policy loss: {total_policy_loss}")
+        
     return 1
 
 
@@ -173,6 +185,6 @@ if __name__ == "__main__":
     model_path="models/"
     experience_folder_path="buffers/"
     load_net(model_path)
-    updated = ddpg_update(experience_folder_path, batch_size=16, epochs=50)
+    updated = ddpg_update(experience_folder_path, batch_size=4, epochs=50)
     if updated:
         save_net(model_path)
