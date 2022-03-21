@@ -79,7 +79,7 @@ class Server(BasicServer):
         
         Note: this threshold must be somewhat decayable
         """
-        device0 = torch.device("cpu")
+        device0 = torch.device("gpu")
         model_list = [i.to(device0) for i in model_list]
         models = []
         for model in model_list:

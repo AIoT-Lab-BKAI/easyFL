@@ -37,7 +37,7 @@ class Server(BasicServer):
 
 
     def get_impact_factor(self, model_list):
-        model_list = [model.to(torch.device("cpu")) for model in model_list]
+        model_list = [model.to(torch.device("cuda")) for model in model_list]
         models = []
         for model in model_list:
             for p, q in zip(model.parameters(), self.model.parameters()):
