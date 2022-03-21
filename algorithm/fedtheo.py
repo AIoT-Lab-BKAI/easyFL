@@ -4,7 +4,7 @@ from utils import fmodule
 import numpy as np
 
 
-def converge_to_array(dictionary_list):
+def convert_to_array(dictionary_list):
     max_key = 0
     for dictionary in dictionary_list:
         for key, value in dictionary.items():
@@ -53,7 +53,7 @@ class Server(BasicServer):
 
 
     def process_insight(self, insights):
-        self.sample_distribution_array = converge_to_array(insights)
+        self.sample_distribution_array = convert_to_array(insights)
 
         def f(w):
             e = np.exp(w)/ np.sum(np.exp(w))
@@ -96,6 +96,7 @@ class Client(BasicClient):
 
         if self.insight is None:
             self.insight = self.get_insight()
+            print(self.insight.keys())
 
         cpkg = self.pack(model, self.insight)
         return cpkg

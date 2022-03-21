@@ -27,18 +27,17 @@ class Server(BasicServer):
         if not self.selected_clients: 
             return
         
-        device0 = torch.device(f"cuda:{self.server_gpu_id}")
-        models = [i.to(device0) for i in models]
-        
         impact_factor = self.get_impact_factor(models)
-        print("Impact_factor:", impact_factor)
         self.model = self.aggregate(models, p = impact_factor)
         return
 
 
     def get_impact_factor(self, model_list):
-        model_list = [model.to(torch.device("cuda")) for model in model_list]
+        device = torch.device(f"cuda:{self.server_gpu_id}")
+        model_list = [model.to(device) for model in model_list]
+        self.model = self.model.to(device)
         models = []
+        
         for model in model_list:
             for p, q in zip(model.parameters(), self.model.parameters()):
                 p = p - q
@@ -48,12 +47,11 @@ class Server(BasicServer):
         for i in range(len(models)):
             for j in range(len(models)):
                 similarity_matrix[i][j] = compute_similarity(models[i], models[j])
-        
         similarity_matrix = 1/similarity_matrix
         
         similarity_matrix = torch.nan_to_num(similarity_matrix, nan=0.0)
         similarity_matrix *= (1- torch.eye(similarity_matrix.shape[0]))
-                
+        
         impact_factor = 1/(similarity_matrix.shape[0]-1) * torch.sum(similarity_matrix, dim=1).flatten()
         return impact_factor.detach().cpu().tolist()
     
