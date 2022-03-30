@@ -1,3 +1,6 @@
+from builtins import breakpoint
+from email.policy import default
+from click import argument
 import numpy as np
 import argparse
 import random
@@ -61,7 +64,7 @@ def read_option():
     parser.add_argument('--beta', help='beta in FedFA',type=float, default='1.0')
     parser.add_argument('--gamma', help='gamma in FedFA', type=float, default='0')
     parser.add_argument('--mu', help='mu in fedprox', type=float, default='0.1')
-    
+    parser.add_argument('--dataidx_filename', default="MNIST-noniid-fedavg_equal_100")
     # server gpu
     parser.add_argument('--server_gpu_id', help='server process on this gpu', type=int, default=0)
     
@@ -87,16 +90,15 @@ def initialize(option):
     utils.fmodule.TaskCalculator = getattr(importlib.import_module(bmk_core_path), 'TaskCalculator')
     utils.fmodule.TaskCalculator.setOP(getattr(importlib.import_module('torch.optim'), option['optimizer']))
     utils.fmodule.Model = getattr(importlib.import_module(bmk_model_path), 'Model')
-    task_reader = getattr(importlib.import_module(bmk_core_path), 'TaskReader')(taskpath=os.path.join('fedtask', option['task']))
-    train_datas, valid_datas, test_data, client_names = task_reader.read_data()
-    num_clients = len(client_names)
+    task_reader = getattr(importlib.import_module(bmk_core_path), 'TaskReader')(taskpath=option['dataidx_filename'])
+    train_datas, test_data, num_clients = task_reader.read_data()
     print("done")
 
     # init client
     print('init clients...', end='')
     client_path = '%s.%s' % ('algorithm', option['algorithm'])
     Client=getattr(importlib.import_module(client_path), 'Client')
-    clients = [Client(option, name = client_names[cid], train_data = train_datas[cid], valid_data = valid_datas[cid]) for cid in range(num_clients)]
+    clients = [Client(option, name = cid, train_data = train_datas[cid]) for cid in range(num_clients)]
     print('done')
 
     # init server

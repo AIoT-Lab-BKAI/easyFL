@@ -15,6 +15,7 @@ imbalance:
     iid:            6 Vol: only the vol of local dataset varies.
     niid:           7 Vol: for generating synthetic data
 """
+from builtins import breakpoint
 import torch
 import ujson
 import numpy as np
@@ -450,7 +451,26 @@ class XYTaskReader(BasicTaskReader):
         train_datas = [XYDataset(feddata[name]['dtrain']['x'], feddata[name]['dtrain']['y']) for name in feddata['client_names']]
         valid_datas = [XYDataset(feddata[name]['dvalid']['x'], feddata[name]['dvalid']['y']) for name in feddata['client_names']]
         return train_datas, valid_datas, test_data, feddata['client_names']
-
+    
+class CusTomTaskReader(BasicTaskReader):
+    def __init__(self, taskpath,train_dataset, test_dataset):
+        super().__init__(taskpath)
+        self.test_dataset = test_dataset
+        self.train_dataset = train_dataset
+        self.taskpath = taskpath
+    
+    
+    def load_dataset_idx(self,path="data"):
+        import json
+        list_idx = json.load(open(path, 'r'))
+        return {int(k): v for k, v in list_idx.items()}
+    
+    def read_data(self):
+        data_idx = self.load_dataset_idx('dataidx/'+self.taskpath +".json")
+        n_clients = len(data_idx)
+        train_data = [CustomDataset(self.train_dataset,data_idx[idx]) for idx in range(n_clients)]
+        test_data = self.test_dataset
+        return train_data, test_data,n_clients
 class IDXTaskReader(BasicTaskReader):
     def __init__(self, taskpath=''):
         super(IDXTaskReader, self).__init__(taskpath)
@@ -468,7 +488,18 @@ class IDXTaskReader(BasicTaskReader):
         train_datas = [IDXDataset(feddata[name]['dtrain']) for name in feddata['client_names']]
         valid_datas = [IDXDataset(feddata[name]['dvalid']) for name in feddata['client_names']]
         return train_datas, valid_datas, test_data, feddata['client_names']
+class CustomDataset(Dataset):
+    def __init__(self, dataset, idxs):
+        self.dataset = dataset
+        self.idxs = list(idxs)
 
+    def __len__(self):
+        return len(self.idxs)
+
+    def __getitem__(self, item):
+        image, label = self.dataset[self.idxs[item]]
+        return image, label
+    
 class XYDataset(Dataset):
     def __init__(self, X=[], Y=[], totensor = True):
         """ Init Dataset with pairs of features and labels/annotations.

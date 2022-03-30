@@ -269,7 +269,7 @@ class BasicClient():
         self.frequency = 0
         # create local dataset
         self.train_data = train_data
-        self.valid_data = valid_data
+        # self.valid_data = valid_data
         self.datavol = len(self.train_data)
         # local calculator
         self.calculator = fmodule.TaskCalculator(device=fmodule.device)
@@ -314,7 +314,8 @@ class BasicClient():
             eval_metric: task specified evaluation metric
             loss: task specified loss
         """
-        dataset = self.train_data if dataflag=='train' else self.valid_data
+        # dataset = self.train_data if dataflag=='train' else self.valid_data
+        dataset = self.train_data
         model.eval()
         loss = 0
         eval_metric = 0
