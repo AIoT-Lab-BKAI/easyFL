@@ -1,3 +1,8 @@
+""" FedKDR - Version 5
+This version handles the problem of stability by using confidence bounds
+and the importance weighing by KL-divergence 
+"""
+
 from pathlib import Path
 from utils import fmodule
 from .mp_fedbase import MPBasicServer, MPBasicClient
@@ -94,8 +99,13 @@ class Server(MPBasicServer):
             self.frequency_record += idx_one_hot
         
             prob = [(inf * np.sqrt(f/(np.log(t+1) + 0.01))) for inf,f,cid in zip(informatives, frequencies, self.selected_clients)]
-            self.max_inf = max(np.sum(incremental_factor), self.max_inf)
-            incremental_factor = np.sum(incremental_factor)/self.max_inf
+            self.max_inf = max(np.sum(informatives), self.max_inf)
+            incremental_factor = np.sum(informatives)/self.max_inf
+            
+            print("Freq:", frequencies)
+            print("Informatives:", informatives)
+            print("Prob:", prob)
+            print("Incre factor", incremental_factor)
             
             new_model = self.aggregate(models, p = prob)
             self.model = fmodule._model_add(self.model.cpu() * (1 - incremental_factor), new_model.cpu() * incremental_factor)

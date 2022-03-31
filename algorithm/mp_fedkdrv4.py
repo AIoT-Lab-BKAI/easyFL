@@ -1,3 +1,18 @@
+""" FedKDR - Version 4
+This version combines Reinforcement learning with FedKDR
+Details:
+    The impact factor of the client is calculated as:
+        p_i = 1 + sqrt(N_i / (ln(t) + 1)) -> Confidence
+    
+    The new model is aggregated as:
+        new_model = sum(p_i * model_i)
+    
+    The new model is cumulatively updated into the server model by factor beta
+        model <- (1 - beta) * model + beta * new_model
+    
+    The purpose of RL agent is to compute beta
+"""
+
 from pathlib import Path
 from utils import fmodule
 from .mp_fedbase import MPBasicServer, MPBasicClient

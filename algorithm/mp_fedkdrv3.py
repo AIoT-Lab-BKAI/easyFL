@@ -1,19 +1,23 @@
-from pathlib import Path
-from utils import fmodule
+""" FedKDR - Version 3
+This version use the Jensen-Shannon distance instead of the Kullback-Leibler Divergence
+Details:
+    JS = 1/2 KL(X, M) + 1/2 KL(Y, M) instead of KL(X,Y)
+"""
 
+from pathlib import Path
 from .mp_fedbase import MPBasicServer, MPBasicClient
+
 import torch.nn as nn
 import numpy as np
-
 
 import torch
 import os
 import copy
 
 
-def KL_divergence(teacher_batch_input, student_batch_input, device):
+def JensenShannon_distance(teacher_batch_input, student_batch_input, device):
     """
-    Compute the KL divergence of 2 batches of layers
+    Compute the Jensen-Shannon distance of 2 batches of layers
     Args:
         teacher_batch_input: Size N x d
         student_batch_input: Size N x c
@@ -48,8 +52,11 @@ def KL_divergence(teacher_batch_input, student_batch_input, device):
     kernel_mtx_t = torch.exp(-1/2 * kernel_mtx_t)
     kernel_mtx_t = kernel_mtx_t/torch.sum(kernel_mtx_t, dim=1, keepdim=True)
     
-    kl = torch.sum(kernel_mtx_t * torch.log(kernel_mtx_t/kernel_mtx_s))
-    return kl
+    fused_mtx = 1/2 * (kernel_mtx_s + kernel_mtx_t)
+    
+    kl_t_fused = torch.sum(kernel_mtx_t * torch.log(kernel_mtx_t/fused_mtx))
+    kl_s_fused = torch.sum(kernel_mtx_s * torch.log(kernel_mtx_s/fused_mtx))
+    return 1/2 * (kl_t_fused + kl_s_fused)
 
 
 class Server(MPBasicServer):
@@ -74,22 +81,14 @@ class Server(MPBasicServer):
         # self.finish(f"algorithm/fedrl_utils/baseline/{self.name}")
         return
     
-    def unpack(self, packages_received_from_clients):
-        models = [cp["model"] for cp in packages_received_from_clients]
-        train_losses = [cp["train_loss"] for cp in packages_received_from_clients]
-        frequencies = [cp["frequency"] for cp in packages_received_from_clients]
-        return models, train_losses, frequencies
-    
     def iterate(self, t, pool):
         self.selected_clients = self.sample()
-        models, train_losses, frequencies = self.communicate(self.selected_clients,pool)
+        models, train_losses = self.communicate(self.selected_clients,pool)
         if not self.selected_clients: 
             return
         device0 = torch.device(f"cuda:{self.server_gpu_id}")
         models = [i.to(device0) for i in models]
-        new_model = self.aggregate(models, p = [(1 + np.sqrt(f/(np.log(t+1) + 1))) for f,cid in zip(frequencies, self.selected_clients)])
-        self.model = fmodule._model_add(self.model.cpu() * self.incremental_factor, new_model.cpu() * (1 - self.incremental_factor))
-        self.step_factor(t)
+        self.model = self.aggregate(models, p = [1 for cid in zip(self.selected_clients)])
         return
 
 
@@ -97,7 +96,6 @@ class Client(MPBasicClient):
     def __init__(self, option, name='', train_data=None, valid_data=None):
         super(Client, self).__init__(option, name, train_data, valid_data)
         self.lossfunc = nn.CrossEntropyLoss()
-        self.frequency = 0
 
         
     def train(self, model, device):
@@ -129,22 +127,6 @@ class Client(MPBasicClient):
         tdata = self.data_to_device(data, device)
         output_s, representation_s = model.pred_and_rep(tdata[0])                  # Student
         _ , representation_t = src_model.pred_and_rep(tdata[0])                    # Teacher
-        kl_loss = KL_divergence(representation_t, representation_s, device)        # KL divergence
+        kl_loss = JensenShannon_distance(representation_t, representation_s, device)
         loss = self.lossfunc(output_s, tdata[1])
         return loss, kl_loss
-    
-    
-    def pack(self, model, loss, frequency):
-        return {
-            "model": model,
-            "train_loss": loss,
-            "frequency": frequency
-        }
-    
-    
-    def reply(self, svr_pkg, device):
-        model = self.unpack(svr_pkg)
-        loss = self.train_loss(model, device)
-        self.train(model, device)
-        cpkg = self.pack(model, loss, self.frequency)
-        return cpkg
