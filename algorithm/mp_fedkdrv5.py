@@ -79,13 +79,12 @@ class Server(MPBasicServer):
     def unpack(self, packages_received_from_clients):
         models = [cp["model"] for cp in packages_received_from_clients]
         train_losses = [cp["train_loss"] for cp in packages_received_from_clients]
-        frequencies = [cp["frequency"] for cp in packages_received_from_clients]
         informatives = [cp["informative"] for cp in packages_received_from_clients]
-        return models, train_losses, frequencies, informatives
+        return models, train_losses, informatives
     
     def iterate(self, t, pool):
         self.selected_clients = self.sample()
-        models, train_losses, frequencies, informatives = self.communicate(self.selected_clients, pool)
+        models, train_losses, informatives = self.communicate(self.selected_clients, pool)
         
         self.prev_reward = - np.sum(train_losses) if t > 0 else None
         
@@ -97,18 +96,18 @@ class Server(MPBasicServer):
             
             idx_one_hot = self.onehot_fromlist(self.selected_clients)
             self.frequency_record += idx_one_hot
+            frequencies = [self.frequency_record.squeeze().tolist()[i] for i in self.selected_clients]
         
             prob = [(inf * np.sqrt(f/(np.log(t+1) + 0.01))) for inf,f,cid in zip(informatives, frequencies, self.selected_clients)]
             self.max_inf = max(np.sum(informatives), self.max_inf)
             incremental_factor = np.sum(informatives)/self.max_inf
             
-            print("Freq:", frequencies)
             print("Informatives:", informatives)
-            print("Prob:", prob)
+            print("frequencies:", frequencies)
             print("Incre factor", incremental_factor)
             
             new_model = self.aggregate(models, p = prob)
-            self.model = fmodule._model_add(self.model.cpu() * (1 - incremental_factor), new_model.cpu() * incremental_factor)
+            self.model = fmodule._model_add(self.model.cpu() * (1 - incremental_factor), new_model.cpu() * (incremental_factor))
             return
 
     def onehot_fromlist(self, list, length=None):
@@ -125,11 +124,8 @@ class Client(MPBasicClient):
         super(Client, self).__init__(option, name, train_data, valid_data)
         self.lossfunc = nn.CrossEntropyLoss()
         self.frequency = 0
-        self.informative = 0
-
         
     def train(self, model, device):
-        self.frequency += 1
         model = model.to(device)
         model.train()
         
@@ -138,7 +134,6 @@ class Client(MPBasicClient):
                 
         data_loader = self.calculator.get_data_loader(self.train_data, batch_size=self.batch_size, droplast=True)
         optimizer = self.calculator.get_optimizer(self.optimizer_name, model, lr = self.learning_rate, weight_decay=self.weight_decay, momentum=self.momentum)
-        
         
         epoch_loss = []
         for iter in range(self.epochs):
@@ -171,11 +166,10 @@ class Client(MPBasicClient):
         return loss, kl_loss
     
     
-    def pack(self, model, loss, frequency, info_amount):
+    def pack(self, model, loss, info_amount):
         return {
             "model": model,
             "train_loss": loss,
-            "frequency": frequency,
             "informative": info_amount
         }
     
@@ -184,5 +178,5 @@ class Client(MPBasicClient):
         model = self.unpack(svr_pkg)
         loss = self.train_loss(model, device)
         self.train(model, device)
-        cpkg = self.pack(model, loss, self.frequency, self.informative)
+        cpkg = self.pack(model, loss, self.informative)
         return cpkg
