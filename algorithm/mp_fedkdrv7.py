@@ -76,7 +76,7 @@ class Server(MPBasicServer):
     
     def convergence_signal(self):
         if len(self.D_list) > 2:
-            return min(torch.abs(self.D_list[-1] - self.D_list[-2]).item() / 100, 1)
+            return min(torch.abs(self.D_list[-1] - self.D_list[-2]).item() / np.max(self.D_list), 1)
         else:
             return 1
             
@@ -89,7 +89,7 @@ class Server(MPBasicServer):
         models = [i.to(device0) for i in models]
         new_model = self.aggregate(models, p = [1.0 for cid in self.selected_clients])
         
-        diff = torch.norm(new_model.cpu() -self.model.cpu()).detach()
+        diff = torch.norm(new_model.cpu() - self.model.cpu()).detach()
         self.D_list.append(diff)
         return
         
@@ -121,7 +121,7 @@ class Client(MPBasicClient):
             for batch_id, batch_data in enumerate(data_loader):
                 model.zero_grad()
                 loss, kl_loss = self.get_loss(model, src_model, batch_data, device)
-                loss = loss + kl_loss
+                loss = loss + convergence_signal * kl_loss
                 loss.backward()
                 optimizer.step()
         return
