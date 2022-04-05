@@ -1,5 +1,5 @@
 from torchvision import datasets, transforms
-from benchmark.toolkits import ClassifyCalculator, DefaultTaskGen, XYTaskReader, XYDataset
+from benchmark.toolkits import ClassifyCalculator, CusTomTaskReader, DefaultTaskGen, XYTaskReader, XYDataset
 
 class TaskGen(DefaultTaskGen):
     def __init__(self, dist_id, num_clients = 1, skewness = 0.5, selected_labels = [0,2,6]):
@@ -33,10 +33,11 @@ class TaskGen(DefaultTaskGen):
         train_x, train_y = self.train_data.tolist()
         self.train_data = {'x':train_x, 'y':train_y}
         return
-
-class TaskReader(XYTaskReader):
+train_dataset = datasets.FashionMNIST("./benchmark/fmnist/data", train=True, download=True, transform=transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))]))
+test_dataset = datasets.FashionMNIST("./benchmark/fmnist/data", train=False, download=True, transform=transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))]))
+class TaskReader(CusTomTaskReader):
     def __init__(self, taskpath=''):
-        super(TaskReader, self).__init__(taskpath)
+        super(TaskReader, self).__init__(taskpath,train_dataset,test_dataset)
 
 class TaskCalculator(ClassifyCalculator):
     def __init__(self, device):
