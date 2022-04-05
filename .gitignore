@@ -1,6 +1,7 @@
 /__pycache__/
 */__pycache__/
 /algorithm/fedrl_utils/ddpg_agent/__pycache__/
+/algorithm/fedrl_utils/gae_agent/__pycache__/
 /algorithm/fedrl_utils/buffers
 /algorithm/fedrl_utils/models
 /algorithm/fedrl_utils/baseline
