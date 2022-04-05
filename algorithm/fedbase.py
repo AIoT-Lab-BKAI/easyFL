@@ -9,6 +9,7 @@ import utils.fflow as flw
 class BasicServer():
     def __init__(self, option, model, clients, test_data = None):
         # basic setting
+        self.output_file_name = option['output_file_name']
         self.task = option['task']
         self.name = option['algorithm']
         self.model = model
@@ -58,7 +59,7 @@ class BasicServer():
         print("=================End==================")
         logger.time_end('Total Time Cost')
         # save results as .json file
-        logger.save(os.path.join('fedtask', self.option['task'], 'record', flw.output_filename(self.option, self)))
+        logger.save('output/'+self.output_file_name)
 
     def iterate(self, t):
         """
