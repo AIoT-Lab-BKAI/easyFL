@@ -105,7 +105,7 @@ class Client(MPBasicClient):
                 
                 loss_proximal = 0
                 for pm, ps in zip(model.parameters(), src_model.parameters()):
-                    loss_proximal += torch.sum(torch.pow(pm-ps,2))
+                    loss_proximal += torch.abs(pm-ps)
                     
                 loss = loss + kl_loss + 0.5 * self.mu * loss_proximal 
                 loss.backward()
