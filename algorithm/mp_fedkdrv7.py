@@ -69,6 +69,19 @@ def KL_divergence(teacher_batch_input, student_batch_input, device):
     return kl
 
 
+def compute_difference(a, b):
+    """
+    Parameters:
+        a, b [torch.nn.Module]
+    Returns:
+        sum of pair-wise difference between layers of a and b
+    """
+    diff = 0
+    for layer_a, layer_b in zip(a.parameters(), b.parameters()):
+        x, y = torch.flatten(layer_a), torch.flatten(layer_b)
+        diff += torch.sum(torch.pow(x - y, 2))
+    return torch.sqrt(diff)
+
 class Server(MPBasicServer):
     def __init__(self, option, model, clients, test_data = None):
         super(Server, self).__init__(option, model, clients, test_data)
@@ -89,7 +102,7 @@ class Server(MPBasicServer):
         models = [i.to(device0) for i in models]
         new_model = self.aggregate(models, p = [1.0 for cid in self.selected_clients])
         
-        diff = torch.norm(new_model.cpu() - self.model.cpu()).detach()
+        diff = compute_difference(new_model.cpu(), self.model.cpu()).detach()
         self.D_list.append(diff)
         return
         

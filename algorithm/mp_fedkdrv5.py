@@ -64,18 +64,6 @@ class Server(MPBasicServer):
         self.max_inf = 0
         return
     
-    def finish(self, model_path):
-        if not Path(model_path).exists():
-            os.system(f"mkdir -p {model_path}")
-        task = self.option['task']
-        torch.save(self.model.state_dict(), f"{model_path}/{self.name}_{self.num_rounds}_{task}.pth")
-        return
-    
-    def run(self):
-        super().run()
-        # self.finish(f"algorithm/fedrl_utils/baseline/{self.name}")
-        return
-    
     def unpack(self, packages_received_from_clients):
         models = [cp["model"] for cp in packages_received_from_clients]
         train_losses = [cp["train_loss"] for cp in packages_received_from_clients]
