@@ -101,6 +101,7 @@ class Server(MPBasicServer):
     
     def iterate(self, t, pool):
         self.selected_clients = self.sample()
+        self.selected_clients = [0,1]
         models, train_losses, frequencies = self.communicate(self.selected_clients, pool)
         
         self.prev_reward = - np.sum(train_losses) if t > 0 else None
@@ -115,10 +116,10 @@ class Server(MPBasicServer):
             self.frequency_record += idx_one_hot
             
             state = torch.vstack([idx_one_hot, self.frequency_record]).flatten().to(device0)
-            incremental_factor = self.agent.get_action(state, self.prev_reward).detach().cpu()
+            incremental_factor = self.agent.get_action(state, self.prev_reward).cpu()
             
             new_model = self.aggregate(models, p = [(1 + np.sqrt(f/(np.log(t+1) + 1))) for f,cid in zip(frequencies, self.selected_clients)])
-            self.model = fmodule._model_add(self.model.cpu() * incremental_factor, new_model.cpu() * (1 - incremental_factor))
+            self.model = fmodule._model_add(self.model.cpu() * incremental_factor.detach(), new_model.cpu() * (1 - incremental_factor.detach()))
             return
 
     def onehot_fromlist(self, list, length=None):
