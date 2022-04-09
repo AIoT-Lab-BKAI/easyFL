@@ -1,6 +1,3 @@
-from builtins import breakpoint
-from email.policy import default
-from click import argument
 import numpy as np
 import argparse
 import random
@@ -64,7 +61,7 @@ def read_option():
     parser.add_argument('--beta', help='beta in FedFA',type=float, default='1.0')
     parser.add_argument('--gamma', help='gamma in FedFA', type=float, default='0')
     parser.add_argument('--mu', help='mu in fedprox', type=float, default='0.1')
-    parser.add_argument('--dataidx_filename', default="MNIST-noniid-fedavg_equal_100")
+    parser.add_argument('--dataidx_filename', help="path to idx file", required=True, default='none')
     # server gpu
     parser.add_argument('--server_gpu_id', help='server process on this gpu', type=int, default=0)
     
@@ -83,7 +80,7 @@ def initialize(option):
     # init fedtask
     print("init fedtask...", end='')
     # dynamical initializing the configuration with the benchmark
-    bmk_name = option['task'][:option['task'].find('cnum')-1].lower()
+    bmk_name = option['task'].split('_')[0]
     bmk_model_path = '.'.join(['benchmark', bmk_name, 'model', option['model']])
     bmk_core_path = '.'.join(['benchmark', bmk_name, 'core'])
     utils.fmodule.device = torch.device('cuda:{}'.format(option['server_gpu_id']) if torch.cuda.is_available() and option['server_gpu_id'] != -1 else 'cpu')

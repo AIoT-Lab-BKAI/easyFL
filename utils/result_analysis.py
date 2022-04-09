@@ -185,26 +185,22 @@ def main_func(task, headers, flt):
 if __name__ == '__main__':
     # task+record
     headers = [
-        'mp_fedavg',
-        'fedavg',
-        'fedprox',
-        'mp_fedkdr',
-        'mp_fedkdrv2',
-        'fedfa',
-        'fedfv',
-        'scaffold'
+        'mp_fedsdiv',
+        # 'mp_fedkdr',
+        'scaffold',
+        'mp_fedavg'
     ]
     flt = {
         # 'E': '5',
         # 'B': '10',
         # 'LR': '0.01',
-        'R': '50',
+        'R': '200',
         # 'P': '0.01',
         # 'S': '0',
     }
     
-    for s in [0.2,0.4,0.6,0.8]:
-        task = f'mnist_cnum100_dist1_skew{s}_seed0'
+    for s in [0.8]:
+        task = f'mnist_cnum10_dist1_skew{s}_seed0'
         try:
             main_func(task, headers, flt)
         except ValueError:
