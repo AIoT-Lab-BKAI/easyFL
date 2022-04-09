@@ -1,5 +1,4 @@
 from torch.distributions import Normal
-from torch.autograd import Variable
 import torch.nn as nn
 import torch
 
@@ -25,12 +24,15 @@ class ActorCritic(nn.Module):
             nn.ReLU(),
             nn.Linear(hidden_size, num_outputs),
         )
-         
+        
+        self.log_std = nn.Parameter(torch.ones(1, num_outputs).squeeze() * std)
+        
         self.apply(init_weights)
         
         
     def forward(self, x):
         value = self.critic(x)
         mu    = self.actor(x)
-        dist  = Normal(mu, 0.01)
+        std   = self.log_std.exp().expand_as(mu)
+        dist  = Normal(mu, std)
         return dist, value

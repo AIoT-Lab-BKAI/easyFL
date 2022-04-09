@@ -119,7 +119,7 @@ class Server(MPBasicServer):
             incremental_factor = self.agent.get_action(state, self.prev_reward).cpu()
             
             new_model = self.aggregate(models, p = [(1 + np.sqrt(f/(np.log(t+1) + 1))) for f,cid in zip(frequencies, self.selected_clients)])
-            self.model = fmodule._model_add(self.model.cpu() * incremental_factor.detach(), new_model.cpu() * (1 - incremental_factor.detach()))
+            self.model = fmodule._model_add(self.model.cpu(), new_model.cpu() * incremental_factor.detach())
             return
 
     def onehot_fromlist(self, list, length=None):

@@ -39,7 +39,7 @@ class gae_agent():
         if prev_reward != None:
             self.rewards.append(torch.FloatTensor(prev_reward).unsqueeze(1).to(self.device))
             
-        if len(self.log_probs) >= 4:
+        if len(self.log_probs) >= self.k_steps:
             assert len(self.rewards) == len(self.log_probs) == len(self.values) == len(self.masks), "Invalid update"
             self.update(state)
             self.clear_storage()
@@ -49,8 +49,8 @@ class gae_agent():
         log_prob = dist.log_prob(action)
         # self.entropy += dist.entropy().mean()
         
-        self.log_probs.append(log_prob)
-        self.values.append(value)
+        self.log_probs.append(log_prob.detach())
+        self.values.append(value.detach())
         self.masks.append(torch.FloatTensor(0).unsqueeze(1).to(self.device))
         return action
     

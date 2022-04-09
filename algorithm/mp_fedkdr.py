@@ -73,7 +73,8 @@ class Server(MPBasicServer):
             return
         device0 = torch.device(f"cuda:{self.server_gpu_id}")
         models = [i.to(device0) for i in models]
-        self.model = self.aggregate(models, p = [1.0 for cid in self.selected_clients])
+        # self.model = self.aggregate(models, p = [1.0 for cid in self.selected_clients])
+        self.model = self.aggregate(models, p = [1.0/6] * 6 + [1,1,1,1])
         return
 
 
