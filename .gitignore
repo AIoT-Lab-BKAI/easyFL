@@ -10,5 +10,6 @@
 /fedtask/
 .vscode*
 /utils/figures/
+/utils/__pycache__
 *.txt
 test*
