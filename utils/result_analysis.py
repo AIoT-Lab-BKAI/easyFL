@@ -25,11 +25,11 @@ import numpy as np
 
 
 linestyle_tuple = [
-'-', '--', '-.', ':', 'dashed', 'dashdot', 'dotted', 'solid',
+'dashed', 'dashdot','-', '--', '-.', ':', 'dotted', 'solid',
 ]
 
 def read_data_into_dicts(task, records):
-    path = '../fedtask/'+task+'/record'
+    path = '../fedtask/'+ task #+'/record'
     files = os.listdir(path)
     res = []
     for f in records:
@@ -89,7 +89,7 @@ def filename_filter(fnames=[], filter={}):
 #     return
 
 def scan_records(task, header = '', filter = {}):
-    path = '../fedtask/' + task + '/record'
+    path = '../fedtask/' + task #+ '/record'
     files = os.listdir(path)
     # check headers
     files = [f for f in files if f.startswith(header+'_')]
@@ -186,7 +186,7 @@ if __name__ == '__main__':
     # task+record
     headers = [
         'mp_fedsdiv',
-        # 'mp_fedkdr',
+        'mp_fedprox',
         'scaffold',
         'mp_fedavg'
     ]
@@ -198,9 +198,8 @@ if __name__ == '__main__':
         # 'P': '0.01',
         # 'S': '0',
     }
-    
-    for s in [0.8]:
-        task = f'mnist_cnum10_dist1_skew{s}_seed0'
+    for s in [1]:
+        task = f'mnist/quantitative/MNIST-noniid-quantitative_{s}'
         try:
             main_func(task, headers, flt)
         except ValueError:

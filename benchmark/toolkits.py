@@ -488,6 +488,7 @@ class IDXTaskReader(BasicTaskReader):
         train_datas = [IDXDataset(feddata[name]['dtrain']) for name in feddata['client_names']]
         valid_datas = [IDXDataset(feddata[name]['dvalid']) for name in feddata['client_names']]
         return train_datas, valid_datas, test_data, feddata['client_names']
+
 class CustomDataset(Dataset):
     def __init__(self, dataset, idxs):
         self.dataset = dataset
