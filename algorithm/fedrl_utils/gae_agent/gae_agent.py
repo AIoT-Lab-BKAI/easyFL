@@ -35,7 +35,7 @@ class gae_agent():
         
     def get_action(self, state, prev_reward):
         self.count += 1
-        
+        state = state.to(self.device)
         if prev_reward != None:
             self.rewards.append(prev_reward.to(self.device))
             
@@ -45,7 +45,7 @@ class gae_agent():
             self.clear_storage()
         
         dist, value = self.model(state)
-        action = dist.sample()
+        action = dist.rsample()
         log_prob = dist.log_prob(action)
         # self.entropy += dist.entropy().mean()
         
@@ -80,7 +80,10 @@ class gae_agent():
     def reflex_update(self, action, guidence):
         action = action.to(self.device)
         guidence = guidence.to(self.device)
+        print(action)
         
+        # print(action.shape)
+        # print(guidence.shape)
         loss = 1.0/self.k_steps * torch.mean(guidence * torch.log(guidence/action))
         
         self.optimizer.zero_grad()
