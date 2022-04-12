@@ -37,7 +37,7 @@ class gae_agent():
         self.count += 1
         
         if prev_reward != None:
-            self.rewards.append(torch.FloatTensor(prev_reward).unsqueeze(1).to(self.device))
+            self.rewards.append(prev_reward.to(self.device))
             
         if len(self.log_probs) >= self.k_steps:
             assert len(self.rewards) == len(self.log_probs) == len(self.values) == len(self.masks), "Invalid update"
@@ -49,9 +49,9 @@ class gae_agent():
         log_prob = dist.log_prob(action)
         # self.entropy += dist.entropy().mean()
         
-        self.log_probs.append(log_prob.detach())
-        self.values.append(value.detach())
-        self.masks.append(torch.FloatTensor(0).unsqueeze(1).to(self.device))
+        self.log_probs.append(log_prob.mean())
+        self.values.append(value)
+        self.masks.append(torch.FloatTensor(1).unsqueeze(1).to(self.device))
         return action
     
     
@@ -60,9 +60,9 @@ class gae_agent():
         _, next_value = self.model(next_state)
         returns = compute_gae(next_value, self.rewards, self.masks, self.values)
         
-        log_probs = torch.cat(self.log_probs)
-        returns   = torch.cat(returns).detach()
-        values    = torch.cat(self.values)
+        log_probs = torch.vstack(self.log_probs)
+        returns   = torch.vstack(returns).detach()
+        values    = torch.vstack(self.values)
 
         advantage = returns - values
 
@@ -75,7 +75,19 @@ class gae_agent():
         loss.backward()
         self.optimizer.step()
         return
+    
+    
+    def reflex_update(self, action, guidence):
+        action = action.to(self.device)
+        guidence = guidence.to(self.device)
         
+        loss = 1.0/self.k_steps * torch.mean(guidence * torch.log(guidence/action))
+        
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+        return
+    
     
     def clear_storage(self):
         self.log_probs.pop(0)
@@ -84,4 +96,3 @@ class gae_agent():
         self.masks.pop(0)
         # self.entropy = 0
         return
-    
