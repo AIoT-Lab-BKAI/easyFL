@@ -1,3 +1,4 @@
+from pathlib import Path
 import numpy as np
 from utils import fmodule
 import copy
@@ -59,7 +60,10 @@ class BasicServer():
         print("=================End==================")
         logger.time_end('Total Time Cost')
         # save results as .json file
-        logger.save(os.path.join('fedtask', self.option['task'], 'record', flw.output_filename(self.option, self)))
+        filepath = os.path.join('fedtask', self.option['dataidx_filename']).split('.')[0]
+        if not Path(filepath).exists():
+            os.system(f"mkdir -p {filepath}")
+        logger.save(os.path.join(filepath, flw.output_filename(self.option, self)))
 
     def iterate(self, t):
         """

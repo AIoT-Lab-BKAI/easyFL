@@ -101,7 +101,6 @@ class Server(MPBasicServer):
     
     def iterate(self, t, pool):
         self.selected_clients = self.sample()
-        self.selected_clients = [0,1]
         models, train_losses, frequencies = self.communicate(self.selected_clients, pool)
         
         self.prev_reward = - np.sum(train_losses) if t > 0 else None
