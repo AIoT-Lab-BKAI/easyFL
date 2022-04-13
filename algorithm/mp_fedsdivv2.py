@@ -71,11 +71,13 @@ class Server(MPBasicServer):
         self.freq_matrix = torch.zeros_like(self.Q_matrix)
 
         self.impact_factor = None
-        self.thr = 0.75
-
+        self.thr = 0.975
+        self.optimal_ = np.array([1/6] * 6 + [1] * 4)
+        
 
     def iterate(self, t, pool):
         self.selected_clients = self.sample()
+        print("Selected:", self.selected_clients)
         models, train_losses = self.communicate(self.selected_clients, pool)
         models = [model.to(torch.device(f"cuda:{self.server_gpu_id}")) for model in models]
         if not self.selected_clients:
@@ -83,14 +85,13 @@ class Server(MPBasicServer):
         if (len(self.selected_clients) < len(self.clients)) or (self.impact_factor is None):
             self.update_Q_matrix(models, self.selected_clients, t)
             self.impact_factor = self.get_impact_factor(self.selected_clients, t)
+        
+        with open("algorithm/invest/opt_loss.txt", "a") as file:
+            loss = np.mean(np.power(np.array(self.impact_factor) - self.optimal_[self.selected_clients], 2))
+            file.write(f'{loss}\n')
             
         self.model = self.aggregate(models, p = self.impact_factor)
-
-        if t % 50 == 0:
-            np.savetxt(f"algorithm/invest/Q_matrix/Q_matrix_{t}.txt", self.Q_matrix.numpy(), fmt='%.5f', delimiter=',')
-            # np.savetxt(f"algorithm/invest/Freq/freq_matrix_{t}.txt", self.freq_matrix.numpy(), fmt='%d', delimiter=',')
-            # np.savetxt(f"algorithm/invest/Client/chosen_at_{t}.txt", np.array(self.selected_clients), fmt='%d', delimiter=',')
-            # np.savetxt(f"algorithm/invest/Impact/impact_{t}.txt", np.array(self.impact_factor), fmt='%.3f', delimiter=',')
+        self.update_threshold(t)
         return
 
     @torch.no_grad()
@@ -107,7 +108,7 @@ class Server(MPBasicServer):
         new_similarity_matrix = torch.zeros_like(self.Q_matrix)
         for i, model_i in zip(client_idx, model_list):
             for j, model_j in zip(client_idx, model_list):
-                new_similarity_matrix[i][j], _ = compute_similarity(model_i, model_j)
+                _ , new_similarity_matrix[i][j] = compute_similarity(model_i, model_j)
                 
         new_freq_matrix = torch.zeros_like(self.freq_matrix)
         for i in client_idx:
@@ -125,24 +126,41 @@ class Server(MPBasicServer):
         Q_asterisk_mtx = self.Q_matrix/(self.freq_matrix)
         Q_asterisk_mtx[torch.isinf(Q_asterisk_mtx)] = 0.0
         Q_asterisk_mtx = torch.nan_to_num(Q_asterisk_mtx, 0.0)
-        
-        partial_mtx = Q_asterisk_mtx[client_idx]
-        partial_mtx = partial_mtx.T
-        partial_mtx = partial_mtx[client_idx]
-        partial_mtx = (partial_mtx - torch.min(partial_mtx))/(torch.max(partial_mtx) - torch.min(partial_mtx))
 
-        for i in range(len(client_idx)):
-            for j in range(len(client_idx)):
-                Q_asterisk_mtx[client_idx[i]][client_idx[j]] = partial_mtx[i][j]
+        # print("Q_asterisk:\n", Q_asterisk_mtx)
+        # partial_mtx = Q_asterisk_mtx[client_idx]
+        # partial_mtx = partial_mtx.T
+        # partial_mtx = partial_mtx[client_idx]
+        # print(partial_mtx)
         
+        # for i in range(len(client_idx)):
+        #     for j in range(len(client_idx)):
+        #         Q_asterisk_mtx[client_idx[i]][client_idx[j]] = partial_mtx[i][j]
+        
+        min_Q = torch.min(Q_asterisk_mtx[Q_asterisk_mtx > 0.0])
+        max_Q = torch.max(Q_asterisk_mtx[Q_asterisk_mtx > 0.0])
+        Q_asterisk_mtx = torch.abs((Q_asterisk_mtx - min_Q)/(max_Q - min_Q) * (self.freq_matrix > 0.0))
+        
+        if t % 2 == 0:
+            np.savetxt(f"algorithm/invest/Q_matrix/Q_matrix_{t}.txt", Q_asterisk_mtx.numpy(), fmt='%.5f', delimiter=',')
+
         Q_asterisk_mtx = Q_asterisk_mtx > self.thr
+        
+        if t % 2 == 0:
+            np.savetxt(f"algorithm/invest/Cluster/Cluster_mtx_{t}.txt", Q_asterisk_mtx.numpy(), fmt='%.5f', delimiter=',')
+            
+        # print(Q_asterisk_mtx * 1.0)
         impact_factor = 1/torch.sum(Q_asterisk_mtx, dim=0)
         impact_factor[torch.isinf(impact_factor)] = 0.0
         impact_factor = torch.nan_to_num(impact_factor, 0.0)
-        impact_factor = impact_factor.detach().cpu().tolist()
-        
+        impact_factor = impact_factor[client_idx].detach().cpu().tolist()
+        # print(impact_factor)
         return impact_factor
-        
+    
+    
+    def update_threshold(self, t):
+        self.thr = min(self.thr * (1 + 0.0005)**t, 0.998)
+        return
 
 class Client(MPBasicClient):
     def __init__(self, option, name='', train_data=None, valid_data=None):

@@ -78,13 +78,10 @@ class Server(MPBasicServer):
         models, train_losses = self.communicate(self.selected_clients, pool)
         models = [model.to(torch.device(f"cuda:{self.server_gpu_id}")) for model in models]
         
-        if not self.selected_clients: 
+        if not self.selected_clients:
             return
         
-        if (len(self.selected_clients) < len(self.clients)) or (self.all_impact_factor is None):
-            self.all_impact_factor = self.get_impact_factor(self.all_client_models, models, self.selected_clients)
-
-        self.model = self.aggregate(self.all_client_models, p = self.all_impact_factor)
+        self.update_global_model(models, self.selected_clients)
         
         # update model list
         self.update_all_client_models_list(models, self.selected_clients)
@@ -93,26 +90,45 @@ class Server(MPBasicServer):
 
 
     @torch.no_grad()
-    def get_impact_factor(self, model_list):
+    def update_global_model(self, model_list, idx_list):
         device = torch.device(f"cuda:{self.server_gpu_id}")
         self.model = self.model.to(device)
-        models = []
+        new_models = []
         
         for model in model_list:
             for p, q in zip(model.parameters(), self.model.parameters()):
                 p = p - q
-            models.append(model)
+            new_models.append(model)
         
-        similarity_matrix = torch.zeros([len(models), len(models)])
-        for i in range(len(models)):
-            for j in range(len(models)):
-                similarity_matrix[i][j], _ = compute_similarity(models[i], models[j])
+        old_models = []
+        for model in self.all_client_models:
+            for p, q in zip(model.parameters(), self.model.parameters()):
+                 p = p - q
+            old_models.append(model)
+        
+        similarity_matrix = torch.zeros([len(old_models), len(old_models)])
+        for i in range(len(old_models)):
+            for j in range(len(old_models)):
+                similarity_matrix[i][j], _ = compute_similarity(old_models[i], old_models[j])
+        
+        for i, model_i in zip(idx_list, new_models):
+            for j, model_j in zip(idx_list, new_models):
+                similarity_matrix[i][j], _ = compute_similarity(model_i, model_j)
         
         similarity_matrix = (similarity_matrix - torch.min(similarity_matrix))/(torch.max(similarity_matrix) - torch.min(similarity_matrix))
         similarity_matrix = similarity_matrix > self.thr
         
         impact_factor = 1/torch.sum(similarity_matrix, dim=0)
-        return impact_factor.detach().cpu().tolist()
+
+        for idx in range(len(self.all_client_models)):
+            if idx in idx_list:
+                # If this client participate in this round's communication
+                self.model = self.model + impact_factor[idx] * model_list[idx_list.index(idx)] - self.all_impact_factor[idx] * self.all_client_models[idx]
+            else:
+                # If not
+                self.model = self.model + (impact_factor[idx] - self.all_impact_factor[idx]) * self.all_client_models[idx]
+                
+        return
 
     
     def update_all_client_models_list(self, models, index):
