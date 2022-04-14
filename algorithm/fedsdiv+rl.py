@@ -69,7 +69,7 @@ class Server(BasicServer):
     def __init__(self, option, model, clients, test_data=None):
         super(Server, self).__init__(option, model, clients, test_data)
         self.impact_factor = None
-        self.thr = 0.975
+        self.thr = 0.8
         self.device = torch.device('cuda')
         
         self.agent = gae_agent(
@@ -108,13 +108,13 @@ class Server(BasicServer):
             client_ratio = self.clients_per_round/len(self.clients)
             losses = np.asscalar(1/np.sum(train_losses))
             new_client = torch.sum(torch.abs(idx_one_hot - self.prev_one_hot))
-            return client_ratio * losses * new_client
+            return client_ratio * losses * (new_client + 1)
         else:
             return None
 
 
     def iterate(self, t):
-        server_device = torch.device(f"cuda:{self.server_gpu_id}")
+        server_device = torch.device("cuda")
         self.selected_clients = self.sample()
         # self.selected_clients = [0,1]
         models, train_losses = self.communicate(self.selected_clients)
@@ -125,6 +125,8 @@ class Server(BasicServer):
         
         if (len(self.selected_clients) < len(self.clients)) or (self.impact_factor is None):
             self.impact_factor = self.get_impact_factor(models)
+            print("impact: ",self.impact_factor.cpu().tolist())
+            self.impact_factor.requires_grad = False
         
         idx_one_hot = self.onehot_fromlist(self.selected_clients)
         state = idx_one_hot.flatten()
@@ -140,7 +142,7 @@ class Server(BasicServer):
 
     @torch.no_grad()
     def get_impact_factor(self, model_list):
-        device = torch.device(f"cuda:{self.server_gpu_id}")
+        device = torch.device("cuda")
         self.model = self.model.to(device)
         models = []
         
