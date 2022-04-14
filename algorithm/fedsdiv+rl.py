@@ -1,4 +1,5 @@
-from .mp_fedbase import MPBasicServer, MPBasicClient
+# from .mp_fedbase import MPBasicServer, MPBasicClient
+from algorithm.fedbase import BasicServer, BasicClient
 import torch.nn as nn
 import numpy as np
 
@@ -64,17 +65,18 @@ def compute_similarity(a, b):
     return torch.mean(torch.tensor(sim)), sim[-1]
 
 
-class Server(MPBasicServer):
+class Server(BasicServer):
     def __init__(self, option, model, clients, test_data=None):
         super(Server, self).__init__(option, model, clients, test_data)
         self.impact_factor = None
-        self.thr = 0.75
+        self.thr = 0.975
+        self.device = torch.device('cuda')
         
         self.agent = gae_agent(
             num_inputs=len(self.clients), 
             num_outputs=self.clients_per_round,
             hidden_size=256, 
-            device=torch.device(f'cuda:{self.server_gpu_id}')
+            device=self.device
             )
         
         self.prev_reward = None
@@ -111,11 +113,11 @@ class Server(MPBasicServer):
             return None
 
 
-    def iterate(self, t, pool):
+    def iterate(self, t):
         server_device = torch.device(f"cuda:{self.server_gpu_id}")
         self.selected_clients = self.sample()
         # self.selected_clients = [0,1]
-        models, train_losses = self.communicate(self.selected_clients, pool)
+        models, train_losses = self.communicate(self.selected_clients)
         models = [model.to(server_device) for model in models]
         
         if not self.selected_clients:
@@ -159,13 +161,14 @@ class Server(MPBasicServer):
         return impact_factor.detach()
 
 
-class Client(MPBasicClient):
+class Client(BasicClient):
     def __init__(self, option, name='', train_data=None, valid_data=None):
         super(Client, self).__init__(option, name, train_data, valid_data)
         self.lossfunc = nn.CrossEntropyLoss()
+        self.device = torch.device('cuda')
         
-        
-    def train(self, model, device):
+    def train(self, model):
+        device = self.device
         model = model.to(device)
         model.train()
         
