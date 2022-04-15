@@ -25,8 +25,11 @@ import numpy as np
 
 
 linestyle_tuple = [
-'dashed', 'dashdot','-', '--', '-.', ':', 'dotted', 'solid',
+# 'dashed', 'dashdot','-', '--', '-.', ':', 'dotted', 'solid',
+'-'
 ]
+
+color_list = ['blue', 'green', 'orange', 'red', 'black', 'violet']
 
 def read_data_into_dicts(task, records):
     path = '../fedtask/'+ task #+'/record'
@@ -54,7 +57,7 @@ def draw_curve(dicts, curve='train_losses', legends = [], final_round = -1):
             y = [dict[curve][round] for round in range(num_rounds + 1) if (round == 0 or round % eval_interval == 0 or round == num_rounds)]
         else:
             y = dict[curve]
-        plt.plot(x, y, label=legends[i], linewidth=1, linestyle=linestyle_tuple[i%len(linestyle_tuple)])
+        plt.plot(x, y, label=legends[i], linewidth=1, linestyle=linestyle_tuple[i%len(linestyle_tuple)], color=color_list[i%(len(color_list))])
         if final_round>0: plt.xlim((0, final_round))
     plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.2), ncol=1)
     return
@@ -170,7 +173,7 @@ def main_func(task, headers, flt):
     for curve in curve_names:
         plt.figure()
         draw_curve(dicts, curve, legends)
-        plt.title(task)
+        plt.title(task.split('_')[0])
         plt.xlabel("communication rounds")
         plt.ylabel(curve)
         ax = plt.gca()
@@ -186,8 +189,9 @@ if __name__ == '__main__':
     # task+record
     headers = [
         'mp_fedsdiv',
-        'mp_fedprox',
-        'scaffold',
+        'mp_fedsdivv2',
+        # 'mp_fedprox',
+        # 'scaffold',
         'mp_fedavg'
     ]
     flt = {
@@ -199,7 +203,7 @@ if __name__ == '__main__':
         # 'S': '0',
     }
     for s in [1]:
-        task = f'mnist/quantitative/MNIST-noniid-quantitative_{s}'
+        task = f'mnist_featured_N10_K3/mnist/featured/MNIST-noniid-featured_{s}'
         try:
             main_func(task, headers, flt)
         except ValueError:

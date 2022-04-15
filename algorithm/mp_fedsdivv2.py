@@ -86,7 +86,7 @@ class Server(MPBasicServer):
             self.update_Q_matrix(models, self.selected_clients, t)
             self.impact_factor = self.get_impact_factor(self.selected_clients, t)
         
-        with open("algorithm/invest/opt_loss.txt", "a") as file:
+        with open("algorithm/invest/opt_loss.txt", "a+") as file:
             loss = np.mean(np.power(np.array(self.impact_factor) - self.optimal_[self.selected_clients], 2))
             file.write(f'{loss}\n')
             
