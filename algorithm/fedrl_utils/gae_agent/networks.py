@@ -33,6 +33,11 @@ class ActorCritic(nn.Module):
     def forward(self, x):
         value = self.critic(x)
         mu    = self.actor(x)
+        
+        if torch.isnan(mu).any():
+            print("Mu is nan")
+            exit(0)
+            
         std   = self.log_std.exp().expand_as(mu)
         dist  = Normal(mu, std)
         return dist, value

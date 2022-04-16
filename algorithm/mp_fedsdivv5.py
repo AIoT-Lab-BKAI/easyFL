@@ -1,4 +1,15 @@
+"""
+This version is an extension from fedsdivv2
+The update model at server is modified as: 
+    new_model = aggregate(delta_models, impact_factors)
+    server_model = server_model + lr * z * new_model
+
+In which: lr = client_per_turn / all_clients
+          z  = new_clients_this_turn / client_per_turn
+"""
 from .mp_fedbase import MPBasicServer, MPBasicClient
+from utils import fmodule
+
 import torch.nn as nn
 import numpy as np
 
@@ -28,7 +39,7 @@ def KL_divergence(teacher_batch_input, student_batch_input, device):
     
     sub_s = student_batch_input - student_batch_input.transpose(0,1)
     sub_s_norm = torch.norm(sub_s, dim=2)
-    sub_s_norm = sub_s_norm[sub_s_norm!=0].view(batch_student,-1)
+    sub_s_norm = sub_s_norm.flatten()[1:].view(batch_student-1, batch_student+1)[:,:-1].reshape(batch_student, batch_student-1)
     std_s = torch.std(sub_s_norm)
     mean_s = torch.mean(sub_s_norm)
     kernel_mtx_s = torch.pow(sub_s_norm - mean_s, 2) / (torch.pow(std_s, 2) + 0.001)
@@ -37,7 +48,7 @@ def KL_divergence(teacher_batch_input, student_batch_input, device):
     
     sub_t = teacher_batch_input - teacher_batch_input.transpose(0,1)
     sub_t_norm = torch.norm(sub_t, dim=2)
-    sub_t_norm = sub_t_norm[sub_t_norm!=0].view(batch_teacher,-1)
+    sub_t_norm = sub_t_norm.flatten()[1:].view(batch_teacher-1, batch_teacher+1)[:,:-1].reshape(batch_teacher, batch_teacher-1)
     std_t = torch.std(sub_t_norm)
     mean_t = torch.mean(sub_t_norm)
     kernel_mtx_t = torch.pow(sub_t_norm - mean_t, 2) / (torch.pow(std_t, 2) + 0.001)
@@ -66,47 +77,52 @@ def compute_similarity(a, b):
 class Server(MPBasicServer):
     def __init__(self, option, model, clients, test_data=None):
         super(Server, self).__init__(option, model, clients, test_data)
-        self.thr = 0.975
-        
-        self.all_client_models = [copy.deepcopy(self.model).zeros_like() for _ in self.clients]
-        self.last_all_impact_factor = [0 for _ in self.clients]
-        
+
         self.Q_matrix = torch.zeros([len(self.clients), len(self.clients)])
         self.freq_matrix = torch.zeros_like(self.Q_matrix)
-        
 
+        self.impact_factor = None
+        self.thr = 0.975
+        # self.optimal_ = np.array([1/6] * 6 + [1] * 4)
+        
+        self.gamma = 1
+        self.device = torch.device(f"cuda:{self.server_gpu_id}")
+        
+    
     def iterate(self, t, pool):
         self.selected_clients = self.sample()
+        # print("Selected:", self.selected_clients)
         models, train_losses = self.communicate(self.selected_clients, pool)
-        models = [model.to(torch.device(f"cuda:{self.server_gpu_id}")) for model in models]
         
+        self.model = self.model.to(self.device)
+        model_diffs = [model.to(self.device) - self.model for model in models]
+
         if not self.selected_clients:
             return
         
-        self.update_Q_matrix(models, self.selected_clients, t)
-        impact_factor = self.update_global_model(models, self.selected_clients)
+        self.update_Q_matrix(model_diffs, self.selected_clients, t)
+        if (len(self.selected_clients) < len(self.clients)) or (self.impact_factor is None):
+            self.impact_factor, self.gamma = self.get_impact_factor(self.selected_clients, t)
+            
+        model_diff = self.aggregate(model_diffs, p = self.impact_factor)
         
-        # update model list
-        self.update_all_client_models_list(models, self.selected_clients)
-        self.last_all_impact_factor = list.copy(impact_factor)
+        self.model = self.model + self.gamma * model_diff
+        self.update_threshold(t)
         return
+    
+    
+    def aggregate(self, models_grads, p=[]):
+        dw = fmodule._model_average(models_grads, p)
+        return dw
 
     @torch.no_grad()
-    def update_Q_matrix(self, model_list, client_idx, t=None):
-        device = torch.device(f"cuda:{self.server_gpu_id}")
-        self.model = self.model.to(device)
-        models = []
-        
-        for model in model_list:
-            for p, q in zip(model.parameters(), self.model.parameters()):
-                p = p - q
-            models.append(model)
+    def update_Q_matrix(self, model_diff, client_idx, t=None):
         
         new_similarity_matrix = torch.zeros_like(self.Q_matrix)
-        for i, model_i in zip(client_idx, model_list):
-            for j, model_j in zip(client_idx, model_list):
+        for i, model_i in zip(client_idx, model_diff):
+            for j, model_j in zip(client_idx, model_diff):
                 _ , new_similarity_matrix[i][j] = compute_similarity(model_i, model_j)
-        
+                
         new_freq_matrix = torch.zeros_like(self.freq_matrix)
         for i in client_idx:
             for j in client_idx:
@@ -115,48 +131,32 @@ class Server(MPBasicServer):
         # Increase frequency
         self.freq_matrix += new_freq_matrix
         self.Q_matrix = self.Q_matrix + new_similarity_matrix
-        return
+        return 
 
     @torch.no_grad()
-    def update_global_model(self, model_list, client_idx):
+    def get_impact_factor(self, client_idx, t=None):
+        
         Q_asterisk_mtx = self.Q_matrix/(self.freq_matrix)
         Q_asterisk_mtx[torch.isinf(Q_asterisk_mtx)] = 0.0
         Q_asterisk_mtx = torch.nan_to_num(Q_asterisk_mtx, 0.0)
-        
-        print("Client this turn", client_idx)
-        print(Q_asterisk_mtx)
         
         min_Q = torch.min(Q_asterisk_mtx[Q_asterisk_mtx > 0.0])
         max_Q = torch.max(Q_asterisk_mtx[Q_asterisk_mtx > 0.0])
         Q_asterisk_mtx = torch.abs((Q_asterisk_mtx - min_Q)/(max_Q - min_Q) * (self.freq_matrix > 0.0))
         
-        print(Q_asterisk_mtx)
-        
         Q_asterisk_mtx = Q_asterisk_mtx > self.thr
+        
         impact_factor = 1/torch.sum(Q_asterisk_mtx, dim=0)
         impact_factor[torch.isinf(impact_factor)] = 0.0
         impact_factor = torch.nan_to_num(impact_factor, 0.0)
-        impact_factor = impact_factor.detach().cpu().tolist()
-        
-        print(impact_factor)
-        print(self.last_all_impact_factor)
-
-        for idx in range(len(self.all_client_models)):
-            if idx in client_idx:
-                # If this client participate in this round's communication
-                self.model = self.model + impact_factor[idx] * model_list[client_idx.index(idx)] - self.last_all_impact_factor[idx] * self.all_client_models[idx]
-            else:
-                # If not
-                self.model = self.model + (impact_factor[idx] - self.last_all_impact_factor[idx]) * self.all_client_models[idx] 
-        
-        return impact_factor
-
+        impact_factor_frac = impact_factor[client_idx]
+        gamma = torch.sum(impact_factor_frac)/torch.sum(impact_factor)
+        return impact_factor_frac.detach().cpu().tolist(), gamma.detach().cpu().item()
     
-    def update_all_client_models_list(self, models, index):
-        for idx, model in zip(index, models):
-            self.all_client_models[idx] = copy.deepcopy(model)
+    
+    def update_threshold(self, t):
+        self.thr = min(self.thr * (1 + 0.0005)**t, 0.998)
         return
-    
 
 class Client(MPBasicClient):
     def __init__(self, option, name='', train_data=None, valid_data=None):
@@ -192,9 +192,6 @@ class Client(MPBasicClient):
         tdata = self.data_to_device(data, device)    
         output_s, representation_s = model.pred_and_rep(tdata[0])                  # Student
         _ , representation_t = src_model.pred_and_rep(tdata[0])                    # Teacher
-        try:
-            kl_loss = KL_divergence(representation_t, representation_s, device)        # KL divergence
-        except:
-            kl_loss = 0.0
+        kl_loss = KL_divergence(representation_t, representation_s, device)        # KL divergence
         loss = self.lossfunc(output_s, tdata[1])
         return loss, kl_loss

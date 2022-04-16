@@ -47,10 +47,21 @@ class gae_agent():
             self.update(state)
             self.clear_storage()
         
+        if torch.isnan(state).any():
+            print("State contains nan")
+            exit(0)
+            
         dist, value = self.model(state)
         action = dist.rsample()
         log_prob = dist.log_prob(action)
-        self.entropy += dist.entropy().mean()
+        entp = dist.entropy().mean()
+        
+        if torch.isnan(entp).any():
+            print("Entropy contains nan")
+            print(dist.entropy())
+            exit(0)
+            
+        self.entropy += entp
         
         self.log_probs.append(log_prob.mean())
         self.values.append(value)
@@ -75,6 +86,17 @@ class gae_agent():
         actor_loss  = -(log_probs * advantage.detach()).mean()
         critic_loss = advantage.pow(2).mean()
 
+        if torch.isnan(actor_loss).any():
+            print("actor loss is nan")
+            print("log prob:", log_probs)
+            print("advantage:", advantage)
+            exit(0)
+        
+        if torch.isnan(critic_loss).any():
+            print("critic loss is nan")
+            print("advantage:", advantage)
+            exit(0)
+            
         loss = actor_loss + 0.5 * critic_loss + self.imitate_loss - 0.001 * self.entropy
 
         self.optimizer.zero_grad()
@@ -87,7 +109,15 @@ class gae_agent():
         action = action.to(self.device)
         guidence = guidence.to(self.device)
         guidence = guidence/torch.sum(guidence)
-        self.imitate_loss += torch.mean(guidence * torch.log(guidence/action))
+        itm = torch.mean(guidence * torch.log(guidence/action))
+        
+        if torch.isnan(itm).any():
+            print("imitate_loss is nan")
+            print("action:", action)
+            print("guidence:", guidence)
+            exit(0)
+            
+        self.imitate_loss += itm
         return
     
     
