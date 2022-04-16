@@ -150,7 +150,20 @@ class Server(MPBasicServer):
         impact_factor[torch.isinf(impact_factor)] = 0.0
         impact_factor = torch.nan_to_num(impact_factor, 0.0)
         impact_factor_frac = impact_factor[client_idx]
-        gamma = torch.sum(impact_factor_frac)/torch.sum(impact_factor)
+        
+        num_cluster_all = torch.sum(impact_factor)
+        
+        temp_mtx = Q_asterisk_mtx[client_idx]
+        temp_mtx = temp_mtx.T
+        temp_mtx = temp_mtx[client_idx]
+        
+        temp_vec = 1/torch.sum(temp_mtx, dim=0)
+        temp_vec[torch.isinf(temp_vec)] = 0.0
+        temp_vec = torch.nan_to_num(temp_vec, 0.0)
+        
+        num_cluster_round = torch.sum(temp_vec)
+        gamma = num_cluster_round/num_cluster_all
+        
         return impact_factor_frac.detach().cpu().tolist(), gamma.detach().cpu().item()
     
     

@@ -86,9 +86,9 @@ class Server(MPBasicServer):
             self.update_Q_matrix(models, self.selected_clients, t)
             self.impact_factor = self.get_impact_factor(self.selected_clients, t)
         
-        with open("algorithm/invest/opt_loss.txt", "a+") as file:
-            loss = np.mean(np.power(np.array(self.impact_factor) - self.optimal_[self.selected_clients], 2))
-            file.write(f'{loss}\n')
+        # with open("algorithm/invest/opt_loss.txt", "a+") as file:
+        #     loss = np.mean(np.power(np.array(self.impact_factor) - self.optimal_[self.selected_clients], 2))
+        #     file.write(f'{loss}\n')
             
         self.model = self.aggregate(models, p = self.impact_factor)
         self.update_threshold(t)
@@ -126,23 +126,13 @@ class Server(MPBasicServer):
         Q_asterisk_mtx = self.Q_matrix/(self.freq_matrix)
         Q_asterisk_mtx[torch.isinf(Q_asterisk_mtx)] = 0.0
         Q_asterisk_mtx = torch.nan_to_num(Q_asterisk_mtx, 0.0)
-
-        # print("Q_asterisk:\n", Q_asterisk_mtx)
-        # partial_mtx = Q_asterisk_mtx[client_idx]
-        # partial_mtx = partial_mtx.T
-        # partial_mtx = partial_mtx[client_idx]
-        # print(partial_mtx)
-        
-        # for i in range(len(client_idx)):
-        #     for j in range(len(client_idx)):
-        #         Q_asterisk_mtx[client_idx[i]][client_idx[j]] = partial_mtx[i][j]
         
         min_Q = torch.min(Q_asterisk_mtx[Q_asterisk_mtx > 0.0])
         max_Q = torch.max(Q_asterisk_mtx[Q_asterisk_mtx > 0.0])
         Q_asterisk_mtx = torch.abs((Q_asterisk_mtx - min_Q)/(max_Q - min_Q) * (self.freq_matrix > 0.0))
         
-        if t % 2 == 0:
-            np.savetxt(f"algorithm/invest/Q_matrix/Q_matrix_{t}.txt", Q_asterisk_mtx.numpy(), fmt='%.5f', delimiter=',')
+        # if t % 2 == 0:
+        #     np.savetxt(f"algorithm/invest/Q_matrix/Q_matrix_{t}.txt", Q_asterisk_mtx.numpy(), fmt='%.5f', delimiter=',')
 
         Q_asterisk_mtx = Q_asterisk_mtx > self.thr
         
