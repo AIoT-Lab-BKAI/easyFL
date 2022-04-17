@@ -173,7 +173,7 @@ def main_func(task, headers, flt):
     for curve in curve_names:
         plt.figure()
         draw_curve(dicts, curve, legends)
-        plt.title(task.split('_')[0])
+        plt.title(task.split('/')[0])
         plt.xlabel("communication rounds")
         plt.ylabel(curve)
         ax = plt.gca()
@@ -190,20 +190,21 @@ if __name__ == '__main__':
     headers = [
         # 'fedsdiv+rl',
         'mp_fedsdivv2',
-        # 'mp_fedprox',
+        'mp_fedsdivv5',
+        'mp_fedprox',
         'scaffold',
-        # 'mp_fedavg'
+        'mp_fedavg'
     ]
     flt = {
         # 'E': '5',
         # 'B': '10',
         # 'LR': '0.01',
-        'R': '200',
+        # 'R': '200',
         # 'P': '0.01',
         # 'S': '0',
     }
     for s in [1]:
-        task = f'mnist_cluster_N10_K10/mnist/client_cluster/MNIST-client-cluster-quantitative'
+        task = f'mnist_clustered_N10_K10/mnist/client_cluster/MNIST-client-cluster-quantitative'
         try:
             main_func(task, headers, flt)
         except ValueError:
