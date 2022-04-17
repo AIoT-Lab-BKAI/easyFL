@@ -93,6 +93,7 @@ class Server(MPBasicServer):
         self.selected_clients = self.sample()
         # print("Selected:", self.selected_clients)
         models, train_losses = self.communicate(self.selected_clients, pool)
+        models = [model.to(self.device) for model in models]
         
         self.model = self.model.to(self.device)
         model_diffs = [model.to(self.device) - self.model for model in models]
@@ -100,27 +101,22 @@ class Server(MPBasicServer):
         if not self.selected_clients:
             return
         
-        self.update_Q_matrix(model_diffs, self.selected_clients, t)
+        self.update_Q_matrix(models, self.selected_clients, t)
         if (len(self.selected_clients) < len(self.clients)) or (self.impact_factor is None):
             self.impact_factor, self.gamma = self.get_impact_factor(self.selected_clients, t)
             
         model_diff = self.aggregate(model_diffs, p = self.impact_factor)
-        
         self.model = self.model + self.gamma * model_diff
         self.update_threshold(t)
         return
-    
-    
-    def aggregate(self, models_grads, p=[]):
-        dw = fmodule._model_average(models_grads, p)
-        return dw
+
 
     @torch.no_grad()
-    def update_Q_matrix(self, model_diff, client_idx, t=None):
+    def update_Q_matrix(self, model_list, client_idx, t=None):
         
         new_similarity_matrix = torch.zeros_like(self.Q_matrix)
-        for i, model_i in zip(client_idx, model_diff):
-            for j, model_j in zip(client_idx, model_diff):
+        for i, model_i in zip(client_idx, model_list):
+            for j, model_j in zip(client_idx, model_list):
                 _ , new_similarity_matrix[i][j] = compute_similarity(model_i, model_j)
                 
         new_freq_matrix = torch.zeros_like(self.freq_matrix)
@@ -131,7 +127,7 @@ class Server(MPBasicServer):
         # Increase frequency
         self.freq_matrix += new_freq_matrix
         self.Q_matrix = self.Q_matrix + new_similarity_matrix
-        return 
+        return
 
     @torch.no_grad()
     def get_impact_factor(self, client_idx, t=None):

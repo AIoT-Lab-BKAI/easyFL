@@ -96,14 +96,6 @@ class Server(MPBasicServer):
 
     @torch.no_grad()
     def update_Q_matrix(self, model_list, client_idx, t=None):
-        device = torch.device(f"cuda:{self.server_gpu_id}")
-        self.model = self.model.to(device)
-        models = []
-        
-        for model in model_list:
-            for p, q in zip(model.parameters(), self.model.parameters()):
-                p = p - q
-            models.append(model)
         
         new_similarity_matrix = torch.zeros_like(self.Q_matrix)
         for i, model_i in zip(client_idx, model_list):

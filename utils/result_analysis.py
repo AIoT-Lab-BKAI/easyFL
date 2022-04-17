@@ -188,11 +188,11 @@ def main_func(task, headers, flt):
 if __name__ == '__main__':
     # task+record
     headers = [
-        'mp_fedsdiv',
+        # 'fedsdiv+rl',
         'mp_fedsdivv2',
         # 'mp_fedprox',
-        # 'scaffold',
-        'mp_fedavg'
+        'scaffold',
+        # 'mp_fedavg'
     ]
     flt = {
         # 'E': '5',
@@ -203,7 +203,7 @@ if __name__ == '__main__':
         # 'S': '0',
     }
     for s in [1]:
-        task = f'mnist_featured_N10_K3/mnist/featured/MNIST-noniid-featured_{s}'
+        task = f'mnist_cluster_N10_K10/mnist/client_cluster/MNIST-client-cluster-quantitative'
         try:
             main_func(task, headers, flt)
         except ValueError:
