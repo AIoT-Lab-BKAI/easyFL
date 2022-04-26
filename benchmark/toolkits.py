@@ -29,7 +29,11 @@ from torch.utils.data import Dataset, DataLoader
 import torch
 ssl._create_default_https_context = ssl._create_unverified_context
 import importlib
-
+from torchvision import transforms, datasets
+import json
+import os
+import cv2
+from PIL import Image
 def set_random_seed(seed=0):
     """Set random seed"""
     random.seed(3 + seed)
@@ -488,6 +492,30 @@ class IDXTaskReader(BasicTaskReader):
         train_datas = [IDXDataset(feddata[name]['dtrain']) for name in feddata['client_names']]
         valid_datas = [IDXDataset(feddata[name]['dvalid']) for name in feddata['client_names']]
         return train_datas, valid_datas, test_data, feddata['client_names']
+
+class PillDataset(Dataset):
+    def __init__(self,user_idx,img_folder_path="",idx_dict=None,label_dict=None,map_label_dict=None):
+        super().__init__()
+        self.user_idx = user_idx
+        self.idx = idx_dict[str(user_idx)]
+        self.img_folder_path = img_folder_path
+        self.label_dict = label_dict
+        self.map_label_dict = map_label_dict
+        self.transform = transforms.Compose([transforms.Resize((224,224)),transforms.ToTensor()])
+
+    def __len__(self):
+        # return 1
+        return len(self.idx)
+
+    def __getitem__(self, item):
+        img_name = self.idx[item]
+        img_path = os.path.join(self.img_folder_path,img_name)
+        img = Image.open(img_path).convert("RGB")
+        img = self.transform(img)
+        pill_name = self.label_dict[img_name]
+        label = self.map_label_dict[pill_name]
+        return img,label 
+
 
 class CustomDataset(Dataset):
     def __init__(self, dataset, idxs):

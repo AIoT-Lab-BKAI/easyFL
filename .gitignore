@@ -1,4 +1,4 @@
-/__pycache__/
+__pycache__/
 */__pycache__/
 /algorithm/fedrl_utils/ddpg_agent/__pycache__/
 /algorithm/fedrl_utils/gae_agent/__pycache__/
@@ -6,10 +6,11 @@
 /algorithm/fedrl_utils/models
 /algorithm/fedrl_utils/baseline
 /algorithm/kd_utils/
-/benchmark/
 /fedtask/
 .vscode*
 /utils/figures/
 /utils/__pycache__
 *.txt
 test*
+benchmark/pilldataset/pill_dataset
+*/data/
