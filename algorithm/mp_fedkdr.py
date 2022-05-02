@@ -8,6 +8,8 @@ import torch
 import os
 import copy
 
+import json
+
 
 def KL_divergence(teacher_batch_input, student_batch_input, device):
     """
@@ -53,17 +55,15 @@ def KL_divergence(teacher_batch_input, student_batch_input, device):
 class Server(MPBasicServer):
     def __init__(self, option, model, clients, test_data = None):
         super(Server, self).__init__(option, model, clients, test_data)
-        
-    def finish(self, model_path):
-        if not Path(model_path).exists():
-            os.system(f"mkdir -p {model_path}")
-        task = self.option['task']
-        torch.save(self.model.state_dict(), f"{model_path}/{self.name}_{self.num_rounds}_{task}.pth")
-        pass
     
     def run(self):
         super().run()
-        # self.finish(f"algorithm/fedrl_utils/baseline/{self.name}")
+        for i in range(len(self.clients)):
+            client = self.clients[i]
+            client.classifier_losses = np.array(client.classifier_losses)
+            client.kd_losses = np.array(client.kd_losses)
+            np.savetxt(f"algorithm/kdr/client_{i}_classfier_loss.txt", client.classifier_losses, fmt="%.10f", delimiter=',')
+            np.savetxt(f"algorithm/kdr/client_{i}_kd_loss.txt", client.kd_losses, fmt="%.10f", delimiter=',')
         return
     
     def iterate(self, t, pool):
@@ -82,6 +82,8 @@ class Client(MPBasicClient):
         super(Client, self).__init__(option, name, train_data, valid_data)
         self.lossfunc = nn.CrossEntropyLoss()
         self.kd_factor = 1
+        self.classifier_losses = []
+        self.kd_losses = []
                 
         
     def train(self, model, device):
@@ -114,4 +116,6 @@ class Client(MPBasicClient):
         _ , representation_t = src_model.pred_and_rep(tdata[0])                    # Teacher
         kl_loss = KL_divergence(representation_t, representation_s, device)        # KL divergence
         loss = self.lossfunc(output_s, tdata[1])
+        self.classifier_losses.append(loss.detach().cpu().item())
+        self.kd_losses.append(kl_loss.detach().cpu().item())
         return loss, kl_loss
