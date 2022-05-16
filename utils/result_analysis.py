@@ -188,8 +188,8 @@ def main_func(task, headers, flt):
 if __name__ == '__main__':
     # task+record
     headers = [
-        # 'fedsdiv+rl',
-        'mp_fedsdivv2',
+        'mp_fedkdr',
+        'mp_fedtest',
         'mp_fedsdivv5',
         'mp_fedprox',
         'scaffold',
@@ -199,7 +199,7 @@ if __name__ == '__main__':
         # 'E': '5',
         # 'B': '10',
         # 'LR': '0.01',
-        # 'R': '200',
+        'R': '500',
         # 'P': '0.01',
         # 'S': '0',
     }

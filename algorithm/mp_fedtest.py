@@ -61,9 +61,7 @@ class Server(MPBasicServer):
         self.freq_matrix = torch.zeros_like(self.Q_matrix)
 
         self.impact_factor = None
-        self.thr = 0.975
-        # self.optimal_ = np.array([1/6] * 6 + [1] * 4)
-        
+        self.thr = 0.975        
         self.gamma = 1
         
 
