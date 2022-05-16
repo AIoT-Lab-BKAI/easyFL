@@ -15,7 +15,6 @@ imbalance:
     iid:            6 Vol: only the vol of local dataset varies.
     niid:           7 Vol: for generating synthetic data
 """
-from builtins import breakpoint
 import torch
 import ujson
 import numpy as np
@@ -32,8 +31,8 @@ import importlib
 from torchvision import transforms, datasets
 import json
 import os
-import cv2
 from PIL import Image
+
 def set_random_seed(seed=0):
     """Set random seed"""
     random.seed(3 + seed)
