@@ -5,9 +5,11 @@ import copy
 
 
 @torch.no_grad()
-def special_aggregate(last_layer_list):
+def special_aggregate(last_layer_list, p=[]):
     P, Q = 0, 0
-    for last_layer in last_layer_list:
+
+    for last_layer, scale in zip(last_layer_list, p):
+        last_layer = last_layer / scale
         alpha = torch.norm(last_layer, dim=1, keepdim=True) * torch.mean((last_layer > 0) * 1.0, dim=1, keepdim=True)
         P += alpha * last_layer
         Q += alpha
@@ -15,7 +17,7 @@ def special_aggregate(last_layer_list):
     return torch.nan_to_num(P/Q, 0)
 
 
-def model_sum(ms):
+def model_sum(ms, p=[]):
     if not ms: return None
     op_with_graph = sum([mi.ingraph for mi in ms]) > 0
     res = copy.deepcopy(ms[0]).to(ms[0].get_device())
@@ -25,7 +27,7 @@ def model_sum(ms):
         
         for n in range(len(mlr)):
             mpks = [mlk[n]._parameters for mlk in mlks]
-            rd = modeldict_sum(mpks, special_aggregate)
+            rd = modeldict_sum(mpks, special_aggregate, p=p)
             for l in mlr[n]._parameters.keys():
                 if mlr[n]._parameters[l] is None: continue
                 mlr[n]._parameters[l] = rd[l]
@@ -35,7 +37,7 @@ def model_sum(ms):
     return res
 
 
-def modeldict_sum(mds, special_aggregate_method=None):
+def modeldict_sum(mds, special_aggregate_method=None, p=[]):
     if not mds: return None
     md_sum = {}
     
@@ -57,7 +59,7 @@ def modeldict_sum(mds, special_aggregate_method=None):
                 md_sum[layer] = md_sum[layer] + mds[wid][layer]
     
     if len(last_layers):
-        md_sum[keys[-2]] = special_aggregate_method(last_layers)
+        md_sum[keys[-2]] = special_aggregate_method(last_layers, p=p)
        
     return md_sum
 
