@@ -64,6 +64,25 @@ class Server(MPBasicServer):
         self.thr = 0.975        
         self.gamma = 1
         
+        self.path = f"../models/{self.task}/round_{self.num_rounds}"
+        self.file_save = f"{self.path}/{self.name}.pth"
+        
+        self.load_model_path = option['load_model_path']
+        
+        if self.load_model_path is not None:
+            if Path(self.load_model_path).exists():
+                print(f"Loading server model at round {self.num_rounds}...")
+                self.model.load_state_dict(torch.load(self.load_model_path))
+            else:
+                print(f"Exists no {self.load_model_path}")
+            
+    
+    def run(self):
+        super().run()
+        if not Path(self.path).exists():
+            os.system(f"mkdir -p {self.path}")
+        torch.save(self.model.state_dict(), self.file_save)
+        
 
     def iterate(self, t, pool):
         self.selected_clients = self.sample()
@@ -181,7 +200,8 @@ class Client(MPBasicClient):
         sample, _ = batch_noise
         sample = sample.to(device)
         output_logits = model(sample)
-        return F.mse_loss(output_logits, -1 * abs(self.contst_fct) * one_hot_batch(targets, device=device))
+        loss = F.mse_loss(output_logits, -1.0 * abs(self.contst_fct) * F.one_hot(targets, num_classes=10))
+        return loss
     
     
     def data_to_device(self, data, device=None):
