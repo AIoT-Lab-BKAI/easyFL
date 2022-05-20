@@ -15,3 +15,5 @@ test*
 benchmark/pilldataset/pill_dataset
 */data/
 benchmark/mnist/data
+dataset_idx/pill_dataset/client_dataset/pill_cropped
+dataset_idx/pill_dataset/server_dataset/pill_cropped
