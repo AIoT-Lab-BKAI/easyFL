@@ -9,10 +9,9 @@ import torch
 class MPBasicServer(BasicServer):
     def __init__(self, option, model, clients, test_data=None):
         super().__init__(option, model, clients, test_data)
-        self.gpus = option['num_gpus']
-        if self.gpus > 1:
-            self.gpus -= 1
-        self.num_threads = option['num_threads_per_gpu'] * (self.gpus)
+        print("Number of processing units: {}".format(option['num_threads']))
+        self.process_dict = option["process_gpu_id"]
+        self.num_threads = option['num_threads']
         self.server_gpu_id = option['server_gpu_id']
 
     def run(self):
@@ -86,9 +85,7 @@ class MPBasicServer(BasicServer):
         """
         
         gpu_id = int(mp.current_process().name[-1]) - 1
-        gpu_id = gpu_id % self.gpus
-        if self.gpus >= 1:
-            gpu_id += 1
+        gpu_id = self.process_dict[gpu_id]
         torch.manual_seed(0)
         torch.cuda.set_device(gpu_id)
         device = torch.device('cuda') # This is only 'cuda' so its can find the propriate cuda id to train

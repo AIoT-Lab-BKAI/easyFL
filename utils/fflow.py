@@ -8,6 +8,7 @@ import os
 import utils.fmodule
 import ujson
 import time
+import yaml 
 
 sample_list=['uniform', 'md', 'active']
 agg_list=['uniform', 'weighted_scale', 'weighted_com', 'none']
@@ -39,10 +40,6 @@ def read_option():
     # machine environment settings
     parser.add_argument('--seed', help='seed for random initialization;', type=int, default=0)
     parser.add_argument('--eval_interval', help='evaluate every __ rounds;', type=int, default=1)
-    parser.add_argument('--num_threads', help='the number of threads;', type=int, default=1)
-    parser.add_argument('--num_threads_per_gpu', help="the number of threads per gpu in the clients computing session;", type=int, default=1)
-    parser.add_argument('--num_gpus', default=3, type=int)
-    parser.add_argument('--gpu', default=0, type=int)
     # the simulating system settings of clients
     
     # constructing the heterogeity of the network
@@ -63,7 +60,6 @@ def read_option():
     parser.add_argument('--mu', help='mu in fedprox', type=float, default='0.1')
     parser.add_argument('--dataidx_filename', help="path to idx file", required=True, default='none')
     # server gpu
-    parser.add_argument('--server_gpu_id', help='server process on this gpu', type=int, default=0)
     parser.add_argument('--load_model_path', help='path to model to continue training', type=str, required=False, default=None)
     
     try: option = vars(parser.parse_args())
