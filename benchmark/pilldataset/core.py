@@ -9,19 +9,19 @@ class TaskReader(BasicTaskReader):
         super(TaskReader,self).__init__(taskpath)
     
     def read_data(self):
-        with open(self.taskpath +"pill_dataset/client_dataset/user_group_img.json",'r') as f:
+        with open(self.taskpath +"/pill_dataset/client_dataset/user_group_img.json",'r') as f:
             user_group_img = json.load(f)
-        with open(self.taskpath +"pill_dataset/client_dataset/img_label_dict.json",'r') as f:
+        with open(self.taskpath +"/pill_dataset/client_dataset/img_label_dict.json",'r') as f:
             img_label_dict = json.load(f)
-        with open(self.taskpath +"pill_dataset/client_dataset/label_hash.json",'r') as f:
+        with open(self.taskpath +"/pill_dataset/client_dataset/label_hash.json",'r') as f:
             label_hash = json.load(f)
-        with open(self.taskpath +"pill_dataset/server_dataset/user_group_img.json",'r') as f:
+        with open(self.taskpath +"/pill_dataset/server_dataset/user_group_img.json",'r') as f:
             server_user_group_img = json.load(f)
-        with open(self.taskpath +"pill_dataset/server_dataset/img_label_dict.json",'r') as f:
+        with open(self.taskpath +"/pill_dataset/server_dataset/img_label_dict.json",'r') as f:
             server_img_label_dict = json.load(f)  
-        test_dataset = PillDataset(0,self.taskpath +"pill_dataset/server_dataset/pill_cropped",server_user_group_img,server_img_label_dict,label_hash)
+        test_dataset = PillDataset(0,self.taskpath +"/pill_dataset/server_dataset/pill_cropped",server_user_group_img,server_img_label_dict,label_hash)
         n_clients = len(user_group_img)
-        train_data = [PillDataset(idx, self.taskpath +"pill_dataset/client_dataset/pill_cropped", user_group_img, img_label_dict, label_hash) for idx in range(n_clients)]
+        train_data = [PillDataset(idx, self.taskpath +"/pill_dataset/client_dataset/pill_cropped", user_group_img, img_label_dict, label_hash) for idx in range(n_clients)]
         return train_data,test_dataset,n_clients
 
 class TaskCalculator(ClassifyCalculator):
