@@ -18,18 +18,20 @@ AC: the active rate of clients
 
 from pathlib import Path
 import matplotlib.pyplot as plt
+plt.rcParams.update({'font.size': 18})
 import ujson
 # import prettytable as pt
 import os
 import numpy as np
 
 
-linestyle_tuple = [
-# 'dashed', 'dashdot','-', '--', '-.', ':', 'dotted', 'solid',
-'-'
-]
+linestyle_tuple = ['dashed', 'dashdot','-', '--', '-.', ':', 'dotted', 'solid',]
 
-color_list = ['blue', 'green', 'orange', 'red', 'black', 'violet']
+marker_list = ['o', 's', 'p', '*', 'h', 'X', 'D']
+
+color_list = ['blue', 'green', 'orange', 'red', 'violet', "teal", "brown", "darkgreen"]
+
+size = 0
 
 def read_data_into_dicts(task, records):
     path = '../fedtask/'+ task #+'/record'
@@ -57,7 +59,11 @@ def draw_curve(dicts, curve='train_losses', legends = [], final_round = -1):
             y = [dict[curve][round] for round in range(num_rounds + 1) if (round == 0 or round % eval_interval == 0 or round == num_rounds)]
         else:
             y = dict[curve]
-        plt.plot(x, y, label=legends[i], linewidth=1, linestyle=linestyle_tuple[i%len(linestyle_tuple)], color=color_list[i%(len(color_list))])
+        plt.plot(x, y, label=legends[i], linewidth=1, 
+                 marker= marker_list[i%len(marker_list)], 
+                 ms=size,
+                 linestyle=linestyle_tuple[i%len(linestyle_tuple)], 
+                 color=color_list[i%(len(color_list))])
         if final_round>0: plt.xlim((0, final_round))
     plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.2), ncol=1)
     return
@@ -171,11 +177,11 @@ def main_func(task, headers, flt):
     # create legends
     legends = create_legend(records, ['P','LR'])
     for curve in curve_names:
-        plt.figure()
+        plt.figure(figsize=(8,6))
         draw_curve(dicts, curve, legends)
-        plt.title(task.split('/')[0])
+        plt.title(task.split('/')[0].replace('_', ' '), pad=10)
         plt.xlabel("communication rounds")
-        plt.ylabel(curve)
+        plt.ylabel(curve.replace('_', ' '))
         ax = plt.gca()
         plt.grid()
         plt.show()
@@ -188,18 +194,25 @@ def main_func(task, headers, flt):
 if __name__ == '__main__':
     # task+record
     headers = [
-        'mp_fedkdr',
+        # 'mp_fedkdr',
         'mp_fedtest',
-        'mp_fedsdivv5',
-        'mp_fedprox',
-        'scaffold',
-        'mp_fedavg'
+        # 'mp_fedtestv2',
+        # 'mp_fedtestv3',
+        # 'mp_fedtestv4',
+        # 'mp_fedtestv5',
+        # 'mp_fedtestv6',
+        'mp_fedtestULT',
+        # 'mp_fedsdivv5',
+        # 'mp_fedprox',
+        # 'scaffold',
+        # 'mp_fedavg',
+        'mp_fedkdrv2'
     ]
     flt = {
-        # 'E': '5',
-        # 'B': '10',
+        'E': '8',
+        'B': '8',
         # 'LR': '0.01',
-        'R': '500',
+        'R': '100',
         # 'P': '0.01',
         # 'S': '0',
     }
