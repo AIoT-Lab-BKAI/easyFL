@@ -1,14 +1,5 @@
-"""
-This version is an extension from fedsdivv2
-The update model at server is modified as: 
-    new_model = aggregate(delta_models, impact_factors)
-    server_model = server_model + lr * z * new_model
-
-In which: lr = client_per_turn / all_clients
-          z  = new_clients_this_turn / client_per_turn
-"""
 from .mp_fedbase import MPBasicServer, MPBasicClient
-from utils import fmodule
+from algorithm.fedrl_utils.gae_agent.gae_agent import gae_agent
 
 import torch.nn as nn
 import numpy as np
@@ -83,10 +74,17 @@ class Server(MPBasicServer):
 
         self.impact_factor = None
         self.thr = 0.975
-        # self.optimal_ = np.array([1/6] * 6 + [1] * 4)
         
         self.gamma = 1
         self.device = torch.device(f"cuda:{self.server_gpu_id}")
+        
+        self.data_vol_tens = torch.Tensor([1.0 * self.client_vols[cid]/self.data_vol for cid in self.clients]).flatten()
+        
+        n_clients = len(self.clients)
+        self.agent = gae_agent(state_dim=n_clients*(n_clients-1)/2 + n_clients + self.clients_per_round,
+                               action_dim=self.clients_per_round, 
+                               hidden_size=256, 
+                               device=self.device)
         
     
     def iterate(self, t, pool):
@@ -104,12 +102,28 @@ class Server(MPBasicServer):
         self.update_Q_matrix(models, self.selected_clients, t)
         if (len(self.selected_clients) < len(self.clients)) or (self.impact_factor is None):
             self.impact_factor, self.gamma = self.get_impact_factor(self.selected_clients, t)
-            
-        model_diff = self.aggregate(model_diffs, p = self.impact_factor)
+        
+        lower_tri = self.Q_matrix.tril(diagonal=-1)
+        flat_lower_tri = lower_tri[lower_tri != 0].flatten()
+        
+        state = torch.hstack(flat_lower_tri, self.data_vol_tens)
+        prev_r = self.compute_reward(train_losses, self.selected_clients)
+        agent_action = self.agent.get_action(state, prev_reward=prev_r)
+        self.agent.reflex_update(action=agent_action, guidence=self.impact_factor)
+        
+        model_diff = self.aggregate(model_diffs, p = agent_action)
         self.model = self.model + self.gamma * model_diff
         self.update_threshold(t)
         return
 
+
+    def compute_reward(self, losses, client_id):
+        p = 0
+        q = 0
+        for loss, cid in zip(client_id, losses):
+            p += loss * self.impact_factor[cid]
+            q += self.impact_factor[cid]
+        return q/p
 
     @torch.no_grad()
     def update_Q_matrix(self, model_list, client_idx, t=None):

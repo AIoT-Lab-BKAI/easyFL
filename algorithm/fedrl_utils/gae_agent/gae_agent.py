@@ -17,8 +17,8 @@ def compute_gae(next_value, rewards, masks, values, gamma=0.25, tau=0.95):
 
 
 class gae_agent():
-    def __init__(self, num_inputs, num_outputs, hidden_size, device):
-        self.model     = ActorCritic(num_inputs, num_outputs, hidden_size).to(device)
+    def __init__(self, state_dim, action_dim, hidden_size, device):
+        self.model     = ActorCritic(state_dim, action_dim, hidden_size).to(device)
         self.optimizer = optim.Adam(self.model.parameters())
         
         self.log_probs = []
@@ -106,6 +106,13 @@ class gae_agent():
     
     
     def reflex_update(self, action, guidence):
+        
+        action = torch.Tensor(action)
+        guidence = torch.Tensor(guidence)
+        
+        action = action/torch.sum(action)
+        guidence = guidence/torch.sum(guidence)
+        
         action = action.to(self.device)
         guidence = guidence.to(self.device)
         guidence = guidence/torch.sum(guidence)
@@ -122,7 +129,6 @@ class gae_agent():
     
     
     def clear_storage(self):
-        
         self.log_probs.clear()
         self.values.clear()
         self.rewards.clear()
