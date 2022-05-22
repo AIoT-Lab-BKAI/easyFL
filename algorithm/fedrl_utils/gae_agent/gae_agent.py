@@ -32,6 +32,8 @@ class gae_agent():
         self.device    = device
         
         self.imitate_loss = 0.0
+        self.itm_factor = 1
+        self.itm_decay = 0.9
         return
         
         
@@ -97,8 +99,7 @@ class gae_agent():
             print("advantage:", advantage)
             exit(0)
             
-        loss = actor_loss + 0.5 * critic_loss + self.imitate_loss - 0.001 * self.entropy
-
+        loss = actor_loss + 0.5 * critic_loss - 0.001 * self.entropy
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
@@ -106,16 +107,11 @@ class gae_agent():
     
     
     def reflex_update(self, action, guidence):
-        
-        action = torch.Tensor(action)
         guidence = torch.Tensor(guidence)
-        
-        action = action/torch.sum(action)
         guidence = guidence/torch.sum(guidence)
         
         action = action.to(self.device)
         guidence = guidence.to(self.device)
-        guidence = guidence/torch.sum(guidence)
         itm = torch.mean(guidence * torch.log(guidence/action))
         
         if torch.isnan(itm).any():
@@ -124,9 +120,10 @@ class gae_agent():
             print("guidence:", guidence)
             exit(0)
             
-        self.imitate_loss += itm
+        self.optimizer.zero_grad()
+        itm.backward()
+        self.optimizer.step()
         return
-    
     
     def clear_storage(self):
         self.log_probs.clear()

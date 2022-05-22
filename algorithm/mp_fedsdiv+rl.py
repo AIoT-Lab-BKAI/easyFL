@@ -111,7 +111,7 @@ class Server(MPBasicServer):
         agent_action = self.agent.get_action(state, prev_reward=prev_r)
         self.agent.reflex_update(action=agent_action, guidence=self.impact_factor)
         
-        model_diff = self.aggregate(model_diffs, p = agent_action)
+        model_diff = self.aggregate(model_diffs, p = agent_action.detach().cpu().tolist())
         self.model = self.model + self.gamma * model_diff
         self.update_threshold(t)
         return
