@@ -27,6 +27,7 @@ class TaskGen(DefaultTaskGen):
 
 train_dataset = datasets.MNIST("./benchmark/mnist/data", train=True, download=True, transform=transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))]))
 test_dataset = datasets.MNIST("./benchmark/mnist/data", train=False, download=True, transform=transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))]))
+
 class TaskReader(CusTomTaskReader):
     def __init__(self, taskpath=''):
         super(TaskReader, self).__init__(taskpath,train_dataset,test_dataset)

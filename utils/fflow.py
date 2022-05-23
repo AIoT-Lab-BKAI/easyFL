@@ -64,6 +64,7 @@ def read_option():
     parser.add_argument('--dataidx_filename', help="path to idx file", required=True, default='none')
     # server gpu
     parser.add_argument('--server_gpu_id', help='server process on this gpu', type=int, default=0)
+    parser.add_argument('--load_model_path', help='path to model to continue training', type=str, required=False, default=None)
     
     try: option = vars(parser.parse_args())
     except IOError as msg: parser.error(str(msg))
