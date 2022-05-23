@@ -99,7 +99,9 @@ class gae_agent():
             print("advantage:", advantage)
             exit(0)
             
-        loss = actor_loss + 0.5 * critic_loss - 0.001 * self.entropy
+        loss = actor_loss + 0.5 * critic_loss + self.itm_factor * self.imitate_loss - 0.001 * self.entropy
+        self.itm_factor *= self.itm_decay
+        
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
@@ -120,9 +122,7 @@ class gae_agent():
             print("guidence:", guidence)
             exit(0)
             
-        self.optimizer.zero_grad()
-        itm.backward()
-        self.optimizer.step()
+        self.imitate_loss += itm
         return
     
     def clear_storage(self):
