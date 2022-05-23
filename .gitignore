@@ -15,3 +15,4 @@ test*
 benchmark/pilldataset/pill_dataset
 */data/
 benchmark/mnist/data
+dataset_idx/
