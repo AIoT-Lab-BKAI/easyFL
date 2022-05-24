@@ -7,7 +7,7 @@ The update model at server is modified as:
 In which: lr = client_per_turn / all_clients
           z  = new_clients_this_turn / client_per_turn
 """
-from .mp_fedbase import MPBasicServer, MPBasicClient
+from .fedbase import BasicServer, BasicClient
 from utils import fmodule
 
 import torch.nn as nn
@@ -74,7 +74,7 @@ def compute_similarity(a, b):
     return torch.mean(torch.tensor(sim)), sim[-1]
 
 
-class Server(MPBasicServer):
+class Server(BasicServer):
     def __init__(self, option, model, clients, test_data=None):
         super(Server, self).__init__(option, model, clients, test_data)
 
@@ -83,16 +83,15 @@ class Server(MPBasicServer):
 
         self.impact_factor = None
         self.thr = 0.975
-        # self.optimal_ = np.array([1/6] * 6 + [1] * 4)
         
         self.gamma = 1
-        self.device = torch.device(f"cuda:{self.server_gpu_id}")
+        self.device = torch.device("cuda")
         
     
-    def iterate(self, t, pool):
+    def iterate(self, t):
         self.selected_clients = self.sample()
         # print("Selected:", self.selected_clients)
-        models, train_losses = self.communicate(self.selected_clients, pool)
+        models, train_losses = self.communicate(self.selected_clients)
         models = [model.to(self.device) for model in models]
         
         self.model = self.model.to(self.device)
@@ -162,18 +161,18 @@ class Server(MPBasicServer):
         
         return impact_factor_frac.detach().cpu().tolist(), gamma.detach().cpu().item()
     
-    
     def update_threshold(self, t):
         self.thr = min(self.thr * (1 + 0.0005)**t, 0.998)
         return
 
-class Client(MPBasicClient):
+
+class Client(BasicClient):
     def __init__(self, option, name='', train_data=None, valid_data=None):
         super(Client, self).__init__(option, name, train_data, valid_data)
         self.lossfunc = nn.CrossEntropyLoss()
         
         
-    def train(self, model, device):
+    def train(self, model, device='cuda'):
         model = model.to(device)
         model.train()
         
@@ -181,7 +180,7 @@ class Client(MPBasicClient):
         src_model.freeze_grad()
                 
         data_loader = self.calculator.get_data_loader(self.train_data, batch_size=self.batch_size, droplast=True)
-        optimizer = self.calculator.get_optimizer(self.optimizer_name, model, lr = self.learning_rate, weight_decay=self.weight_decay, momentum=self.momentum)
+        optimizer = self.calculator.get_optimizer(self.optimizer_name, model, lr=self.learning_rate, weight_decay=self.weight_decay, momentum=self.momentum)
         
         for iter in range(self.epochs):
             for batch_id, batch_data in enumerate(data_loader):
@@ -193,7 +192,7 @@ class Client(MPBasicClient):
         return
     
     
-    def data_to_device(self, data,device):
+    def data_to_device(self, data, device):
         return data[0].to(device), data[1].to(device)
 
 

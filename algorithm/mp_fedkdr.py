@@ -91,8 +91,6 @@ class Client(MPBasicClient):
         super(Client, self).__init__(option, name, train_data, valid_data)
         self.lossfunc = nn.CrossEntropyLoss()
         self.kd_factor = 1
-        self.classifier_losses = []
-        self.kd_losses = []
     
     
     def reply(self, svr_pkg, device, client_id):
@@ -121,13 +119,6 @@ class Client(MPBasicClient):
                 loss.backward()
                 optimizer.step()
         
-        with open(f"algorithm/kdr/client_{client_id}.csv", "a+") as file:
-            mean_c = np.mean(np.array(self.classifier_losses))
-            mean_k = np.mean(np.array(self.kd_losses))
-            file.write(f"{mean_c},{mean_k}\n")
-        
-        self.classifier_losses.clear()
-        self.kd_losses.clear()
         return
     
     
@@ -141,6 +132,4 @@ class Client(MPBasicClient):
         _ , representation_t = src_model.pred_and_rep(tdata[0])                    # Teacher
         kl_loss = KL_divergence(representation_t, representation_s, device)        # KL divergence
         loss = self.lossfunc(output_s, tdata[1])
-        self.classifier_losses.append(loss.detach().cpu().item())
-        self.kd_losses.append(kl_loss.detach().cpu().item())
         return loss, kl_loss * self.kd_factor
