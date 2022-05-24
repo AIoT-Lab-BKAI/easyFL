@@ -49,6 +49,7 @@ def main():
     multiprocessing.set_start_method('spawn')
     # read options
     option = flw.read_option()
+    
     import yaml
     n_procs = 0
     with open('config_gpu.yaml') as f:
@@ -59,9 +60,9 @@ def main():
         for value in config['process'][k]:
             n_procs += 1
             process_gpu_id[value] = int(k)
+    
     option['process_gpu_id'] = process_gpu_id
     option['num_threads'] = n_procs
-    option['process_gpu_id'] = process_gpu_id
     os.environ['MASTER_ADDR'] = "localhost"
     os.environ['MASTER_PORT'] = '8888'
     os.environ['WORLD_SIZE'] = str(3)
