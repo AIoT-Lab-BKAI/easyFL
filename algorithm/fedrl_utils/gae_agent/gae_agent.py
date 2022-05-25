@@ -52,7 +52,7 @@ class gae_agent():
         if torch.isnan(state).any():
             print("State contains nan")
             exit(0)
-            
+        
         dist, value = self.model(state)
         action = dist.rsample()
         log_prob = dist.log_prob(action)
@@ -61,6 +61,11 @@ class gae_agent():
         if torch.isnan(entp).any():
             print("Entropy contains nan")
             print(dist.entropy())
+            exit(0)
+            
+        if torch.isnan(value).any():
+            print("Entropy contains nan")
+            print(value)
             exit(0)
             
         self.entropy += entp
@@ -104,6 +109,7 @@ class gae_agent():
         
         self.optimizer.zero_grad()
         loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.model.parameters(), 5)
         self.optimizer.step()
         return
     
