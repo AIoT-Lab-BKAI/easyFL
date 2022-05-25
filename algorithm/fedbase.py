@@ -39,6 +39,7 @@ class BasicServer():
         self.option = option
         # server calculator
         self.calculator = fmodule.TaskCalculator(fmodule.device)
+        self.server_gpu_id = option['server_gpu_id']
 
     def run(self):
         """
