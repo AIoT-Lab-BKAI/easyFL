@@ -46,34 +46,34 @@ class Server(BasicServer):
         self.thr = 0.975        
         self.gamma = 1
         
-        self.path = f"/models/{self.task}/round_{self.num_rounds}"
-        self.file_save = f"{self.path}/{self.name}.pth"
+        # self.path = f"/models/{self.task}/round_{self.num_rounds}"
+        # self.file_save = f"{self.path}/{self.name}.pth"
         
-        self.load_model_path = option['load_model_path']
+        # self.load_model_path = option['load_model_path']
         
-        if self.load_model_path is not None:
-            if Path(self.load_model_path).exists():
-                print(f"Loading server model at round {self.num_rounds}...")
-                self.model.load_state_dict(torch.load(self.load_model_path))
-            else:
-                print(f"Exists no {self.load_model_path}")
+        # if self.load_model_path is not None:
+        #     if Path(self.load_model_path).exists():
+        #         print(f"Loading server model at round {self.num_rounds}...")
+        #         self.model.load_state_dict(torch.load(self.load_model_path))
+        #     else:
+        #         print(f"Exists no {self.load_model_path}")
             
     
     def run(self):
         super().run()
-        try:
-            if not Path(self.path).exists():
-                os.system(f"mkdir -p {self.path}")
-            torch.save(self.model.state_dict(), self.file_save)
-        except:
-            print("Save model failed")
+        # try:
+        #     if not Path(self.path).exists():
+        #         os.system(f"mkdir -p {self.path}")
+        #     torch.save(self.model.state_dict(), self.file_save)
+        # except:
+        #     print("Save model failed")
         
 
     def iterate(self, t):
         self.selected_clients = self.sample()
         models, train_losses = self.communicate(self.selected_clients)
         if not self.selected_clients: return
-        device0 = torch.device(f"cuda:{self.server_gpu_id}")
+        device0 = torch.device("cuda")
         
         self.model = self.model.to(device0)
         models = [i.to(device0) - self.model for i in models]
