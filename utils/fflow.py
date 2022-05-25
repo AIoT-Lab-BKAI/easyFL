@@ -31,7 +31,7 @@ def read_option():
     parser.add_argument('--proportion', help='proportion of clients sampled per round', type=float, default=0.2)
     # hyper-parameters of local training
     parser.add_argument('--num_epochs', help='number of epochs when clients trainset on data;', type=int, default=5)
-    parser.add_argument('--learning_rate', help='learning rate for inner solver;', type=float, default=0.1)
+    parser.add_argument('--learning_rate', help='learning rate for inner solver;', type=float, default=0.001)
     parser.add_argument('--batch_size', help='batch size when clients trainset on data;', type=int, default=64)
     parser.add_argument('--optimizer', help='select the optimizer for gd', type=str, choices=optimizer_list, default='SGD')
     parser.add_argument('--momentum', help='momentum of local update', type=float, default=0)
@@ -65,6 +65,8 @@ def read_option():
     # server gpu
     parser.add_argument('--server_gpu_id', help='server process on this gpu', type=int, default=0)
     parser.add_argument('--load_model_path', help='path to model to continue training', type=str, required=False, default=None)
+    parser.add_argument('--data_folder', help="path to data folder", type=str, default=None)
+    parser.add_argument('--log_folder', help="folder to write results", type=str, default='fedtask')
     
     try: option = vars(parser.parse_args())
     except IOError as msg: parser.error(str(msg))
@@ -88,7 +90,7 @@ def initialize(option):
     utils.fmodule.TaskCalculator = getattr(importlib.import_module(bmk_core_path), 'TaskCalculator')
     utils.fmodule.TaskCalculator.setOP(getattr(importlib.import_module('torch.optim'), option['optimizer']))
     utils.fmodule.Model = getattr(importlib.import_module(bmk_model_path), 'Model')
-    task_reader = getattr(importlib.import_module(bmk_core_path), 'TaskReader')(taskpath=option['dataidx_filename'])
+    task_reader = getattr(importlib.import_module(bmk_core_path), 'TaskReader')(taskpath=option['dataidx_filename'], data_folder=option['data_folder'])
     train_datas, test_data, num_clients = task_reader.read_data()
     print("done")
 

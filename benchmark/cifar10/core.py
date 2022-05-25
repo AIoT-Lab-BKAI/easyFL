@@ -26,7 +26,7 @@ class TaskGen(DefaultTaskGen):
         return
 
 class TaskReader(XYTaskReader):
-    def __init__(self, taskpath=''):
+    def __init__(self, taskpath='', data_folder=None):
         super(TaskReader, self).__init__(taskpath)
 
 

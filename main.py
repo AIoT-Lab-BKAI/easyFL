@@ -5,6 +5,10 @@ import os
 import multiprocessing
 
 class MyLogger(flw.Logger):
+    def __init__(self):
+        super().__init__()
+        
+        
     def log(self, server=None):
         if server==None: return
         if self.output == {}:
@@ -20,7 +24,7 @@ class MyLogger(flw.Logger):
                 "mean_valid_accs":[],
             }
         if "mp_" in server.name:
-            test_metric, test_loss = server.test(device=torch.device('cuda:0'))
+            test_metric, test_loss = server.test(device=torch.device('cuda'))
         else:
             test_metric, test_loss = server.test()
         
