@@ -18,3 +18,4 @@ benchmark/mnist/data
 dataset_idx/
 dataset_idx/pill_dataset/client_dataset/pill_cropped
 dataset_idx/pill_dataset/server_dataset/pill_cropped
+wandb/
