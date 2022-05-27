@@ -85,7 +85,7 @@ class Server(BasicServer):
             self.update_Q_matrix(models, self.selected_clients, t)
             self.impact_factor, self.gamma = self.get_impact_factor(self.selected_clients, t)
         
-        self.model = self.model + self.aggregate(models, self.impact_factor)
+        self.model = self.model + self.gamma * self.aggregate(models, self.impact_factor)
         self.update_threshold(t)
         return
 
