@@ -28,7 +28,7 @@ class Model(FModule):
     def pred_and_rep(self, x):
         e = self.encoder(x)
         o = self.decoder(e.flatten(1))
-        return o, e
+        return o, e.flatten(1)
 
 class Loss(nn.Module):
     def __init__(self):
