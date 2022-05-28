@@ -100,28 +100,21 @@ class Server(BasicServer):
         if not self.selected_clients:
             return
         
-        self.update_Q_matrix(models, self.selected_clients, t)
         if (len(self.selected_clients) < len(self.clients)) or (self.impact_factor is None):
+            self.update_Q_matrix(models, self.selected_clients, t)
             self.impact_factor, self.gamma = self.get_impact_factor(self.selected_clients, t)
-            
+        
+        print(self.selected_clients)
+        print("Round", t, self.impact_factor)
+        np.savetxt(f"Q_matrix/round_{t}.txt", self.Q_matrix.numpy())
+        
         model_diff = self.aggregate(model_diffs, p = self.impact_factor)
         self.model = self.model + self.gamma * model_diff
         self.update_threshold(t)
         return
-
-
-    def transitive_update(self, Q_matrix, client_idx):
-        Q_matrix = self.Q_matrix/(self.freq_matrix)
-        Q_matrix = self.remove_inf_nan(Q_matrix)
-        for i in range(Q_matrix.shape[0]):
-            for j in range(i+1, Q_matrix.shape[0]):
-                for k in range(j+1, Q_matrix.shape[0]):
-                    if (i not in client_idx) or (j not in client_idx) or (k not in client_idx):
-                        if Q_matrix[i][j] != 0 and Q_matrix[j][k] != 0:
-                            self.Q_matrix[i][k] = self.compute_simXY(Q_matrix[i][j], Q_matrix[j][k]) * self.freq_matrix[i][k]
     
-    def compute_simXY(self, simXZ, simZY):
-        return torch.normal(simXZ * simZY, torch.sqrt((1-simXZ**2) * (1-simZY**2))/3)
+    # def compute_simXY(self, simXZ, simZY):
+    #     return torch.normal(simXZ * simZY, torch.sqrt((1-simXZ**2) * (1-simZY**2))/3)
 
     def remove_inf_nan(self, input):
         input[torch.isinf(input)] = 0.0
@@ -140,16 +133,38 @@ class Server(BasicServer):
         for i in client_idx:
             for j in client_idx:
                 new_freq_matrix[i][j] = 1
-        
+                    
         # Increase frequency
         self.freq_matrix += new_freq_matrix
         self.Q_matrix = self.Q_matrix + new_similarity_matrix
+        
+        for i in range(len(self.clients)):
+            for j in range(i+1, len(self.clients)):
+                for k in range(j+1, len(self.clients)):
+                    if (self.Q_matrix[i,j] != 0) and (self.Q_matrix[i,k] != 0) and (self.Q_matrix[j,k] == 0):
+                        self.Q_matrix[j,k] = (self.Q_matrix[i,j] * self.Q_matrix[i,k])/(self.freq_matrix[i,j] * self.freq_matrix[i,k])
+                        self.freq_matrix[j,k] += 1
+                        self.Q_matrix[k,j] = self.Q_matrix[j,k]
+                        self.freq_matrix[k,j] += 1
+                        print(f"Transitive: Client[{j}] - Client[{k}]: {self.Q_matrix[j,k]:>.5f}")
+                    
+                    elif (self.Q_matrix[i,j] != 0) and (self.Q_matrix[i,k] == 0) and (self.Q_matrix[j,k] != 0):
+                        self.Q_matrix[i,k] = (self.Q_matrix[i,j] * self.Q_matrix[j,k])/(self.freq_matrix[i,j]*self.freq_matrix[j,k])
+                        self.freq_matrix[i,k] += 1
+                        self.Q_matrix[k,i] = self.Q_matrix[i,k]
+                        self.freq_matrix[k,i] += 1
+                        print(f"Transitive: Client[{i}] - Client[{k}]: {self.Q_matrix[i,k]:>.5f}")
+                    
+                    elif (self.Q_matrix[i,j] == 0) and (self.Q_matrix[i,k] != 0) and (self.Q_matrix[j,k] != 0):
+                        self.Q_matrix[i,j] = (self.Q_matrix[i,k] * self.Q_matrix[j,k])/(self.freq_matrix[i,k]*self.freq_matrix[j,k])
+                        self.freq_matrix[i,j] += 1
+                        self.Q_matrix[j,i] = self.Q_matrix[i,j]
+                        self.freq_matrix[j,i] += 1
+                        print(f"Transitive: Client[{j}] - Client[{i}]: {self.Q_matrix[j,i]:>.5f}")
         return
 
     @torch.no_grad()
-    def get_impact_factor(self, client_idx, t=None):
-        
-        self.transitive_update(client_idx)
+    def get_impact_factor(self, client_idx, t=None):      
         
         Q_asterisk_mtx = self.Q_matrix/(self.freq_matrix)
         Q_asterisk_mtx = self.remove_inf_nan(Q_asterisk_mtx)
