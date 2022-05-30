@@ -40,18 +40,18 @@ class Server(BasicServer):
         flat_models = [flatten_model(model) for model in models]
         lodal_weights = torch.vstack(flat_models)
         
-        model_difference = lodal_weights.to('cpu') - self.model.to('cpu')
+        model_difference = lodal_weights.to('cuda') - flatten_model(self.model).to('cuda')
 
         F_i = - model_difference / 0.01
 
-        D_i = [self.client_vols[cid] for cid in self.selected_clients]
-        D_i = torch.FloatTensor(D_i / torch.sum(D_i))
+        D_i = torch.tensor([self.client_vols[cid] for cid in self.selected_clients])
+        D_i = torch.FloatTensor(D_i / torch.sum(D_i)).to('cuda')
 
-        F = D_i.T @ F_i
+        F = D_i.transpose(-1,0) @ F_i
 
-        corel = F.unsqueeze(0) @ F_i.T
+        corel = F.unsqueeze(0) @ F_i.transpose(-1,0)
 
-        instantaneous_angle = torch.squeeze(torch.arccos(corel/(torch.norm(F_i) * torch.norm(F))))
+        instantaneous_angle = torch.squeeze(torch.arccos(corel/(torch.norm(F_i) * torch.norm(F)))).to('cpu')
 
         if (self.smooth_angle is None):
             self.smooth_angle = instantaneous_angle
