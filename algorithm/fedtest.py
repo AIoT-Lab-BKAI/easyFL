@@ -186,7 +186,7 @@ class Client(BasicClient):
         self.lossfunc = torch.nn.CrossEntropyLoss()
         sample, _ = train_data[0]
         self.noise_data = NoiseDataset(sample, len(train_data))
-        self.contst_fct = 5
+        self.contst_fct = option['neg_fct']
 
 
     def train(self, model, device='cuda'):
