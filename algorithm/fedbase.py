@@ -41,6 +41,7 @@ class BasicServer():
         self.calculator = fmodule.TaskCalculator(fmodule.device)
         self.server_gpu_id = option['server_gpu_id']
         self.log_folder = option['log_folder']
+        self.wandb = option['wandb']
 
     def run(self):
         """
