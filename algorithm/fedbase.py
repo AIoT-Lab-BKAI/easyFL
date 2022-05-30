@@ -292,6 +292,7 @@ class BasicClient():
         # the probability of dropout obey distribution beta(drop, 1). The larger 'drop' is, the more possible for a device to drop
         self.drop_rate = 0 if option['net_drop']<0.01 else np.random.beta(option['net_drop'], 1, 1).item()
         self.active_rate = 1 if option['net_active']>99998 else np.random.beta(option['net_active'], 1, 1).item()
+        self.wandb = option['wandb']
 
     def train(self, model):
         """
@@ -326,7 +327,7 @@ class BasicClient():
         model.eval()
         loss = 0
         eval_metric = 0
-        data_loader = self.calculator.get_data_loader(dataset, batch_size=64)
+        data_loader = self.calculator.get_data_loader(dataset, batch_size=32)
         for batch_id, batch_data in enumerate(data_loader):
             bmean_eval_metric, bmean_loss = self.calculator.test(model, batch_data)
             loss += bmean_loss * len(batch_data[1])

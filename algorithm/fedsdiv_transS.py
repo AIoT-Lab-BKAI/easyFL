@@ -69,7 +69,7 @@ def compute_similarity(a, b):
     sim = []
     for layer_a, layer_b in zip(a.parameters(), b.parameters()):
         x, y = torch.flatten(layer_a), torch.flatten(layer_b)
-        sim.append((x.T @ y) / (torch.norm(x) * torch.norm(y)))
+        sim.append((x.transpose(-1,0) @ y) / (torch.norm(x) * torch.norm(y)))
 
     return torch.mean(torch.tensor(sim)), sim[-1]
 
@@ -80,7 +80,8 @@ class Server(BasicServer):
 
         self.Q_matrix = torch.zeros([len(self.clients), len(self.clients)])
         self.freq_matrix = torch.zeros_like(self.Q_matrix)
-
+        self.confidence = torch.ones_like(self.Q_matrix)
+        
         self.impact_factor = None
         self.thr = 0.975
         
@@ -104,17 +105,59 @@ class Server(BasicServer):
             self.update_Q_matrix(models, self.selected_clients, t)
             self.impact_factor, self.gamma = self.get_impact_factor(self.selected_clients, t)
         
-        print(self.selected_clients)
-        print("Round", t, self.impact_factor)
-        np.savetxt(f"Q_matrix/round_{t}.txt", self.Q_matrix.numpy())
+        # print(self.selected_clients)
+        # print("Round", t, self.impact_factor)
         
         model_diff = self.aggregate(model_diffs, p = self.impact_factor)
         self.model = self.model + self.gamma * model_diff
         self.update_threshold(t)
         return
     
-    # def compute_simXY(self, simXZ, simZY):
-    #     return torch.normal(simXZ * simZY, torch.sqrt((1-simXZ**2) * (1-simZY**2))/3)
+    def compute_simXY(self, simXZ, simZY):
+        sigma = torch.abs(torch.sqrt((1-simXZ**2) * (1-simZY**2)))
+        return simXZ * simZY, sigma 
+
+    def transitive_update_Q(self):
+        temp_Q = torch.zeros_like(self.Q_matrix)
+        temp_F = torch.zeros_like(self.freq_matrix)
+        
+        for i in range(len(self.clients)):
+            for j in range(i+1, len(self.clients)):
+                for k in range(j+1, len(self.clients)):
+                    if (self.Q_matrix[i,j] != 0) and (self.Q_matrix[i,k] != 0) and (self.Q_matrix[j,k] == 0):
+                        simi, sigma = self.compute_simXY(self.Q_matrix[i,j]/self.freq_matrix[i,j],
+                                                        self.Q_matrix[i,k]/self.freq_matrix[i,k])
+                        if sigma < 0.015 and simi > 0.998:
+                            temp_Q[j,k] += simi
+                            temp_F[j,k] += 1
+                            temp_Q[k,j] = temp_Q[j,k]
+                            temp_F[k,j] += 1
+                            print(f"Transitive: Client[{j}] - Client[{k}], By Client[{i}]: {simi:>.5f}")
+                    
+                    elif (self.Q_matrix[i,j] != 0) and (self.Q_matrix[i,k] == 0) and (self.Q_matrix[j,k] != 0):
+                        simi, sigma = self.compute_simXY(self.Q_matrix[i,j]/self.freq_matrix[i,j],
+                                                        self.Q_matrix[j,k]/self.freq_matrix[j,k])
+                        if sigma < 0.015 and simi > 0.998:
+                            temp_Q[i,k] += simi
+                            temp_F[i,k] += 1
+                            temp_Q[k,i] = temp_Q[i,k]
+                            temp_F[k,i] += 1
+                            print(f"Transitive: Client[{i}] - Client[{k}], By Client[{j}]: {simi:>.5f}")
+                    
+                    elif (self.Q_matrix[i,j] == 0) and (self.Q_matrix[i,k] != 0) and (self.Q_matrix[j,k] != 0):
+                        simi, sigma = self.compute_simXY(self.Q_matrix[i,k]/self.freq_matrix[i,k],
+                                                        self.Q_matrix[j,k]/self.freq_matrix[j,k])
+                        if sigma < 0.015 and simi > 0.998:
+                            temp_Q[i,j] += simi
+                            temp_F[i,j] += 1
+                            temp_Q[j,i] = temp_Q[i,j]
+                            temp_F[j,i] += 1
+                            print(f"Transitive: Client[{j}] - Client[{i}], By Client[{k}]: {simi:>.5f}")
+                        
+        temp_Q[temp_Q > 0] = temp_Q[temp_Q > 0]/temp_F[temp_Q > 0]
+        self.Q_matrix += temp_Q
+        self.freq_matrix += (temp_F > 0) * 1.0
+        return
 
     def remove_inf_nan(self, input):
         input[torch.isinf(input)] = 0.0
@@ -128,7 +171,7 @@ class Server(BasicServer):
         for i, model_i in zip(client_idx, model_list):
             for j, model_j in zip(client_idx, model_list):
                 _ , new_similarity_matrix[i][j] = compute_similarity(model_i, model_j)
-                
+                                
         new_freq_matrix = torch.zeros_like(self.freq_matrix)
         for i in client_idx:
             for j in client_idx:
@@ -138,29 +181,8 @@ class Server(BasicServer):
         self.freq_matrix += new_freq_matrix
         self.Q_matrix = self.Q_matrix + new_similarity_matrix
         
-        for i in range(len(self.clients)):
-            for j in range(i+1, len(self.clients)):
-                for k in range(j+1, len(self.clients)):
-                    if (self.Q_matrix[i,j] != 0) and (self.Q_matrix[i,k] != 0) and (self.Q_matrix[j,k] == 0):
-                        self.Q_matrix[j,k] = (self.Q_matrix[i,j] * self.Q_matrix[i,k])/(self.freq_matrix[i,j] * self.freq_matrix[i,k])
-                        self.freq_matrix[j,k] += 1
-                        self.Q_matrix[k,j] = self.Q_matrix[j,k]
-                        self.freq_matrix[k,j] += 1
-                        print(f"Transitive: Client[{j}] - Client[{k}]: {self.Q_matrix[j,k]:>.5f}")
-                    
-                    elif (self.Q_matrix[i,j] != 0) and (self.Q_matrix[i,k] == 0) and (self.Q_matrix[j,k] != 0):
-                        self.Q_matrix[i,k] = (self.Q_matrix[i,j] * self.Q_matrix[j,k])/(self.freq_matrix[i,j]*self.freq_matrix[j,k])
-                        self.freq_matrix[i,k] += 1
-                        self.Q_matrix[k,i] = self.Q_matrix[i,k]
-                        self.freq_matrix[k,i] += 1
-                        print(f"Transitive: Client[{i}] - Client[{k}]: {self.Q_matrix[i,k]:>.5f}")
-                    
-                    elif (self.Q_matrix[i,j] == 0) and (self.Q_matrix[i,k] != 0) and (self.Q_matrix[j,k] != 0):
-                        self.Q_matrix[i,j] = (self.Q_matrix[i,k] * self.Q_matrix[j,k])/(self.freq_matrix[i,k]*self.freq_matrix[j,k])
-                        self.freq_matrix[i,j] += 1
-                        self.Q_matrix[j,i] = self.Q_matrix[i,j]
-                        self.freq_matrix[j,i] += 1
-                        print(f"Transitive: Client[{j}] - Client[{i}]: {self.Q_matrix[j,i]:>.5f}")
+        if 0 in self.Q_matrix and t > 0:
+            self.transitive_update_Q()
         return
 
     @torch.no_grad()
@@ -169,11 +191,14 @@ class Server(BasicServer):
         Q_asterisk_mtx = self.Q_matrix/(self.freq_matrix)
         Q_asterisk_mtx = self.remove_inf_nan(Q_asterisk_mtx)
         
+        np.savetxt(f"Q_matrix/round_{t}.txt", Q_asterisk_mtx.numpy(), fmt='%.5f')
+        
         min_Q = torch.min(Q_asterisk_mtx[Q_asterisk_mtx > 0.0])
         max_Q = torch.max(Q_asterisk_mtx[Q_asterisk_mtx > 0.0])
         Q_asterisk_mtx = torch.abs((Q_asterisk_mtx - min_Q)/(max_Q - min_Q) * (self.freq_matrix > 0.0))
         
         Q_asterisk_mtx = Q_asterisk_mtx > self.thr
+        np.savetxt(f"Q_matrix/cluster_{t}.txt", Q_asterisk_mtx.numpy(), fmt='%d')
         
         impact_factor = 1/torch.sum(Q_asterisk_mtx, dim=0)
         impact_factor = self.remove_inf_nan(impact_factor)

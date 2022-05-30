@@ -69,7 +69,7 @@ def compute_similarity(a, b):
     sim = []
     for layer_a, layer_b in zip(a.parameters(), b.parameters()):
         x, y = torch.flatten(layer_a), torch.flatten(layer_b)
-        sim.append((x.T @ y) / (torch.norm(x) * torch.norm(y)))
+        sim.append((x.transpose(-1,0) @ y) / (torch.norm(x) * torch.norm(y)))
 
     return torch.mean(torch.tensor(sim)), sim[-1]
 
@@ -103,7 +103,7 @@ class Server(BasicServer):
         self.update_Q_matrix(models, self.selected_clients, t)
         if (len(self.selected_clients) < len(self.clients)) or (self.impact_factor is None):
             self.impact_factor, self.gamma = self.get_impact_factor(self.selected_clients, t)
-            
+        
         model_diff = self.aggregate(model_diffs, p = self.impact_factor)
         self.model = self.model + self.gamma * model_diff
         self.update_threshold(t)
@@ -135,11 +135,15 @@ class Server(BasicServer):
         Q_asterisk_mtx[torch.isinf(Q_asterisk_mtx)] = 0.0
         Q_asterisk_mtx = torch.nan_to_num(Q_asterisk_mtx, 0.0)
         
+        np.savetxt(f"Q_matrix_by_sdiv/round_{t}.txt", Q_asterisk_mtx.numpy())
+        
         min_Q = torch.min(Q_asterisk_mtx[Q_asterisk_mtx > 0.0])
         max_Q = torch.max(Q_asterisk_mtx[Q_asterisk_mtx > 0.0])
         Q_asterisk_mtx = torch.abs((Q_asterisk_mtx - min_Q)/(max_Q - min_Q) * (self.freq_matrix > 0.0))
         
         Q_asterisk_mtx = Q_asterisk_mtx > self.thr
+        
+        np.savetxt(f"Q_matrix_by_sdiv/cluster_{t}.txt", Q_asterisk_mtx.numpy())
         
         impact_factor = 1/torch.sum(Q_asterisk_mtx, dim=0)
         impact_factor[torch.isinf(impact_factor)] = 0.0

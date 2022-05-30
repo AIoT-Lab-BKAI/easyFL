@@ -67,6 +67,7 @@ def read_option():
     parser.add_argument('--load_model_path', help='path to model to continue training', type=str, required=False, default=None)
     parser.add_argument('--data_folder', help="path to data folder", type=str, default=None)
     parser.add_argument('--log_folder', help="folder to write results", type=str, default='fedtask')
+    parser.add_argument('--wandb', help="whether to use wandb or not", type=bool, default=True)
     
     try: option = vars(parser.parse_args())
     except IOError as msg: parser.error(str(msg))
