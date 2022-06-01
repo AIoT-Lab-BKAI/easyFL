@@ -132,7 +132,7 @@ class Server(BasicServer):
                             temp_F[j,k] += 1
                             temp_Q[k,j] = temp_Q[j,k]
                             temp_F[k,j] += 1
-                            print(f"Transitive: Client[{j}] - Client[{k}], By Client[{i}]: {simi:>.5f}")
+                            # print(f"Transitive: Client[{j}] - Client[{k}], By Client[{i}]: {simi:>.5f}")
                     
                     elif (self.Q_matrix[i,j] != 0) and (self.Q_matrix[i,k] == 0) and (self.Q_matrix[j,k] != 0):
                         simi, sigma = self.compute_simXY(self.Q_matrix[i,j]/self.freq_matrix[i,j],
@@ -142,7 +142,7 @@ class Server(BasicServer):
                             temp_F[i,k] += 1
                             temp_Q[k,i] = temp_Q[i,k]
                             temp_F[k,i] += 1
-                            print(f"Transitive: Client[{i}] - Client[{k}], By Client[{j}]: {simi:>.5f}")
+                            # print(f"Transitive: Client[{i}] - Client[{k}], By Client[{j}]: {simi:>.5f}")
                     
                     elif (self.Q_matrix[i,j] == 0) and (self.Q_matrix[i,k] != 0) and (self.Q_matrix[j,k] != 0):
                         simi, sigma = self.compute_simXY(self.Q_matrix[i,k]/self.freq_matrix[i,k],
@@ -152,7 +152,7 @@ class Server(BasicServer):
                             temp_F[i,j] += 1
                             temp_Q[j,i] = temp_Q[i,j]
                             temp_F[j,i] += 1
-                            print(f"Transitive: Client[{j}] - Client[{i}], By Client[{k}]: {simi:>.5f}")
+                            # print(f"Transitive: Client[{j}] - Client[{i}], By Client[{k}]: {simi:>.5f}")
                         
         temp_Q[temp_Q > 0] = temp_Q[temp_Q > 0]/temp_F[temp_Q > 0]
         self.Q_matrix += temp_Q
@@ -191,14 +191,14 @@ class Server(BasicServer):
         Q_asterisk_mtx = self.Q_matrix/(self.freq_matrix)
         Q_asterisk_mtx = self.remove_inf_nan(Q_asterisk_mtx)
         
-        np.savetxt(f"Q_matrix/round_{t}.txt", Q_asterisk_mtx.numpy(), fmt='%.5f')
+        # np.savetxt(f"Q_matrix/round_{t}.txt", Q_asterisk_mtx.numpy(), fmt='%.5f')
         
         min_Q = torch.min(Q_asterisk_mtx[Q_asterisk_mtx > 0.0])
         max_Q = torch.max(Q_asterisk_mtx[Q_asterisk_mtx > 0.0])
         Q_asterisk_mtx = torch.abs((Q_asterisk_mtx - min_Q)/(max_Q - min_Q) * (self.freq_matrix > 0.0))
         
         Q_asterisk_mtx = Q_asterisk_mtx > self.thr
-        np.savetxt(f"Q_matrix/cluster_{t}.txt", Q_asterisk_mtx.numpy(), fmt='%d')
+        # np.savetxt(f"Q_matrix/cluster_{t}.txt", Q_asterisk_mtx.numpy(), fmt='%d')
         
         impact_factor = 1/torch.sum(Q_asterisk_mtx, dim=0)
         impact_factor = self.remove_inf_nan(impact_factor)
