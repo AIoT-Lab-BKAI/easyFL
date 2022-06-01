@@ -19,7 +19,7 @@ def compute_similarity(a, b):
     sim = []
     for layer_a, layer_b in zip(a.parameters(), b.parameters()):
         x, y = torch.flatten(layer_a), torch.flatten(layer_b)
-        sim.append((x.T @ y) / (torch.norm(x) * torch.norm(y)))
+        sim.append((x.transpose(-1,0) @ y) / (torch.norm(x) * torch.norm(y)))
 
     return torch.mean(torch.tensor(sim)), sim[-1]
 
@@ -45,28 +45,6 @@ class Server(BasicServer):
         self.impact_factor = None
         self.thr = 0.975        
         self.gamma = 1
-        
-        # self.path = f"/models/{self.task}/round_{self.num_rounds}"
-        # self.file_save = f"{self.path}/{self.name}.pth"
-        
-        # self.load_model_path = option['load_model_path']
-        
-        # if self.load_model_path is not None:
-        #     if Path(self.load_model_path).exists():
-        #         print(f"Loading server model at round {self.num_rounds}...")
-        #         self.model.load_state_dict(torch.load(self.load_model_path))
-        #     else:
-        #         print(f"Exists no {self.load_model_path}")
-            
-    
-    def run(self):
-        super().run()
-        # try:
-        #     if not Path(self.path).exists():
-        #         os.system(f"mkdir -p {self.path}")
-        #     torch.save(self.model.state_dict(), self.file_save)
-        # except:
-        #     print("Save model failed")
         
 
     def iterate(self, t):
@@ -96,6 +74,51 @@ class Server(BasicServer):
         return model_sum([model_k * pk for model_k, pk in zip(models, p)], p=p)
     
     
+    def compute_simXY(self, simXZ, simZY):
+        sigma = torch.abs(torch.sqrt((1-simXZ**2) * (1-simZY**2)))
+        return simXZ * simZY, sigma 
+
+
+    def transitive_update_Q(self):
+        temp_Q = torch.zeros_like(self.Q_matrix)
+        temp_F = torch.zeros_like(self.freq_matrix)
+        
+        for i in range(len(self.clients)):
+            for j in range(i+1, len(self.clients)):
+                for k in range(j+1, len(self.clients)):
+                    if (self.Q_matrix[i,j] != 0) and (self.Q_matrix[i,k] != 0) and (self.Q_matrix[j,k] == 0):
+                        simi, sigma = self.compute_simXY(self.Q_matrix[i,j]/self.freq_matrix[i,j],
+                                                        self.Q_matrix[i,k]/self.freq_matrix[i,k])
+                        if sigma < 0.015 and simi > 0.998:
+                            temp_Q[j,k] += simi
+                            temp_F[j,k] += 1
+                            temp_Q[k,j] = temp_Q[j,k]
+                            temp_F[k,j] += 1
+                    
+                    elif (self.Q_matrix[i,j] != 0) and (self.Q_matrix[i,k] == 0) and (self.Q_matrix[j,k] != 0):
+                        simi, sigma = self.compute_simXY(self.Q_matrix[i,j]/self.freq_matrix[i,j],
+                                                        self.Q_matrix[j,k]/self.freq_matrix[j,k])
+                        if sigma < 0.015 and simi > 0.998:
+                            temp_Q[i,k] += simi
+                            temp_F[i,k] += 1
+                            temp_Q[k,i] = temp_Q[i,k]
+                            temp_F[k,i] += 1
+                    
+                    elif (self.Q_matrix[i,j] == 0) and (self.Q_matrix[i,k] != 0) and (self.Q_matrix[j,k] != 0):
+                        simi, sigma = self.compute_simXY(self.Q_matrix[i,k]/self.freq_matrix[i,k],
+                                                        self.Q_matrix[j,k]/self.freq_matrix[j,k])
+                        if sigma < 0.015 and simi > 0.998:
+                            temp_Q[i,j] += simi
+                            temp_F[i,j] += 1
+                            temp_Q[j,i] = temp_Q[i,j]
+                            temp_F[j,i] += 1
+                        
+        temp_Q[temp_Q > 0] = temp_Q[temp_Q > 0]/temp_F[temp_Q > 0]
+        self.Q_matrix += temp_Q
+        self.freq_matrix += (temp_F > 0) * 1.0
+        return
+    
+    
     @torch.no_grad()
     def update_Q_matrix(self, model_list, client_idx, t=None):
         
@@ -112,6 +135,9 @@ class Server(BasicServer):
         # Increase frequency
         self.freq_matrix += new_freq_matrix
         self.Q_matrix = self.Q_matrix + new_similarity_matrix
+        
+        if 0 in self.Q_matrix and t > 0:
+            self.transitive_update_Q()
         return
 
 
@@ -160,7 +186,7 @@ class Client(BasicClient):
         self.lossfunc = torch.nn.CrossEntropyLoss()
         sample, _ = train_data[0]
         self.noise_data = NoiseDataset(sample, len(train_data))
-        self.contst_fct = 5
+        self.contst_fct = option['neg_fct']
 
 
     def train(self, model, device='cuda'):

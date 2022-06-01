@@ -47,6 +47,7 @@ class BasicBlock(nn.Module):
 
     def forward(self, x):
         return nn.ReLU(inplace=True)(self.residual_function(x) + self.shortcut(x))
+    
 import torch
 class BottleNeck(nn.Module):
     """Residual block for resnet over 50 layers
@@ -129,7 +130,17 @@ class Model(FModule):
         output = output.view(output.size(0), -1)
         output = self.fc(output)
         return output
-
+    
+    def pred_and_rep(self, x):
+        output = self.conv1(x)
+        output = self.conv2_x(output)
+        output = self.conv3_x(output)
+        output = self.conv4_x(output)
+        output = self.conv5_x(output)
+        output = self.avg_pool(output)
+        rep = output.view(output.size(0), -1)
+        pred = self.fc(rep)
+        return pred, rep.flatten()
 
 class Loss(nn.Module):
     def __init__(self):

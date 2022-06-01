@@ -25,11 +25,11 @@ class TaskGen(DefaultTaskGen):
         self.train_data = {'x':train_x, 'y':train_y}
         self.test_data = {'x': test_x, 'y': test_y}
         return
-"./benchmark/fmnist/data"
-train_dataset = datasets.CIFAR100("./benchmark/cifar100/data", train=True, download=True, transform=transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))]))
-test_dataset = datasets.CIFAR100("./benchmark/cifar100/data", train=False, download=True, transform=transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))]))
+
 class TaskReader(CusTomTaskReader):
-    def __init__(self, taskpath=''):
+    def __init__(self, taskpath='', data_folder="./benchmark/cifar100/data"):
+        train_dataset = datasets.CIFAR100(data_folder, train=True, download=True, transform=transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))]))
+        test_dataset = datasets.CIFAR100(data_folder, train=False, download=True, transform=transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))]))
         super(TaskReader, self).__init__(taskpath,train_dataset,test_dataset)
         self.DataLoader = DataLoader
 

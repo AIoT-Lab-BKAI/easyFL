@@ -47,16 +47,17 @@ class MyLogger(flw.Logger):
         print(self.temp.format("Std of Client Accuracy:", self.output['var_curve'][-1]))
         
         # wandb record
-        wandb.log(
-            {
-                "Training Loss":        self.output['train_losses'][-1], 
-                "Testing Loss":         self.output['test_losses'][-1],
-                "Testing Accuracy":     self.output['test_accs'][-1],
-                "Validating Accuracy":  self.output['mean_valid_accs'][-1],
-                "Mean Client Accuracy": self.output['mean_curve'][-1],
-                "Std Client Accuracy":  self.output['var_curve'][-1]
-            }
-        )
+        if server.wandb:
+            wandb.log(
+                {
+                    "Training Loss":        self.output['train_losses'][-1], 
+                    "Testing Loss":         self.output['test_losses'][-1],
+                    "Testing Accuracy":     self.output['test_accs'][-1],
+                    "Validating Accuracy":  self.output['mean_valid_accs'][-1],
+                    "Mean Client Accuracy": self.output['mean_curve'][-1],
+                    "Std Client Accuracy":  self.output['var_curve'][-1]
+                }
+            )
 
 
 logger = MyLogger()
@@ -73,13 +74,14 @@ def main():
     # initialize server
     server = flw.initialize(option)
     
-    wandb.init(
-        project="easyFL", 
-        entity="aiotlab",
-        group=option['task'],
-        name=option['algorithm'],
-        config=option
-    )
+    if option['wandb']:
+        wandb.init(
+            project="easyFL", 
+            entity="aiotlab",
+            group=option['task'],
+            name=option['algorithm'],
+            config=option
+        )
     # start federated optimization
     server.run()
 

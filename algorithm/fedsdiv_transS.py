@@ -1,5 +1,13 @@
+"""
+This version is an extension from fedsdivv2
+The update model at server is modified as: 
+    new_model = aggregate(delta_models, impact_factors)
+    server_model = server_model + lr * z * new_model
+
+In which: lr = client_per_turn / all_clients
+          z  = new_clients_this_turn / client_per_turn
+"""
 from .fedbase import BasicServer, BasicClient
-from algorithm.fedrl_utils.gae_agent.gae_agent import gae_agent
 from utils import fmodule
 
 import torch.nn as nn
@@ -61,7 +69,7 @@ def compute_similarity(a, b):
     sim = []
     for layer_a, layer_b in zip(a.parameters(), b.parameters()):
         x, y = torch.flatten(layer_a), torch.flatten(layer_b)
-        sim.append((x.T @ y) / (torch.norm(x) * torch.norm(y)))
+        sim.append((x.transpose(-1,0) @ y) / (torch.norm(x) * torch.norm(y)))
 
     return torch.mean(torch.tensor(sim)), sim[-1]
 
@@ -72,20 +80,13 @@ class Server(BasicServer):
 
         self.Q_matrix = torch.zeros([len(self.clients), len(self.clients)])
         self.freq_matrix = torch.zeros_like(self.Q_matrix)
-
+        self.confidence = torch.ones_like(self.Q_matrix)
+        
         self.impact_factor = None
         self.thr = 0.975
         
         self.gamma = 1
         self.device = torch.device("cuda")
-        
-        self.data_vol_tens = torch.Tensor([1.0 * self.client_vols[cid]/self.data_vol for cid in range(len(self.clients))]).flatten()
-        
-        n_clients = len(self.clients)        
-        self.agent = gae_agent(state_dim=int(n_clients*(n_clients-1)/2 + n_clients + self.clients_per_round),
-                               action_dim=self.clients_per_round, 
-                               hidden_size=256, 
-                               device=self.device)
         
     
     def iterate(self, t):
@@ -104,32 +105,64 @@ class Server(BasicServer):
             self.update_Q_matrix(models, self.selected_clients, t)
             self.impact_factor, self.gamma = self.get_impact_factor(self.selected_clients, t)
         
-        lower_tri = self.Q_matrix.tril(diagonal=-1)
-        flat_lower_tri = lower_tri[lower_tri != 0].flatten()
+        # print(self.selected_clients)
+        # print("Round", t, self.impact_factor)
         
-        state = torch.hstack([flat_lower_tri, self.data_vol_tens, torch.tensor(self.selected_clients)/len(self.clients)])
-        
-        prev_r = None
-        if t > 0:
-            prev_r = self.compute_reward(train_losses, self.selected_clients)
-            
-        agent_action = self.agent.get_action(state, prev_reward=prev_r)
-        self.agent.reflex_update(action=agent_action, guidence=self.impact_factor)
-        
-        model_diff = self.aggregate(model_diffs, p = agent_action.detach().cpu().tolist())
+        model_diff = self.aggregate(model_diffs, p = self.impact_factor)
         self.model = self.model + self.gamma * model_diff
         self.update_threshold(t)
         return
+    
+    def compute_simXY(self, simXZ, simZY):
+        sigma = torch.abs(torch.sqrt((1-simXZ**2) * (1-simZY**2)))
+        return simXZ * simZY, sigma 
 
+    def transitive_update_Q(self):
+        temp_Q = torch.zeros_like(self.Q_matrix)
+        temp_F = torch.zeros_like(self.freq_matrix)
+        
+        for i in range(len(self.clients)):
+            for j in range(i+1, len(self.clients)):
+                for k in range(j+1, len(self.clients)):
+                    if (self.Q_matrix[i,j] != 0) and (self.Q_matrix[i,k] != 0) and (self.Q_matrix[j,k] == 0):
+                        simi, sigma = self.compute_simXY(self.Q_matrix[i,j]/self.freq_matrix[i,j],
+                                                        self.Q_matrix[i,k]/self.freq_matrix[i,k])
+                        if sigma < 0.015 and simi > 0.998:
+                            temp_Q[j,k] += simi
+                            temp_F[j,k] += 1
+                            temp_Q[k,j] = temp_Q[j,k]
+                            temp_F[k,j] += 1
+                            # print(f"Transitive: Client[{j}] - Client[{k}], By Client[{i}]: {simi:>.5f}")
+                    
+                    elif (self.Q_matrix[i,j] != 0) and (self.Q_matrix[i,k] == 0) and (self.Q_matrix[j,k] != 0):
+                        simi, sigma = self.compute_simXY(self.Q_matrix[i,j]/self.freq_matrix[i,j],
+                                                        self.Q_matrix[j,k]/self.freq_matrix[j,k])
+                        if sigma < 0.015 and simi > 0.998:
+                            temp_Q[i,k] += simi
+                            temp_F[i,k] += 1
+                            temp_Q[k,i] = temp_Q[i,k]
+                            temp_F[k,i] += 1
+                            # print(f"Transitive: Client[{i}] - Client[{k}], By Client[{j}]: {simi:>.5f}")
+                    
+                    elif (self.Q_matrix[i,j] == 0) and (self.Q_matrix[i,k] != 0) and (self.Q_matrix[j,k] != 0):
+                        simi, sigma = self.compute_simXY(self.Q_matrix[i,k]/self.freq_matrix[i,k],
+                                                        self.Q_matrix[j,k]/self.freq_matrix[j,k])
+                        if sigma < 0.015 and simi > 0.998:
+                            temp_Q[i,j] += simi
+                            temp_F[i,j] += 1
+                            temp_Q[j,i] = temp_Q[i,j]
+                            temp_F[j,i] += 1
+                            # print(f"Transitive: Client[{j}] - Client[{i}], By Client[{k}]: {simi:>.5f}")
+                        
+        temp_Q[temp_Q > 0] = temp_Q[temp_Q > 0]/temp_F[temp_Q > 0]
+        self.Q_matrix += temp_Q
+        self.freq_matrix += (temp_F > 0) * 1.0
+        return
 
-    def compute_reward(self, losses, client_id):
-        p = 0
-        q = 0
-        for cid, loss in zip(client_id, losses):
-            p += loss * self.impact_factor[cid]
-            q += self.impact_factor[cid]
-        return torch.tensor(q/p)
-
+    def remove_inf_nan(self, input):
+        input[torch.isinf(input)] = 0.0
+        input = torch.nan_to_num(input, 0.0)
+        return input
 
     @torch.no_grad()
     def update_Q_matrix(self, model_list, client_idx, t=None):
@@ -138,33 +171,37 @@ class Server(BasicServer):
         for i, model_i in zip(client_idx, model_list):
             for j, model_j in zip(client_idx, model_list):
                 _ , new_similarity_matrix[i][j] = compute_similarity(model_i, model_j)
-                
+                                
         new_freq_matrix = torch.zeros_like(self.freq_matrix)
         for i in client_idx:
             for j in client_idx:
                 new_freq_matrix[i][j] = 1
-        
+                    
         # Increase frequency
         self.freq_matrix += new_freq_matrix
         self.Q_matrix = self.Q_matrix + new_similarity_matrix
+        
+        if 0 in self.Q_matrix and t > 0:
+            self.transitive_update_Q()
         return
 
     @torch.no_grad()
-    def get_impact_factor(self, client_idx, t=None):
+    def get_impact_factor(self, client_idx, t=None):      
         
         Q_asterisk_mtx = self.Q_matrix/(self.freq_matrix)
-        Q_asterisk_mtx[torch.isinf(Q_asterisk_mtx)] = 0.0
-        Q_asterisk_mtx = torch.nan_to_num(Q_asterisk_mtx, 0.0)
+        Q_asterisk_mtx = self.remove_inf_nan(Q_asterisk_mtx)
+        
+        # np.savetxt(f"Q_matrix/round_{t}.txt", Q_asterisk_mtx.numpy(), fmt='%.5f')
         
         min_Q = torch.min(Q_asterisk_mtx[Q_asterisk_mtx > 0.0])
         max_Q = torch.max(Q_asterisk_mtx[Q_asterisk_mtx > 0.0])
         Q_asterisk_mtx = torch.abs((Q_asterisk_mtx - min_Q)/(max_Q - min_Q) * (self.freq_matrix > 0.0))
         
         Q_asterisk_mtx = Q_asterisk_mtx > self.thr
+        # np.savetxt(f"Q_matrix/cluster_{t}.txt", Q_asterisk_mtx.numpy(), fmt='%d')
         
         impact_factor = 1/torch.sum(Q_asterisk_mtx, dim=0)
-        impact_factor[torch.isinf(impact_factor)] = 0.0
-        impact_factor = torch.nan_to_num(impact_factor, 0.0)
+        impact_factor = self.remove_inf_nan(impact_factor)
         impact_factor_frac = impact_factor[client_idx]
         
         num_cluster_all = torch.sum(impact_factor)
@@ -174,8 +211,7 @@ class Server(BasicServer):
         temp_mtx = temp_mtx[client_idx]
         
         temp_vec = 1/torch.sum(temp_mtx, dim=0)
-        temp_vec[torch.isinf(temp_vec)] = 0.0
-        temp_vec = torch.nan_to_num(temp_vec, 0.0)
+        temp_vec = self.remove_inf_nan(temp_vec)
         
         num_cluster_round = torch.sum(temp_vec)
         gamma = num_cluster_round/num_cluster_all

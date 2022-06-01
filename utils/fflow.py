@@ -57,7 +57,7 @@ def read_option():
     parser.add_argument('--epsilon', help='ε in fedmgda+', type=float, default='0.0')
     parser.add_argument('--eta', help='global learning rate in fedmgda+', type=float, default='1.0')
     parser.add_argument('--tau', help='the length of recent history gradients to be contained in FedFAvg', type=int, default=0)
-    parser.add_argument('--alpha', help='proportion of clients keeping original direction in FedFV/alpha in fedFA', type=float, default='0.0')
+    parser.add_argument('--alpha', help='proportion of clients keeping original direction in FedFV/alpha in fedFA', type=float, default='0.5')
     parser.add_argument('--beta', help='beta in FedFA',type=float, default='1.0')
     parser.add_argument('--gamma', help='gamma in FedFA', type=float, default='0')
     parser.add_argument('--mu', help='mu in fedprox', type=float, default='0.1')
@@ -67,6 +67,9 @@ def read_option():
     parser.add_argument('--load_model_path', help='path to model to continue training', type=str, required=False, default=None)
     parser.add_argument('--data_folder', help="path to data folder", type=str, default=None)
     parser.add_argument('--log_folder', help="folder to write results", type=str, default='fedtask')
+    parser.add_argument('--wandb', help="whether to use wandb or not", type=int, default=1)
+    
+    parser.add_argument('--neg_fct', help="Margin for negative learning (Fedtest)", type=int, default=5)
     
     try: option = vars(parser.parse_args())
     except IOError as msg: parser.error(str(msg))
