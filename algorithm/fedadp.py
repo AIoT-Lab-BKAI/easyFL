@@ -40,12 +40,12 @@ class Server(BasicServer):
         flat_models = [flatten_model(model) for model in models]
         lodal_weights = torch.vstack(flat_models)
         
-        model_difference = lodal_weights.to('cuda') - flatten_model(self.model).to('cuda')
+        model_difference = lodal_weights.to('cpu') - flatten_model(self.model).to('cpu')
 
         F_i = - model_difference / 0.01
 
         D_i = torch.tensor([self.client_vols[cid] for cid in self.selected_clients])
-        D_i = torch.FloatTensor(D_i / torch.sum(D_i)).to('cuda')
+        D_i = torch.FloatTensor(D_i / torch.sum(D_i)).to('cpu')
 
         F = D_i.transpose(-1,0) @ F_i
 
