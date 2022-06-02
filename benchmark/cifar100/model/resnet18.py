@@ -137,7 +137,7 @@ class Model(FModule):
         output = self.conv5_x(output)
         output = self.avg_pool(output)
         e = output.view(output.size(0), -1)
-        o = self.fc(output)
+        o = self.fc(e)
         return o, e.flatten()
 
 
