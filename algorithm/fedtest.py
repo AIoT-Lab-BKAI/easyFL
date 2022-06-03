@@ -46,6 +46,7 @@ class Server(BasicServer):
         self.thr = 0.975        
         self.gamma = 1
         
+        self.paras_name = ['neg_fct']
 
     def iterate(self, t):
         self.selected_clients = self.sample()
