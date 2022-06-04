@@ -1,14 +1,3 @@
-# python main.py --task mnist_cnum10_dist1_skew0.8_seed0 --model cnn --algorithm fedtheo --num_rounds 100 --num_epochs 5 --learning_rate 0.001 --proportion 1 --batch_size 10 --eval_interval 1 --gpu 3 --num_threads 1
-CUDA_VISIBLE_DEVICES=1 python main.py --task pilldataset_cnum100_dist1_skew0.2_seed0 --model cnn --algorithm mp_fedavg --num_rounds 2 --num_epochs 1 --learning_rate 0.001 --proportion 0.1 --batch_size 10 --eval_interval 1 --gpu 0 --num_threads 1 --output_file_name test.json --num_gpus 1 --dataidx_filename "benchmark/pilldataset/"
-# python main.py --task pilldataset_cnum100_dist1_skew0.2_seed0 --model cnn --algorithm mp_fedavg --num_rounds 2 --num_epochs 1 --learning_rate 0.001 --proportion 0.1 --batch_size 10 --eval_interval 1 --gpu 0 --num_threads 1 --output_file_name test.json --num_gpus 1 --dataidx_filename mnist/100client/equal/MNIST-noniid-fedavg_equal_100.json
-
-# python main.py --task mnist_cnum10_dist1_skew0.8_seed0 --model cnn --algorithm fedavg --num_rounds 100 --num_epochs 5 --learning_rate 0.001 --proportion 1 --batch_size 10 --eval_interval 1 --gpu 3
-# python main.py --task mnist_cnum10_dist1_skew0.8_seed0 --model cnn --algorithm fedprox --num_rounds 100 --num_epochs 5 --learning_rate 0.001 --proportion 1 --batch_size 10 --eval_interval 1 --gpu 3
-
-# python main.py --task mnist_cnum100_dist2_skew0.3_seed0 --model cnn --algorithm fedrl --num_rounds 100 --num_epochs 5 --learning_rate 0.001 --proportion 1 --batch_size 10 --eval_interval 1 --gpu 3
-# python main.py --task mnist_cnum100_dist2_skew0.3_seed0 --model cnn --algorithm fedavg --num_rounds 100 --num_epochs 5 --learning_rate 0.001 --proportion 1 --batch_size 10 --eval_interval 1 --gpu 3
-# python main.py --task mnist_cnum100_dist2_skew0.3_seed0 --model cnn --algorithm fedprox --num_rounds 100 --num_epochs 5 --learning_rate 0.001 --proportion 1 --batch_size 10 --eval_interval 1 --gpu 3
-
-# python main.py --task mnist_cnum100_dist3_skew0.4_seed0 --model cnn --algorithm fedrl --num_rounds 100 --num_epochs 5 --learning_rate 0.001 --proportion 1 --batch_size 10 --eval_interval 1 --gpu 3
-# python main.py --task mnist_cnum100_dist2_skew0.4_seed0 --model cnn --algorithm fedavg --num_rounds 100 --num_epochs 5 --learning_rate 0.001 --proportion 1 --batch_size 10 --eval_interval 1 --gpu 3
-# python main.py --task mnist_cnum100_dist2_skew0.4_seed0 --model cnn --algorithm fedprox --num_rounds 100 --num_epochs 5 --learning_rate 0.001 --proportion 1 --batch_size 10 --eval_interval 1 --gpu 3
+python main.py --task pilldataset_cnum100_dist1_skew0.2_seed0 --model resnet18 --algorithm mp_fedavg --num_rounds 2 --num_epochs 1 --learning_rate 0.001 --proportion 0.1 --batch_size 10 --eval_interval 1 --gpu 0 --num_threads 1 --output_file_name test.json --num_gpus 1 --dataidx_filename "/mnt/disk1/longnd/data_FL/pill3/" --dataidx_path "syndata3" 
+# python main.py --task pilldataset_cnum100_dist1_skew0.2_seed0 --model resnet18 --algorithm mp_fedavg --num_rounds 2 --num_epochs 1 --learning_rate 0.001 --proportion 0.1 --batch_size 10 --eval_interval 1 --gpu 0 --num_threads 1 --output_file_name test.json --num_gpus 1 --dataidx_filename "pill2" --dataidx_path "syndata2"
+# python main.py --task pilldataset_cnum100_dist1_skew0.2_seed0 --model resnet18 --algorithm mp_fedavg --num_rounds 2 --num_epochs 1 --learning_rate 0.001 --proportion 0.1 --batch_size 10 --eval_interval 1 --gpu 0 --num_threads 1 --output_file_name test.json --num_gpus 1 --dataidx_filename "" --dataidx_path "syndata1"

@@ -61,7 +61,8 @@ def read_option():
     parser.add_argument('--beta', help='beta in FedFA',type=float, default='1.0')
     parser.add_argument('--gamma', help='gamma in FedFA', type=float, default='0')
     parser.add_argument('--mu', help='mu in fedprox', type=float, default='0.1')
-    parser.add_argument('--dataidx_filename', help="path to idx file", required=True, default='none')
+    parser.add_argument('--dataidx_filename', help="path to pilldataset folder", required=True, default='none')
+    parser.add_argument('--dataidx_path', help="path to idx file", required=True, default='none')
     # server gpu
     parser.add_argument('--server_gpu_id', help='server process on this gpu', type=int, default=0)
     
@@ -87,7 +88,10 @@ def initialize(option):
     utils.fmodule.TaskCalculator = getattr(importlib.import_module(bmk_core_path), 'TaskCalculator')
     utils.fmodule.TaskCalculator.setOP(getattr(importlib.import_module('torch.optim'), option['optimizer']))
     utils.fmodule.Model = getattr(importlib.import_module(bmk_model_path), 'Model')
-    task_reader = getattr(importlib.import_module(bmk_core_path), 'TaskReader')(taskpath=option['dataidx_filename'])
+    if bmk_name == "pilldataset":
+        task_reader = getattr(importlib.import_module(bmk_core_path), 'TaskReader')(taskpath=option['dataidx_filename'],dataidx_path=option['dataidx_path'])
+    else:
+        task_reader = getattr(importlib.import_module(bmk_core_path), 'TaskReader')(taskpath=option['dataidx_filename'],)
     train_datas, test_data, num_clients = task_reader.read_data()
     print("done")
 
