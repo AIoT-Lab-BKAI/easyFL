@@ -128,6 +128,17 @@ class Model(FModule):
         output = output.view(output.size(0), -1)
         output = self.fc(output)
         return output
+    
+    def pred_and_rep(self, x):
+        output = self.conv1(x)
+        output = self.conv2_x(output)
+        output = self.conv3_x(output)
+        output = self.conv4_x(output)
+        output = self.conv5_x(output)
+        output = self.avg_pool(output)
+        e = output.view(output.size(0), -1)
+        o = self.fc(e)
+        return o, e.flatten()
 
 
 class Loss(nn.Module):

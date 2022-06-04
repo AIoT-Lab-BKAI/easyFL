@@ -1,21 +1,12 @@
-"""
-This version is an extension from fedsdivv2
-The update model at server is modified as: 
-    new_model = aggregate(delta_models, impact_factors)
-    server_model = server_model + lr * z * new_model
-
-In which: lr = client_per_turn / all_clients
-          z  = new_clients_this_turn / client_per_turn
-"""
 from .mp_fedbase import MPBasicServer, MPBasicClient
-from utils import fmodule
 
-import torch.nn as nn
-import numpy as np
-
+from torch.utils.data import Dataset, DataLoader
+from pathlib import Path
+import torch.nn.functional as F
 import torch
 import os
 import copy
+from algorithm.agg_utils.fedtest_utils import model_sum
 
 
 def KL_divergence(teacher_batch_input, student_batch_input, device):
@@ -39,7 +30,7 @@ def KL_divergence(teacher_batch_input, student_batch_input, device):
     
     sub_s = student_batch_input - student_batch_input.transpose(0,1)
     sub_s_norm = torch.norm(sub_s, dim=2)
-    sub_s_norm = sub_s_norm.flatten()[1:].view(batch_student-1, batch_student+1)[:,:-1].reshape(batch_student, batch_student-1)
+    sub_s_norm = sub_s_norm[sub_s_norm!=0].view(batch_student,-1)
     std_s = torch.std(sub_s_norm)
     mean_s = torch.mean(sub_s_norm)
     kernel_mtx_s = torch.pow(sub_s_norm - mean_s, 2) / (torch.pow(std_s, 2) + 0.001)
@@ -48,7 +39,7 @@ def KL_divergence(teacher_batch_input, student_batch_input, device):
     
     sub_t = teacher_batch_input - teacher_batch_input.transpose(0,1)
     sub_t_norm = torch.norm(sub_t, dim=2)
-    sub_t_norm = sub_t_norm.flatten()[1:].view(batch_teacher-1, batch_teacher+1)[:,:-1].reshape(batch_teacher, batch_teacher-1)
+    sub_t_norm = sub_t_norm[sub_t_norm!=0].view(batch_teacher,-1)
     std_t = torch.std(sub_t_norm)
     mean_t = torch.mean(sub_t_norm)
     kernel_mtx_t = torch.pow(sub_t_norm - mean_t, 2) / (torch.pow(std_t, 2) + 0.001)
@@ -74,30 +65,60 @@ def compute_similarity(a, b):
     return torch.mean(torch.tensor(sim)), sim[-1]
 
 
-class Server(MPBasicServer):
-    def __init__(self, option, model, clients, test_data=None):
-        super(Server, self).__init__(option, model, clients, test_data)
+class NoiseDataset(Dataset):
+    def __init__(self, sample, length):
+        self.noise_dataset = [(torch.rand_like(sample), "Noise") for i in range(length)]
 
+    def __len__(self):
+        return len(self.noise_dataset)
+
+    def __getitem__(self, item):
+        noise, label = self.noise_dataset[item]
+        return noise, label
+    
+
+class Server(MPBasicServer):
+    def __init__(self, option, model, clients, test_data = None):
+        super(Server, self).__init__(option, model, clients, test_data)
         self.Q_matrix = torch.zeros([len(self.clients), len(self.clients)])
         self.freq_matrix = torch.zeros_like(self.Q_matrix)
 
         self.impact_factor = None
-        self.thr = 0.975
-        # self.optimal_ = np.array([1/6] * 6 + [1] * 4)
-        
+        self.thr = 0.975        
         self.gamma = 1
-        self.device = torch.device(f"cuda:{self.server_gpu_id}")
         
+        self.path = f"/models/{self.task}/round_{self.num_rounds}"
+        self.file_save = f"{self.path}/{self.name}.pth"
+        
+        self.load_model_path = option['load_model_path']
+        
+        if self.load_model_path is not None:
+            if Path(self.load_model_path).exists():
+                print(f"Loading server model at round {self.num_rounds}...")
+                self.model.load_state_dict(torch.load(self.load_model_path))
+            else:
+                print(f"Exists no {self.load_model_path}")
+            
     
+    def run(self):
+        super().run()
+        try:
+            if not Path(self.path).exists():
+                os.system(f"mkdir -p {self.path}")
+            torch.save(self.model.state_dict(), self.file_save)
+        except:
+            print("Save model failed")
+        
+
     def iterate(self, t, pool):
         self.selected_clients = self.sample()
-        # print("Selected:", self.selected_clients)
         models, train_losses = self.communicate(self.selected_clients, pool)
-        models = [model.to(self.device) for model in models]
+        if not self.selected_clients: return
+        device0 = torch.device(f"cuda:{self.server_gpu_id}")
         
-        self.model = self.model.to(self.device)
-        model_diffs = [model.to(self.device) - self.model for model in models]
-
+        self.model = self.model.to(device0)
+        models = [i.to(device0) - self.model for i in models]
+        
         if not self.selected_clients:
             return
         
@@ -105,12 +126,18 @@ class Server(MPBasicServer):
         if (len(self.selected_clients) < len(self.clients)) or (self.impact_factor is None):
             self.impact_factor, self.gamma = self.get_impact_factor(self.selected_clients, t)
             
-        model_diff = self.aggregate(model_diffs, p = self.impact_factor)
-        self.model = self.model + self.gamma * model_diff
+            
+        self.model = self.model + self.aggregate(models, self.impact_factor)
         self.update_threshold(t)
         return
 
 
+    def aggregate(self, models, p=...):
+        sump = sum(p)
+        p = [pk/sump for pk in p]
+        return model_sum([model_k * pk for model_k, pk in zip(models, p)], p=p)
+    
+    
     @torch.no_grad()
     def update_Q_matrix(self, model_list, client_idx, t=None):
         
@@ -128,6 +155,7 @@ class Server(MPBasicServer):
         self.freq_matrix += new_freq_matrix
         self.Q_matrix = self.Q_matrix + new_similarity_matrix
         return
+
 
     @torch.no_grad()
     def get_impact_factor(self, client_idx, t=None):
@@ -166,41 +194,58 @@ class Server(MPBasicServer):
     def update_threshold(self, t):
         self.thr = min(self.thr * (1 + 0.0005)**t, 0.998)
         return
+    
 
 class Client(MPBasicClient):
     def __init__(self, option, name='', train_data=None, valid_data=None):
         super(Client, self).__init__(option, name, train_data, valid_data)
-        self.lossfunc = nn.CrossEntropyLoss()
-        
-        
+        self.lossfunc = torch.nn.CrossEntropyLoss()
+        sample, _ = train_data[0]
+        self.noise_data = NoiseDataset(sample, len(train_data))
+        self.contst_fct = 5
+
+
     def train(self, model, device):
         model = model.to(device)
         model.train()
         
         src_model = copy.deepcopy(model).to(device)
         src_model.freeze_grad()
-                
-        data_loader = self.calculator.get_data_loader(self.train_data, batch_size=self.batch_size, droplast=True)
-        optimizer = self.calculator.get_optimizer(self.optimizer_name, model, lr = self.learning_rate, weight_decay=self.weight_decay, momentum=self.momentum)
         
+        data_loader = self.calculator.get_data_loader(self.train_data, batch_size=self.batch_size)
+        noise_loader = DataLoader(self.noise_data, batch_size=self.batch_size, shuffle=True)
+        
+        optimizer = self.calculator.get_optimizer(self.optimizer_name, model, lr = self.learning_rate, weight_decay=self.weight_decay, momentum=self.momentum)
         for iter in range(self.epochs):
-            for batch_id, batch_data in enumerate(data_loader):
+            for ((batch_id, batch_data), (_, batch_noise)) in zip(enumerate(data_loader), enumerate(noise_loader)):
                 model.zero_grad()
-                loss, kl_loss = self.get_loss(model, src_model, batch_data, device)
-                loss = loss + kl_loss
+                loss = self.get_loss(model, src_model, batch_data, batch_noise, device)
                 loss.backward()
                 optimizer.step()
         return
-    
-    
-    def data_to_device(self, data,device):
-        return data[0].to(device), data[1].to(device)
 
 
-    def get_loss(self, model, src_model, data, device):
-        tdata = self.data_to_device(data, device)    
-        output_s, representation_s = model.pred_and_rep(tdata[0])                  # Student
-        _ , representation_t = src_model.pred_and_rep(tdata[0])                    # Teacher
-        kl_loss = KL_divergence(representation_t, representation_s, device)        # KL divergence
-        loss = self.lossfunc(output_s, tdata[1])
-        return loss, kl_loss
+    def get_contrastive_loss(self, model, batch_noise, targets, device):
+        sample, _ = batch_noise
+        sample = sample.to(device)
+        output_logits = model(sample)
+        loss = F.mse_loss(output_logits, -1.0 * abs(self.contst_fct) * F.one_hot(targets, num_classes=10))
+        return loss
+    
+    
+    def data_to_device(self, data, device=None):
+        if device is None:
+            return data[0].to(self.device), data[1].to(self.device)
+        else:
+            return data[0].to(device), data[1].to(device)
+    
+    
+    def get_loss(self, model, src_model, data, noise, device=None):
+        tdata = self.data_to_device(data, device)
+        # outputs = model(tdata[0])
+        output_s, representation_s = model.pred_and_rep(tdata[0])                       # Student
+        _ , representation_t = src_model.pred_and_rep(tdata[0])                         # Teacher
+        loss = self.lossfunc(output_s, tdata[1])                                        # Classifier
+        contrastive_loss = self.get_contrastive_loss(model, noise, tdata[1], device)    # Contrastive
+        kl_loss = KL_divergence(representation_t, representation_s, device)             # KL divergence
+        return loss + contrastive_loss + kl_loss

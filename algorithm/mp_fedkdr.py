@@ -3,10 +3,13 @@ from pathlib import Path
 from .mp_fedbase import MPBasicServer, MPBasicClient
 import torch.nn as nn
 import numpy as np
+import torch.multiprocessing as mp
 
 import torch
 import os
 import copy
+
+import json
 
 
 def KL_divergence(teacher_batch_input, student_batch_input, device):
@@ -53,17 +56,9 @@ def KL_divergence(teacher_batch_input, student_batch_input, device):
 class Server(MPBasicServer):
     def __init__(self, option, model, clients, test_data = None):
         super(Server, self).__init__(option, model, clients, test_data)
-        
-    def finish(self, model_path):
-        if not Path(model_path).exists():
-            os.system(f"mkdir -p {model_path}")
-        task = self.option['task']
-        torch.save(self.model.state_dict(), f"{model_path}/{self.name}_{self.num_rounds}_{task}.pth")
-        pass
     
     def run(self):
         super().run()
-        # self.finish(f"algorithm/fedrl_utils/baseline/{self.name}")
         return
     
     def iterate(self, t, pool):
@@ -75,6 +70,20 @@ class Server(MPBasicServer):
         models = [i.to(device0) for i in models]
         self.model = self.aggregate(models, p = [1.0 for cid in self.selected_clients])
         return
+    
+    
+    def communicate_with(self, client_id):
+        gpu_id = int(mp.current_process().name[-1]) - 1
+        gpu_id = gpu_id % self.gpus
+
+        torch.manual_seed(0)
+        torch.cuda.set_device(gpu_id)
+        device = torch.device('cuda') # This is only 'cuda' so its can find the propriate cuda id to train
+        # package the necessary information
+        svr_pkg = self.pack(client_id)
+        # listen for the client's response and return None if the client drops out
+        if self.clients[client_id].is_drop(): return None
+        return self.clients[client_id].reply(svr_pkg, device, client_id)
 
 
 class Client(MPBasicClient):
@@ -82,9 +91,17 @@ class Client(MPBasicClient):
         super(Client, self).__init__(option, name, train_data, valid_data)
         self.lossfunc = nn.CrossEntropyLoss()
         self.kd_factor = 1
-                
+    
+    
+    def reply(self, svr_pkg, device, client_id):
+        model = self.unpack(svr_pkg)
+        loss = self.train_loss(model, device)
+        self.train(model, device, client_id)
+        cpkg = self.pack(model, loss)
+        return cpkg
+    
         
-    def train(self, model, device):
+    def train(self, model, device, client_id):
         model = model.to(device)
         model.train()
         
@@ -98,9 +115,10 @@ class Client(MPBasicClient):
             for batch_id, batch_data in enumerate(data_loader):
                 model.zero_grad()
                 loss, kl_loss = self.get_loss(model, src_model, batch_data, device)
-                loss = loss + kl_loss
+                # loss = loss + kl_loss
                 loss.backward()
                 optimizer.step()
+        
         return
     
     
@@ -114,4 +132,4 @@ class Client(MPBasicClient):
         _ , representation_t = src_model.pred_and_rep(tdata[0])                    # Teacher
         kl_loss = KL_divergence(representation_t, representation_s, device)        # KL divergence
         loss = self.lossfunc(output_s, tdata[1])
-        return loss, kl_loss
+        return loss, kl_loss * self.kd_factor

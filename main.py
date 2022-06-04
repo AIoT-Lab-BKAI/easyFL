@@ -3,8 +3,12 @@ import numpy as np
 import torch
 import os
 import multiprocessing
+import wandb
 
 class MyLogger(flw.Logger):
+    def __init__(self):
+        super().__init__()
+        
     def log(self, server=None):
         if server==None: return
         if self.output == {}:
@@ -20,7 +24,7 @@ class MyLogger(flw.Logger):
                 "mean_valid_accs":[],
             }
         if "mp_" in server.name:
-            test_metric, test_loss = server.test(device=torch.device('cuda:0'))
+            test_metric, test_loss = server.test(device=torch.device('cuda'))
         else:
             test_metric, test_loss = server.test()
         
@@ -41,6 +45,19 @@ class MyLogger(flw.Logger):
         print(self.temp.format("Validating Accuracy:", self.output['mean_valid_accs'][-1]))
         print(self.temp.format("Mean of Client Accuracy:", self.output['mean_curve'][-1]))
         print(self.temp.format("Std of Client Accuracy:", self.output['var_curve'][-1]))
+        
+        # wandb record
+        if server.wandb:
+            wandb.log(
+                {
+                    "Training Loss":        self.output['train_losses'][-1], 
+                    "Testing Loss":         self.output['test_losses'][-1],
+                    "Testing Accuracy":     self.output['test_accs'][-1],
+                    "Validating Accuracy":  self.output['mean_valid_accs'][-1],
+                    "Mean Client Accuracy": self.output['mean_curve'][-1],
+                    "Std Client Accuracy":  self.output['var_curve'][-1]
+                }
+            )
 
 
 logger = MyLogger()
@@ -56,6 +73,15 @@ def main():
     flw.setup_seed(option['seed'])
     # initialize server
     server = flw.initialize(option)
+    
+    if option['wandb']:
+        wandb.init(
+            project="easyFL", 
+            entity="aiotlab",
+            group=option['task'],
+            name=option['algorithm'],
+            config=option
+        )
     # start federated optimization
     server.run()
 

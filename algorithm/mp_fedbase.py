@@ -12,6 +12,7 @@ class MPBasicServer(BasicServer):
         self.gpus = option['num_gpus']
         self.num_threads = option['num_threads_per_gpu'] * self.gpus
         self.server_gpu_id = option['server_gpu_id']
+        self.log_folder = option['log_folder']
 
     def run(self):
         """
@@ -34,7 +35,7 @@ class MPBasicServer(BasicServer):
         print("=================End==================")
         logger.time_end('Total Time Cost')
         # save results as .json file
-        filepath = os.path.join('fedtask', self.option['task'] ,self.option['dataidx_filename']).split('.')[0]
+        filepath = os.path.join(self.log_folder, self.option['task'], self.option['dataidx_filename']).split('.')[0]
         if not Path(filepath).exists():
             os.system(f"mkdir -p {filepath}")
         logger.save(os.path.join(filepath, flw.output_filename(self.option, self)))
