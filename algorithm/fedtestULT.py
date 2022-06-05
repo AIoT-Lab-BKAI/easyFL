@@ -31,7 +31,7 @@ def KL_divergence(teacher_batch_input, student_batch_input, device):
     
     sub_s = student_batch_input - student_batch_input.transpose(0,1)
     sub_s_norm = torch.norm(sub_s, dim=2)
-    sub_s_norm = sub_s_norm[sub_s_norm!=0].view(batch_student,-1)
+    sub_s_norm = sub_s_norm.flatten()[1:].view(batch_student-1, batch_student+1)[:,:-1].reshape(batch_student, batch_student-1)
     std_s = torch.std(sub_s_norm)
     mean_s = torch.mean(sub_s_norm)
     kernel_mtx_s = torch.pow(sub_s_norm - mean_s, 2) / (torch.pow(std_s, 2) + 0.001)
@@ -40,7 +40,7 @@ def KL_divergence(teacher_batch_input, student_batch_input, device):
     
     sub_t = teacher_batch_input - teacher_batch_input.transpose(0,1)
     sub_t_norm = torch.norm(sub_t, dim=2)
-    sub_t_norm = sub_t_norm[sub_t_norm!=0].view(batch_teacher,-1)
+    sub_t_norm = sub_t_norm.flatten()[1:].view(batch_teacher-1, batch_teacher+1)[:,:-1].reshape(batch_teacher, batch_teacher-1)
     std_t = torch.std(sub_t_norm)
     mean_t = torch.mean(sub_t_norm)
     kernel_mtx_t = torch.pow(sub_t_norm - mean_t, 2) / (torch.pow(std_t, 2) + 0.001)

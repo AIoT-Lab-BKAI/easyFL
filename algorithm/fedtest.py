@@ -214,7 +214,7 @@ class Client(BasicClient):
         sample, _ = batch_noise
         sample = sample.to(device)
         output_logits = model(sample)
-        loss = F.mse_loss(output_logits, -1.0 * abs(self.contst_fct) * F.one_hot(targets, num_classes=10))
+        loss = F.mse_loss(output_logits, -1.0 * abs(self.contst_fct) * F.one_hot(targets, num_classes=output_logits.shape[1]))
         return loss
     
     
