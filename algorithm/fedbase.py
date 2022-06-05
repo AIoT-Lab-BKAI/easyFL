@@ -8,6 +8,7 @@ from main import logger
 import os
 import utils.fflow as flw
 import wandb
+import torch
 
 class BasicServer():
     def __init__(self, option, model, clients, test_data = None):
@@ -312,12 +313,14 @@ class BasicClient():
         :return
         """
         model.train()
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        model = model.to(device)
         data_loader = self.calculator.get_data_loader(self.train_data, batch_size=self.batch_size)
         optimizer = self.calculator.get_optimizer(self.optimizer_name, model, lr = self.learning_rate, weight_decay=self.weight_decay, momentum=self.momentum)
         for iter in range(self.epochs):
             for batch_id, batch_data in enumerate(data_loader):
                 model.zero_grad()
-                loss = self.calculator.get_loss(model, batch_data)
+                loss = self.calculator.get_loss(model, batch_data, device)
                 loss.backward()
                 optimizer.step()
         return

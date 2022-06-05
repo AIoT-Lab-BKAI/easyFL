@@ -36,17 +36,18 @@ class Client(BasicClient):
 
     def train(self, model):
         if self.gradL == None:
-            self.gradL = model.zeros_like()
+            self.gradL = model.zeros_like().to('cuda')
         # global parameters
-        src_model = copy.deepcopy(model)
+        src_model = copy.deepcopy(model).to('cuda')
         src_model.freeze_grad()
+        model = model.to('cuda')
         model.train()
         data_loader = self.calculator.get_data_loader(self.train_data, batch_size=self.batch_size)
         optimizer = self.calculator.get_optimizer(self.optimizer_name, model, lr=self.learning_rate, weight_decay=self.weight_decay, momentum=self.momentum)
         for iter in range(self.epochs):
             for batch_idx, batch_data in enumerate(data_loader):
                 model.zero_grad()
-                l1 = self.calculator.get_loss(model, batch_data)
+                l1 = self.calculator.get_loss(model, batch_data, device='cuda')
                 l2 = 0
                 l3 = 0
                 for pgl, pm, ps in zip(self.gradL.parameters(), model.parameters(), src_model.parameters()):
