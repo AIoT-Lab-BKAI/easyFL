@@ -1,7 +1,8 @@
 from .fedbase import BasicServer, BasicClient
 import copy
 import torch
-
+import wandb
+import time
 
 def flatten_tensors(tensors):
     """
@@ -67,9 +68,13 @@ class Server(BasicServer):
         models, train_losses = self.communicate(self.selected_clients)
         if not self.selected_clients: 
             return
-
+        
+        start = time.time()
         impact_factor = self.get_impact_factor(models, t)
         self.model = self.aggregate(models, p = impact_factor)
+        end = time.time()
+        if self.wandb:
+            wandb.log({"Aggregation_time": end-start})
         return
 
 

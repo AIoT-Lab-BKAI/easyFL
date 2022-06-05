@@ -1,3 +1,4 @@
+import time
 from pathlib import Path
 import numpy as np
 from utils import fmodule
@@ -6,6 +7,7 @@ from multiprocessing import Pool as ThreadPool
 from main import logger
 import os
 import utils.fflow as flw
+import wandb
 
 class BasicServer():
     def __init__(self, option, model, clients, test_data = None):
@@ -82,7 +84,11 @@ class BasicServer():
         # check whether all the clients have dropped out, because the dropped clients will be deleted from self.selected_clients
         if not self.selected_clients: return
         # aggregate: pk = 1/K as default where K=len(selected_clients)
+        start = time.time()
         self.model = self.aggregate(models, p = [1.0 * self.client_vols[cid]/self.data_vol for cid in self.selected_clients])
+        end = time.time()
+        if self.wandb:
+            wandb.log({"Aggregation_time": end-start})
         return
 
     def communicate(self, selected_clients):
@@ -230,7 +236,7 @@ class BasicServer():
             p = [pk/sump for pk in p]
             return fmodule._model_sum([model_k * pk for model_k, pk in zip(models, p)])
 
-    def test_on_clients(self, round, dataflag='valid'):
+    def test_on_clients(self, round, dataflag='valid', device='cpu'):
         """
         Validate accuracies and losses on clients' local datasets
         :param
@@ -242,12 +248,12 @@ class BasicServer():
         """
         evals, losses = [], []
         for c in self.clients:
-            eval_value, loss = c.test(self.model, dataflag)
+            eval_value, loss = c.test(self.model, dataflag, device)
             evals.append(eval_value)
             losses.append(loss)
         return evals, losses
 
-    def test(self, model=None):
+    def test(self, model=None, device='cpu'):
         """
         Evaluate the model on the test dataset owned by the server.
         :param
@@ -260,16 +266,19 @@ class BasicServer():
             model.eval()
             loss = 0
             eval_metric = 0
+            inference_metric = 0
             data_loader = self.calculator.get_data_loader(self.test_data, batch_size=64)
             for batch_id, batch_data in enumerate(data_loader):
-                bmean_eval_metric, bmean_loss = self.calculator.test(model, batch_data)
+                bmean_eval_metric, bmean_loss, inference_time = self.calculator.test(model, batch_data, device)                
                 loss += bmean_loss * len(batch_data[1])
                 eval_metric += bmean_eval_metric * len(batch_data[1])
+                inference_metric += inference_time
             eval_metric /= len(self.test_data)
             loss /= len(self.test_data)
-            return eval_metric, loss
+            inference_metric /= len(self.test_data)
+            return eval_metric, loss, inference_metric
         else: 
-            return -1,-1
+            return -1,-1,-1
 
 class BasicClient():
     def __init__(self, option, name='', train_data=None, valid_data=None):
@@ -313,7 +322,7 @@ class BasicClient():
                 optimizer.step()
         return
 
-    def test(self, model, dataflag='valid'):
+    def test(self, model, dataflag='valid', device='cpu'):
         """
         Evaluate the model with local data (e.g. training data or validating data).
         :param
@@ -330,7 +339,7 @@ class BasicClient():
         eval_metric = 0
         data_loader = self.calculator.get_data_loader(dataset, batch_size=32)
         for batch_id, batch_data in enumerate(data_loader):
-            bmean_eval_metric, bmean_loss = self.calculator.test(model, batch_data)
+            bmean_eval_metric, bmean_loss, _ = self.calculator.test(model, batch_data, device)
             loss += bmean_loss * len(batch_data[1])
             eval_metric += bmean_eval_metric * len(batch_data[1])
         eval_metric =1.0 * eval_metric / len(dataset)

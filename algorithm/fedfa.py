@@ -2,6 +2,7 @@ from utils import fmodule
 from .fedbase import BasicServer, BasicClient
 import numpy as np
 import copy
+import time, wandb
 
 class Server(BasicServer):
     def __init__(self, option, model, clients, test_data = None):
@@ -28,6 +29,7 @@ class Server(BasicServer):
         ws, losses, ACC, F = self.communicate(self.selected_clients)
         if self.selected_clients == []: return
         # aggregate
+        start = time.time()
         # calculate ACCi_inf, fi_inf
         sum_acc = np.sum(ACC)
         sum_f = np.sum(F)
@@ -44,6 +46,10 @@ class Server(BasicServer):
         # calculate m = γm+(1-γ)dw
         self.m = self.gamma * self.m + (1 - self.gamma) * dw
         self.model = wnew - self.m * self.eta
+        
+        end = time.time()
+        if self.wandb:
+            wandb.log({"Aggregation_time": end-start})
         return
 
 class Client(BasicClient):

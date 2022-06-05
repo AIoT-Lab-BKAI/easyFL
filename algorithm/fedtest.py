@@ -6,7 +6,7 @@ import torch.nn.functional as F
 import torch
 import os
 from algorithm.agg_utils.fedtest_utils import model_sum
-
+import time, wandb
 
 
 def compute_similarity(a, b):
@@ -52,13 +52,12 @@ class Server(BasicServer):
         self.selected_clients = self.sample()
         models, train_losses = self.communicate(self.selected_clients)
         if not self.selected_clients: return
+        
+        start = time.time()
         device0 = torch.device("cuda")
         
         self.model = self.model.to(device0)
         models = [i.to(device0) - self.model for i in models]
-        
-        if not self.selected_clients:
-            return
         
         if (len(self.selected_clients) < len(self.clients)) or (self.impact_factor is None):
             self.update_Q_matrix(models, self.selected_clients, t)
@@ -66,6 +65,10 @@ class Server(BasicServer):
         
         self.model = self.model + self.aggregate(models, self.impact_factor)
         self.update_threshold(t)
+        
+        end = time.time()
+        if self.wandb:
+            wandb.log({"Aggregation_time": end-start})
         return
 
 

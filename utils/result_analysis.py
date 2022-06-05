@@ -195,29 +195,29 @@ if __name__ == '__main__':
     # task+record
     headers = [
         # 'mp_fedkdr',
-        'mp_fedtest',
+        'fedtest',
         # 'mp_fedtestv2',
         # 'mp_fedtestv3',
         # 'mp_fedtestv4',
         # 'mp_fedtestv5',
         # 'mp_fedtestv6',
-        'mp_fedtestULT',
+        # 'mp_fedtestULT',
         # 'mp_fedsdivv5',
         # 'mp_fedprox',
         # 'scaffold',
         # 'mp_fedavg',
-        'mp_fedkdrv2'
+        # 'mp_fedkdrv2'
     ]
     flt = {
-        'E': '8',
-        'B': '8',
+        # 'E': '8',
+        # 'B': '8',
         # 'LR': '0.01',
         'R': '100',
         # 'P': '0.01',
         # 'S': '0',
     }
     for s in [1]:
-        task = f'mnist_clustered_N10_K10/mnist/client_cluster/MNIST-client-cluster-quantitative'
+        task = f'mnist_clustered_N10_K10_invest/mnist/client_cluster/MNIST-client-cluster-quantitative'
         try:
             main_func(task, headers, flt)
         except ValueError:

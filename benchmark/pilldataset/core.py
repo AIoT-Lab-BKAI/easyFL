@@ -1,16 +1,16 @@
 
 from benchmark.toolkits import BasicTaskReader,PillDataset
-from benchmark.toolkits import ClassifyCalculator, CusTomTaskReader, DefaultTaskGen, XYTaskReader
-from torch.utils.data import DataLoader
+from benchmark.toolkits import ClassifyCalculator
 
 import json
 
 
 class TaskReader(BasicTaskReader):
-    def __init__(self,taskpath="", data_folder="./dataset_idx/pill_dataset",dataidx_path=""):
+    def __init__(self,taskpath="", data_folder="./dataset_idx/pill_dataset", dataidx_path=""):
         super(TaskReader,self).__init__(taskpath)
         self.dataidx_path = dataidx_path
         self.data_folder = data_folder
+        
     def read_data(self):
         with open(self.dataidx_path +"/client_dataset/user_group_img.json",'r') as f:
             user_group_img = json.load(f)

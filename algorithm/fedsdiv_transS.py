@@ -16,6 +16,7 @@ import numpy as np
 import torch
 import os
 import copy
+import wandb, time
 
 
 def KL_divergence(teacher_batch_input, student_batch_input, device):
@@ -101,16 +102,20 @@ class Server(BasicServer):
         if not self.selected_clients:
             return
         
+        start = time.time()
+        
         if (len(self.selected_clients) < len(self.clients)) or (self.impact_factor is None):
             self.update_Q_matrix(models, self.selected_clients, t)
             self.impact_factor, self.gamma = self.get_impact_factor(self.selected_clients, t)
         
-        # print(self.selected_clients)
-        # print("Round", t, self.impact_factor)
-        
         model_diff = self.aggregate(model_diffs, p = self.impact_factor)
         self.model = self.model + self.gamma * model_diff
         self.update_threshold(t)
+        
+        end = time.time()
+        if self.wandb:
+            wandb.log({"Aggregation_time": end-start})
+            
         return
     
     def compute_simXY(self, simXZ, simZY):

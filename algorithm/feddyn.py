@@ -2,6 +2,8 @@ from .fedbase import BasicServer, BasicClient
 import copy
 from utils import fmodule
 import torch
+import wandb
+import time
 
 class Server(BasicServer):
     def __init__(self, option, model, clients, test_data=None):
@@ -14,7 +16,11 @@ class Server(BasicServer):
         self.selected_clients = self.sample()
         models, train_losses = self.communicate(self.selected_clients)
         if not self.selected_clients: return
+        start = time.time()
         self.model = self.aggregate(models)
+        end = time.time()
+        if self.wandb:
+            wandb.log({"Aggregation_time": end-start})
         return
 
     def aggregate(self, models):

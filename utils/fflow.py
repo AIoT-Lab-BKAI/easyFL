@@ -61,8 +61,8 @@ def read_option():
     parser.add_argument('--beta', help='beta in FedFA',type=float, default='1.0')
     parser.add_argument('--gamma', help='gamma in FedFA', type=float, default='0')
     parser.add_argument('--mu', help='mu in fedprox', type=float, default='0.1')
-    parser.add_argument('--dataidx_filename', help="path to pilldataset folder", required=True, default='none')
-    parser.add_argument('--dataidx_path', help="path to idx file", required=True, default='none')
+    parser.add_argument('--dataidx_filename', help="path to pilldataset folder", required=False, default='none')
+    parser.add_argument('--dataidx_path', help="path to idx file", required=False, default='none')
     # server gpu
     parser.add_argument('--server_gpu_id', help='server process on this gpu', type=int, default=0)
     parser.add_argument('--load_model_path', help='path to model to continue training', type=str, required=False, default=None)

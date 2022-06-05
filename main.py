@@ -1,3 +1,4 @@
+from prometheus_client import Summary
 import utils.fflow as flw
 import numpy as np
 import torch
@@ -22,14 +23,17 @@ class MyLogger(flw.Logger):
                 "valid_accs":[],
                 "client_accs":{},
                 "mean_valid_accs":[],
+                "inference_time": []
             }
         if "mp_" in server.name:
-            test_metric, test_loss = server.test(device=torch.device('cuda'))
+            test_metric, test_loss, inference_time = server.test(device=torch.device('cuda'))
         else:
-            test_metric, test_loss = server.test()
+            test_metric, test_loss, inference_time = server.test()
         
-        valid_metrics, valid_losses = server.test_on_clients(self.current_round, 'valid')
-        train_metrics, train_losses = server.test_on_clients(self.current_round, 'train')
+        valid_metrics, valid_losses = server.test_on_clients(self.current_round, 'valid', 'cuda')
+        # train_metrics, train_losses = server.test_on_clients(self.current_round, 'train', 'cuda')
+        train_metrics, train_losses = (valid_metrics, valid_losses)
+        
         self.output['train_losses'].append(1.0*sum([ck * closs for ck, closs in zip(server.client_vols, train_losses)])/server.data_vol)
         self.output['valid_accs'].append(valid_metrics)
         self.output['test_accs'].append(test_metric)
@@ -37,14 +41,18 @@ class MyLogger(flw.Logger):
         self.output['mean_valid_accs'].append(1.0*sum([ck * acc for ck, acc in zip(server.client_vols, valid_metrics)])/server.data_vol)
         self.output['mean_curve'].append(np.mean(valid_metrics))
         self.output['var_curve'].append(np.std(valid_metrics))
+        self.output['inference_time'].append(inference_time)
+        
         for cid in range(server.num_clients):
             self.output['client_accs'][server.clients[cid].name]=[self.output['valid_accs'][i][cid] for i in range(len(self.output['valid_accs']))]
+        
         print(self.temp.format("Training Loss:", self.output['train_losses'][-1]))
         print(self.temp.format("Testing Loss:", self.output['test_losses'][-1]))
         print(self.temp.format("Testing Accuracy:", self.output['test_accs'][-1]))
         print(self.temp.format("Validating Accuracy:", self.output['mean_valid_accs'][-1]))
         print(self.temp.format("Mean of Client Accuracy:", self.output['mean_curve'][-1]))
         print(self.temp.format("Std of Client Accuracy:", self.output['var_curve'][-1]))
+        print(self.temp.format("Mean of Inference Time:", self.output['inference_time'][-1]))
         
         # wandb record
         if server.wandb:
@@ -55,7 +63,8 @@ class MyLogger(flw.Logger):
                     "Testing Accuracy":     self.output['test_accs'][-1],
                     "Validating Accuracy":  self.output['mean_valid_accs'][-1],
                     "Mean Client Accuracy": self.output['mean_curve'][-1],
-                    "Std Client Accuracy":  self.output['var_curve'][-1]
+                    "Std Client Accuracy":  self.output['var_curve'][-1],
+                    "Inference Time":  self.output['inference_time'][-1]
                 }
             )
 
@@ -82,6 +91,9 @@ def main():
             name=option['algorithm'],
             config=option
         )
+        
+        wandb.define_metric("Testing Accuracy", summary="max")
+        wandb.define_metric("Inference Time", summary="mean")
     # start federated optimization
     server.run()
 

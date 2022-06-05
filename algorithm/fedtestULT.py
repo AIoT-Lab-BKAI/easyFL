@@ -7,6 +7,7 @@ import torch
 import os
 import copy
 from algorithm.agg_utils.fedtest_utils import model_sum
+import time, wandb
 
 
 def KL_divergence(teacher_batch_input, student_batch_input, device):
@@ -100,12 +101,17 @@ class Server(BasicServer):
         if not self.selected_clients:
             return
         
+        start = time.time()
         if (len(self.selected_clients) < len(self.clients)) or (self.impact_factor is None):
             self.update_Q_matrix(models, self.selected_clients, t)
             self.impact_factor, self.gamma = self.get_impact_factor(self.selected_clients, t)
             
         self.model = self.model + self.gamma * self.aggregate(models, self.impact_factor)
         self.update_threshold(t)
+        
+        end = time.time()
+        if self.wandb:
+            wandb.log({"Aggregation_time": end-start})
         return
 
 

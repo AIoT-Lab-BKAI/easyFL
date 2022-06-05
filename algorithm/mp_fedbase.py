@@ -1,10 +1,12 @@
 from pathlib import Path
+import time
 from algorithm.fedbase import BasicServer, BasicClient
 from main import logger
 import os
 import utils.fflow as flw
 import torch.multiprocessing as mp
 import torch
+import wandb
 
 class MPBasicServer(BasicServer):
     def __init__(self, option, model, clients, test_data=None):
@@ -54,9 +56,13 @@ class MPBasicServer(BasicServer):
         # check whether all the clients have dropped out, because the dropped clients will be deleted from self.selected_clients
         if not self.selected_clients: return
         # aggregate: pk = 1/K as default where K=len(selected_clients)
+        start = time.time()
         device0 = torch.device(f"cuda:{self.server_gpu_id}")
         models = [i.to(device0) for i in models]
         self.model = self.aggregate(models, p = [1.0 * self.client_vols[cid]/self.data_vol for cid in self.selected_clients])
+        end = time.time()
+        if self.wandb:
+            wandb.log({"Aggregation_time": end-start})
         return
 
     def communicate(self, selected_clients, pool):
@@ -111,17 +117,36 @@ class MPBasicServer(BasicServer):
             model.eval()
             loss = 0
             eval_metric = 0
+            inference_metric = 0
             data_loader = self.calculator.get_data_loader(self.test_data, batch_size=64)
             for batch_id, batch_data in enumerate(data_loader):
-                bmean_eval_metric, bmean_loss = self.calculator.test(model, batch_data, device)
+                bmean_eval_metric, bmean_loss, inference_time = self.calculator.test(model, batch_data, device)
                 loss += bmean_loss * len(batch_data[1])
                 eval_metric += bmean_eval_metric * len(batch_data[1])
+                inference_metric += inference_time
             eval_metric /= len(self.test_data)
             loss /= len(self.test_data)
-            return eval_metric, loss
+            inference_metric /= len(self.test_data)
+            return eval_metric, loss, inference_metric
         else: 
-            return -1, -1
+            return -1, -1, -1
 
+    def test_on_clients(self, round, dataflag='valid', device='cuda'):
+        """
+        Validate accuracies and losses on clients' local datasets
+        :param
+            round: the current communication round
+            dataflag: choose train data or valid data to evaluate
+        :return
+            evals: the evaluation metrics of the global model on each client's dataset
+            loss: the loss of the global model on each client's dataset
+        """
+        evals, losses = [], []
+        for c in self.clients:
+            eval_value, loss = c.test(self.model, dataflag, device=device)
+            evals.append(eval_value)
+            losses.append(loss)
+        return evals, losses
 
 class MPBasicClient(BasicClient):
     def __init__(self, option, name='', train_data=None, valid_data=None):
@@ -168,7 +193,7 @@ class MPBasicClient(BasicClient):
         eval_metric = 0
         data_loader = self.calculator.get_data_loader(dataset, batch_size=64)
         for batch_id, batch_data in enumerate(data_loader):
-            bmean_eval_metric, bmean_loss = self.calculator.test(model, batch_data,device)
+            bmean_eval_metric, bmean_loss, _ = self.calculator.test(model, batch_data, device)
             loss += bmean_loss * len(batch_data[1])
             eval_metric += bmean_eval_metric * len(batch_data[1])
         eval_metric =1.0 * eval_metric / len(dataset)
