@@ -2,7 +2,8 @@ from utils import fmodule
 from .fedbase import BasicServer, BasicClient
 import copy
 import math
-import wandb, time
+import wandb
+import time
 
 class Server(BasicServer):
     def __init__(self, option, model, clients, test_data = None):
@@ -22,7 +23,7 @@ class Server(BasicServer):
         ws, losses = self.communicate(self.selected_clients)
         if self.selected_clients == []: return
         
-        start = time.start()
+        start = time.time()
         grads = [self.model - w for w in ws]
         # update GH
         for cid, gi in zip(self.selected_clients, grads):
