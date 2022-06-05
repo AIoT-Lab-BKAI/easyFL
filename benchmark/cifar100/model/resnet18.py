@@ -138,7 +138,7 @@ class Model(FModule):
         output = self.avg_pool(output)
         e = output.view(output.size(0), -1)
         o = self.fc(e)
-        return o, e.flatten()
+        return o, e
 
 
 class Loss(nn.Module):
