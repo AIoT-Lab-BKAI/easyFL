@@ -93,6 +93,8 @@ def main():
         
         wandb.define_metric("Testing Accuracy", summary="max")
         wandb.define_metric("Inference Time", summary="mean")
+    
+    print("=> CONFIG\n", option)
     # start federated optimization
     server.run()
 
