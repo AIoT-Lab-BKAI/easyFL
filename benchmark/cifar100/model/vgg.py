@@ -2,7 +2,6 @@ import math
 from torch import nn
 from utils.fmodule import FModule
 import torch.nn.functional as F
-import torch.nn.init as init
 
 cfg = {
     "A": [64, "M", 128, "M", 256, 256, "M", 512, 512, "M", 512, 512,"M"],
@@ -14,10 +13,10 @@ cfg = {
 class Model(FModule):
     def __init__(self):
         super(Model, self).__init__()
-        self.features = make_layers(cfg["A"], output_dim=256)
+        self.features = make_layers(cfg["A"])
         self.classifier = nn.Sequential(
             nn.Dropout(),
-            nn.Linear(256, 512),
+            nn.Linear(512, 512),
             nn.ReLU(True),
             nn.Dropout(),
             nn.Linear(512, 512),
@@ -29,16 +28,22 @@ class Model(FModule):
             if isinstance(m, nn.Conv2d):
                 n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
                 m.weight.data.normal_(0, math.sqrt(2.0 / n))
-                m.bias.data.zero_()
+                m.bias.data.zero_()    
     
     def forward(self, x):
         x = self.features(x)
         x = x.view(x.size(0), -1)
         x = self.classifier(x)
         return x
+    
+    def pred_and_pre(self, x):
+        x = self.features(x)
+        e = x.view(x.size(0), -1)
+        o = self.classifier(e)
+        return o, e
 
 
-def make_layers(cfg,output_dim, batch_norm=False):
+def make_layers(cfg, batch_norm=False):
     layers = []
     in_channels = 3
     for v in cfg:
@@ -51,17 +56,6 @@ def make_layers(cfg,output_dim, batch_norm=False):
             else:
                 layers += [conv2d, nn.ReLU(inplace=True)]
             in_channels = v
-    
-    layers += [
-            nn.Flatten(1,-1),
-            nn.Dropout(),
-            nn.Linear(512, 512),
-            nn.ReLU(True),
-            nn.Dropout(),
-            nn.Linear(512, 512),
-            nn.ReLU(True),
-            nn.Linear(512, output_dim),
-            ]
     
     return nn.Sequential(*layers)
 
