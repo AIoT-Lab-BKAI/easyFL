@@ -59,12 +59,13 @@ class Server(BasicServer):
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
         model = model.to(device)
         data_loader = DataLoader(self.train_dataset, batch_size=16, shuffle=True)
-
-        for batch_id, batch_data in enumerate(data_loader):
-            model.zero_grad()
-            loss = self.calculator.get_loss(model, batch_data, device)
-            loss.backward()
-            self.optimizer.step()
+        
+        for iter in range(self.option['num_epochs']):
+            for batch_id, batch_data in enumerate(data_loader):
+                model.zero_grad()
+                loss = self.calculator.get_loss(model, batch_data, device)
+                loss.backward()
+                self.optimizer.step()
 
 
 class Client(BasicClient):
