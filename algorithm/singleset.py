@@ -58,7 +58,7 @@ class Server(BasicServer):
         model.train()
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
         model = model.to(device)
-        data_loader = DataLoader(self.train_dataset, batch_size=16, shuffle=True)
+        data_loader = DataLoader(self.train_dataset, batch_size=self.clients_per_round*self.option['batch_size'], shuffle=True)
         
         for iter in range(self.option['num_epochs']):
             for batch_id, batch_data in enumerate(data_loader):
