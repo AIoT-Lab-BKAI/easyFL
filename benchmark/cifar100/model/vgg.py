@@ -14,10 +14,10 @@ cfg = {
 class Model(FModule):
     def __init__(self):
         super(Model, self).__init__()
-        self.features = make_layers(cfg["A"], output_dim=512)
+        self.features = make_layers(cfg["A"], output_dim=256)
         self.classifier = nn.Sequential(
             nn.Dropout(),
-            nn.Linear(512, 512),
+            nn.Linear(256, 512),
             nn.ReLU(True),
             nn.Dropout(),
             nn.Linear(512, 512),
