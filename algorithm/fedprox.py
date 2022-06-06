@@ -12,17 +12,19 @@ class Client(BasicClient):
         super(Client, self).__init__(option, name, train_data, valid_data)
         self.mu = option['mu']
 
-    def train(self, model):
+    def train(self, model, device='cuda'):
         # global parameters
-        src_model = copy.deepcopy(model)
+        src_model = copy.deepcopy(model).to(device)
         src_model.freeze_grad()
+        model = model.to(device)
         model.train()
+        
         data_loader = self.calculator.get_data_loader(self.train_data, batch_size=self.batch_size)
         optimizer = self.calculator.get_optimizer(self.optimizer_name, model, lr=self.learning_rate, weight_decay=self.weight_decay, momentum=self.momentum)
         for iter in range(self.epochs):
             for batch_idx, batch_data in enumerate(data_loader):
                 model.zero_grad()
-                original_loss = self.calculator.get_loss(model, batch_data)
+                original_loss = self.calculator.get_loss(model, batch_data, device='cuda')
                 # proximal term
                 loss_proximal = 0
                 for pm, ps in zip(model.parameters(), src_model.parameters()):
