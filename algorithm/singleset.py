@@ -33,11 +33,11 @@ class CustomDataset(Dataset):
 class Server(BasicServer):
     def __init__(self, option, model, clients, test_data = None):
         super(Server, self).__init__(option, model, clients, test_data)
-        single_set_idx = option['dataidx_filename']
+        single_set_idx = 'dataset_idx/' + option['dataidx_filename']
         data_folder = option['data_folder']
         train_dataset = datasets.CIFAR100(data_folder, 
                                           train=True, 
-                                          download=True, 
+                                          download=False,
                                           transform=transforms.Compose([
                                               transforms.ToTensor(), 
                                               transforms.Normalize((0.4914, 0.4822, 0.4465),
@@ -48,10 +48,13 @@ class Server(BasicServer):
         self.optimizer = optim.Adam(self.model.parameters())
         
     def iterate(self, t):
-        self.train(self.model)
+        self.train()
         return
     
-    def train(self, model):
+    def train(self, model=None):
+        if model == None:
+            model = self.model
+            
         model.train()
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
         model = model.to(device)
@@ -62,7 +65,6 @@ class Server(BasicServer):
             loss = self.calculator.get_loss(model, batch_data, device)
             loss.backward()
             self.optimizer.step()
-        return
 
 
 class Client(BasicClient):
