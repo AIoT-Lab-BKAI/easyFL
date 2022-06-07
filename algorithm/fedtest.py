@@ -41,12 +41,10 @@ class Server(BasicServer):
         super(Server, self).__init__(option, model, clients, test_data)
         self.Q_matrix = torch.zeros([len(self.clients), len(self.clients)])
         self.freq_matrix = torch.zeros_like(self.Q_matrix)
-
         self.impact_factor = None
         self.thr = 0.975        
         self.gamma = 1
-        
-        self.paras_name = ['neg_fct']
+        self.paras_name = ['neg_fct', 'neg_mrg']
 
     def iterate(self, t):
         self.selected_clients = self.sample()
@@ -191,6 +189,7 @@ class Client(BasicClient):
         sample, _ = train_data[0]
         self.noise_data = NoiseDataset(sample, len(train_data))
         self.contst_fct = option['neg_fct']
+        self.contst_mrg = option['neg_mrg']
 
 
     def train(self, model, device='cuda'):
@@ -214,7 +213,7 @@ class Client(BasicClient):
         sample, _ = batch_noise
         sample = sample.to(device)
         output_logits = model(sample)
-        loss = F.mse_loss(output_logits, -1.0 * abs(self.contst_fct) * F.one_hot(targets, num_classes=output_logits.shape[1]))
+        loss = F.mse_loss(output_logits, -1.0 * abs(self.contst_mrg) * F.one_hot(targets, num_classes=output_logits.shape[1]))
         return loss
     
     
@@ -230,4 +229,4 @@ class Client(BasicClient):
         outputs = model(tdata[0])
         loss = self.lossfunc(outputs, tdata[1])
         contrastive_loss = self.get_contrastive_loss(model, noise, tdata[1], device)
-        return loss + contrastive_loss
+        return loss + self.contst_fct * contrastive_loss
