@@ -35,15 +35,28 @@ class Server(BasicServer):
         super(Server, self).__init__(option, model, clients, test_data)
         single_set_idx = 'dataset_idx/' + option['dataidx_filename']
         data_folder = option['data_folder']
-        train_dataset = datasets.CIFAR100(data_folder, 
-                                          train=True, 
-                                          download=False,
-                                          transform=transforms.Compose([
-                                              transforms.ToTensor(), 
-                                              transforms.Normalize((0.4914, 0.4822, 0.4465),
-                                                                   (0.2023, 0.1994, 0.2010))
-                                              ])
-                                          )
+        
+        dataset_name = option['task'].split('_')[0]
+        
+        if dataset_name == 'mnist': 
+            train_dataset = datasets.MNIST(data_folder, 
+                                           train=True, 
+                                           download=True, 
+                                           transform=transforms.Compose([
+                                               transforms.ToTensor(), 
+                                               transforms.Normalize((0.1307,), (0.3081,))
+                                               ]))
+            
+        elif dataset_name == 'cifar100':
+            train_dataset = datasets.CIFAR100(data_folder, 
+                                            train=True, 
+                                            download=False,
+                                            transform=transforms.Compose([
+                                                transforms.ToTensor(), 
+                                                transforms.Normalize((0.4914, 0.4822, 0.4465),
+                                                                    (0.2023, 0.1994, 0.2010))
+                                                ]))
+        
         self.train_dataset = CustomDataset(train_dataset, read_json_idx(single_set_idx))
         self.optimizer = optim.Adam(self.model.parameters())
         
