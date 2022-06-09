@@ -10,7 +10,7 @@ def conv_block(in_channel, out_channel, pool=False):
         layers.append(nn.MaxPool2d(2))
     return nn.Sequential(*layers)
 
-class Resnet9(FModule):
+class Model(FModule):
   def __init__(self,in_channel=3,num_classes=100):
     super().__init__()
 
