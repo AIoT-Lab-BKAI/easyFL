@@ -51,7 +51,6 @@ class BasicBlock(nn.Module):
 import torch
 class BottleNeck(nn.Module):
     """Residual block for resnet over 50 layers
-
     """
     expansion = 4
     def __init__(self, in_channels, out_channels, stride=1):
@@ -140,7 +139,7 @@ class Model(FModule):
         output = self.avg_pool(output)
         rep = output.view(output.size(0), -1)
         pred = self.fc(rep)
-        return pred, rep.flatten()
+        return pred, rep
 
 class Loss(nn.Module):
     def __init__(self):
