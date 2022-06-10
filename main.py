@@ -27,7 +27,7 @@ class MyLogger(flw.Logger):
         if "mp_" in server.name:
             test_metric, test_loss, inference_time = server.test(device=torch.device('cuda'))
         else:
-            test_metric, test_loss, inference_time = server.test()
+            test_metric, test_loss, inference_time = server.test(device="cuda")
         
         valid_metrics, valid_losses = server.test_on_clients(self.current_round, 'valid', 'cuda')
         # train_metrics, train_losses = server.test_on_clients(self.current_round, 'train', 'cuda')
