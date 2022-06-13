@@ -104,8 +104,8 @@ class Server(BasicServer):
         
         start = time.time()
         
+        self.update_Q_matrix(models, self.selected_clients, t)
         if (len(self.selected_clients) < len(self.clients)) or (self.impact_factor is None):
-            self.update_Q_matrix(models, self.selected_clients, t)
             self.impact_factor, self.gamma = self.get_impact_factor(self.selected_clients, t)
         
         model_diff = self.aggregate(model_diffs, p = self.impact_factor)
