@@ -11,7 +11,7 @@ def conv_block(in_channel, out_channel, pool=False):
     return nn.Sequential(*layers)
 
 class Model(FModule):
-  def __init__(self,in_channel=3,num_classes=100):
+  def __init__(self, in_channel=3, num_classes=100):
     super().__init__()
 
     self.conv1 = conv_block(in_channel,32)
@@ -22,10 +22,9 @@ class Model(FModule):
     self.conv4 = conv_block(128,256,pool=True)
     self.res2 = nn.Sequential(conv_block(256,256),conv_block(256,256))
 
-    self.classifier = nn.Sequential(nn.MaxPool2d(4),
-                                    nn.Flatten(),
-                                    nn.Dropout(0.2),
-                                    nn.Linear(256,num_classes))
+    self.pool = nn.MaxPool2d(4)
+    self.dropout = nn.Dropout(0.2)
+    self.classifier = nn.Linear(256, num_classes)
     
   def forward(self,x):
     out = self.conv1(x)
@@ -34,5 +33,19 @@ class Model(FModule):
     out = self.conv3(out)
     out = self.conv4(out)
     out = self.res2(out) + out
+    out = self.pool(out)
+    out = self.dropout(out.view(x.shape[0], -1))
     out = self.classifier(out)
     return out
+  
+  def pred_and_rep(self,x):
+    out = self.conv1(x)
+    out = self.conv2(out)
+    out = self.res1(out) + out
+    out = self.conv3(out)
+    out = self.conv4(out)
+    out = self.res2(out) + out
+    out = self.pool(out)
+    e = self.dropout(out.view(x.shape[0], -1))
+    o = self.classifier(e)
+    return o, e
