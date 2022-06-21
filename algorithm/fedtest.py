@@ -65,7 +65,7 @@ class Server(BasicServer):
         if (len(self.selected_clients) < len(self.clients)) or (self.impact_factor is None):
             self.impact_factor, self.gamma = self.get_impact_factor(self.selected_clients, t)
             
-        self.model = self.model + self.gamma * self.aggregate(models, self.impact_factor)
+        self.model = self.model + self.aggregate(models, self.impact_factor)
         self.update_threshold(t)
         return
 
