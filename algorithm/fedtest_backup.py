@@ -6,6 +6,7 @@ import torch.nn.functional as F
 import torch
 import os
 from algorithm.agg_utils.fedtest_utils import model_sum
+import time, wandb
 
 
 def compute_similarity(a, b):
@@ -36,105 +37,43 @@ class NoiseDataset(Dataset):
     
 
 class Server(BasicServer):
-    def __init__(self, option, model, clients, test_data = None):
+    def __init__(self, option, model, clients, test_data=None):
         super(Server, self).__init__(option, model, clients, test_data)
         self.Q_matrix = torch.zeros([len(self.clients), len(self.clients)])
         self.freq_matrix = torch.zeros_like(self.Q_matrix)
-
         self.impact_factor = None
         self.thr = 0.975        
         self.gamma = 1
-        
-        self.paras_name = ['neg_fct', 'neg_mrg', 'temp']
-        self.temp = option['temp']
-        
+        self.paras_name = ['neg_fct', 'neg_mrg']
 
     def iterate(self, t):
         self.selected_clients = self.sample()
         models, train_losses = self.communicate(self.selected_clients)
         if not self.selected_clients: return
-        device0 = torch.device(f"cuda:{self.server_gpu_id}")
+        
+        start = time.time()
+        device0 = torch.device("cuda")
         
         self.model = self.model.to(device0)
         models = [i.to(device0) - self.model for i in models]
         
-        if not self.selected_clients:
-            return
-        
         self.update_Q_matrix(models, self.selected_clients, t)
         if (len(self.selected_clients) < len(self.clients)) or (self.impact_factor is None):
             self.impact_factor, self.gamma = self.get_impact_factor(self.selected_clients, t)
-            
+        
         self.model = self.model + self.gamma * self.aggregate(models, self.impact_factor)
         self.update_threshold(t)
+        
+        end = time.time()
+        if self.wandb:
+            wandb.log({"Aggregation_time": end-start})
         return
 
 
     def aggregate(self, models, p=...):
         sump = sum(p)
         p = [pk/sump for pk in p]
-        return model_sum([model_k * pk for model_k, pk in zip(models, p)], p=p, temp=self.temp)
-    
-    
-    @torch.no_grad()
-    def update_Q_matrix(self, model_list, client_idx, t=None):
-        
-        new_similarity_matrix = torch.zeros_like(self.Q_matrix)
-        for i, model_i in zip(client_idx, model_list):
-            for j, model_j in zip(client_idx, model_list):
-                _ , new_similarity_matrix[i][j] = compute_similarity(model_i, model_j)
-                
-        new_freq_matrix = torch.zeros_like(self.freq_matrix)
-        for i in client_idx:
-            for j in client_idx:
-                new_freq_matrix[i][j] = 1
-        
-        # Increase frequency
-        self.freq_matrix += new_freq_matrix
-        self.Q_matrix = self.Q_matrix + new_similarity_matrix
-        
-        if 0 in self.Q_matrix and t > 0:
-            self.transitive_update_Q()
-        return
-
-
-    @torch.no_grad()
-    def get_impact_factor(self, client_idx, t=None):
-        
-        Q_asterisk_mtx = self.Q_matrix/(self.freq_matrix)
-        Q_asterisk_mtx[torch.isinf(Q_asterisk_mtx)] = 0.0
-        Q_asterisk_mtx = torch.nan_to_num(Q_asterisk_mtx, 0.0)
-        
-        min_Q = torch.min(Q_asterisk_mtx[Q_asterisk_mtx > 0.0])
-        max_Q = torch.max(Q_asterisk_mtx[Q_asterisk_mtx > 0.0])
-        Q_asterisk_mtx = torch.abs((Q_asterisk_mtx - min_Q)/(max_Q - min_Q) * (self.freq_matrix > 0.0))
-        
-        Q_asterisk_mtx = Q_asterisk_mtx > self.thr
-        
-        impact_factor = 1/torch.sum(Q_asterisk_mtx, dim=0)
-        impact_factor[torch.isinf(impact_factor)] = 0.0
-        impact_factor = torch.nan_to_num(impact_factor, 0.0)
-        impact_factor_frac = impact_factor[client_idx]
-        
-        num_cluster_all = torch.sum(impact_factor)
-        
-        temp_mtx = Q_asterisk_mtx[client_idx]
-        temp_mtx = temp_mtx.T
-        temp_mtx = temp_mtx[client_idx]
-        
-        temp_vec = 1/torch.sum(temp_mtx, dim=0)
-        temp_vec[torch.isinf(temp_vec)] = 0.0
-        temp_vec = torch.nan_to_num(temp_vec, 0.0)
-        
-        num_cluster_round = torch.sum(temp_vec)
-        gamma = num_cluster_round/num_cluster_all
-        
-        return impact_factor_frac.detach().cpu().tolist(), gamma.detach().cpu().item()
-    
-    
-    def update_threshold(self, t):
-        self.thr = min(self.thr * (1 + 0.0005)**t, 0.998)
-        return
+        return model_sum([model_k * pk for model_k, pk in zip(models, p)], p=p)
     
     
     def compute_simXY(self, simXZ, simZY):
@@ -181,6 +120,67 @@ class Server(BasicServer):
         self.freq_matrix += (temp_F > 0) * 1.0
         return
     
+    
+    @torch.no_grad()
+    def update_Q_matrix(self, model_list, client_idx, t=None):
+        
+        new_similarity_matrix = torch.zeros_like(self.Q_matrix)
+        for i, model_i in zip(client_idx, model_list):
+            for j, model_j in zip(client_idx, model_list):
+                _ , new_similarity_matrix[i][j] = compute_similarity(model_i, model_j)
+                
+        new_freq_matrix = torch.zeros_like(self.freq_matrix)
+        for i in client_idx:
+            for j in client_idx:
+                new_freq_matrix[i][j] = 1
+        
+        # Increase frequency
+        self.freq_matrix += new_freq_matrix
+        self.Q_matrix = self.Q_matrix + new_similarity_matrix
+        
+        # if 0 in self.Q_matrix and t > 0:
+        #     self.transitive_update_Q()
+        return
+
+
+    @torch.no_grad()
+    def get_impact_factor(self, client_idx, t=None):
+        
+        Q_asterisk_mtx = self.Q_matrix/(self.freq_matrix)
+        Q_asterisk_mtx[torch.isinf(Q_asterisk_mtx)] = 0.0
+        Q_asterisk_mtx = torch.nan_to_num(Q_asterisk_mtx, 0.0)
+        
+        min_Q = torch.min(Q_asterisk_mtx[Q_asterisk_mtx > 0.0])
+        max_Q = torch.max(Q_asterisk_mtx[Q_asterisk_mtx > 0.0])
+        Q_asterisk_mtx = torch.abs((Q_asterisk_mtx - min_Q)/(max_Q - min_Q) * (self.freq_matrix > 0.0))
+        
+        Q_asterisk_mtx = Q_asterisk_mtx > self.thr
+        
+        impact_factor = 1/torch.sum(Q_asterisk_mtx, dim=0)
+        impact_factor[torch.isinf(impact_factor)] = 0.0
+        impact_factor = torch.nan_to_num(impact_factor, 0.0)
+        impact_factor_frac = impact_factor[client_idx]
+        
+        num_cluster_all = torch.sum(impact_factor)
+        
+        temp_mtx = Q_asterisk_mtx[client_idx]
+        temp_mtx = temp_mtx.T
+        temp_mtx = temp_mtx[client_idx]
+        
+        temp_vec = 1/torch.sum(temp_mtx, dim=0)
+        temp_vec[torch.isinf(temp_vec)] = 0.0
+        temp_vec = torch.nan_to_num(temp_vec, 0.0)
+        
+        num_cluster_round = torch.sum(temp_vec)
+        gamma = num_cluster_round/num_cluster_all
+        
+        return impact_factor_frac.detach().cpu().tolist(), gamma.detach().cpu().item()
+    
+    
+    def update_threshold(self, t):
+        self.thr = min(self.thr * (1 + 0.0005)**t, 0.998)
+        return
+    
 
 class Client(BasicClient):
     def __init__(self, option, name='', train_data=None, valid_data=None):
@@ -188,7 +188,6 @@ class Client(BasicClient):
         self.lossfunc = torch.nn.CrossEntropyLoss()
         sample, _ = train_data[0]
         self.noise_data = NoiseDataset(sample, len(train_data))
-        # self.contst_fct = 5
         self.contst_fct = option['neg_fct']
         self.contst_mrg = option['neg_mrg']
 
@@ -214,7 +213,6 @@ class Client(BasicClient):
         sample, _ = batch_noise
         sample = sample.to(device)
         output_logits = model(sample)
-        # loss = F.mse_loss(output_logits, -1.0 * abs(self.contst_fct) * F.one_hot(targets, num_classes=10))
         loss = F.mse_loss(output_logits, -1.0 * abs(self.contst_mrg) * F.one_hot(targets, num_classes=output_logits.shape[1]))
         return loss
     
@@ -231,5 +229,4 @@ class Client(BasicClient):
         outputs = model(tdata[0])
         loss = self.lossfunc(outputs, tdata[1])
         contrastive_loss = self.get_contrastive_loss(model, noise, tdata[1], device)
-        # return loss + contrastive_loss
         return loss + self.contst_fct * contrastive_loss
