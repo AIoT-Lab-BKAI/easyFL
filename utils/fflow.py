@@ -70,8 +70,8 @@ def read_option():
     parser.add_argument('--log_folder', help="folder to write results", type=str, default='fedtask')
     parser.add_argument('--wandb', help="whether to use wandb or not", type=int, default=1)
     
-    parser.add_argument('--neg_fct', help="Factor for negative learning (Fedtest)", type=int, default=1)
-    parser.add_argument('--neg_mrg', help="Margin for negative learning (Fedtest)", type=int, default=5)
+    parser.add_argument('--neg_fct', help="Factor for negative learning (Fedtest)", type=float, default="1.0")
+    parser.add_argument('--neg_mrg', help="Margin for negative learning (Fedtest)", type=float, default="5.0")
     
     try: option = vars(parser.parse_args())
     except IOError as msg: parser.error(str(msg))

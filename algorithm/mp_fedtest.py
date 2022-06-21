@@ -8,7 +8,6 @@ import os
 from algorithm.agg_utils.fedtest_utils import model_sum
 
 
-
 def compute_similarity(a, b):
     """
     Parameters:
@@ -19,7 +18,7 @@ def compute_similarity(a, b):
     sim = []
     for layer_a, layer_b in zip(a.parameters(), b.parameters()):
         x, y = torch.flatten(layer_a), torch.flatten(layer_b)
-        sim.append((x.T @ y) / (torch.norm(x) * torch.norm(y)))
+        sim.append((x.transpose(-1,0) @ y) / (torch.norm(x) * torch.norm(y)))
 
     return torch.mean(torch.tensor(sim)), sim[-1]
 
@@ -46,27 +45,7 @@ class Server(MPBasicServer):
         self.thr = 0.975        
         self.gamma = 1
         
-        self.path = f"/models/{self.task}/round_{self.num_rounds}"
-        self.file_save = f"{self.path}/{self.name}.pth"
-        
-        self.load_model_path = option['load_model_path']
-        
-        if self.load_model_path is not None:
-            if Path(self.load_model_path).exists():
-                print(f"Loading server model at round {self.num_rounds}...")
-                self.model.load_state_dict(torch.load(self.load_model_path))
-            else:
-                print(f"Exists no {self.load_model_path}")
-            
-    
-    def run(self):
-        super().run()
-        try:
-            if not Path(self.path).exists():
-                os.system(f"mkdir -p {self.path}")
-            torch.save(self.model.state_dict(), self.file_save)
-        except:
-            print("Save model failed")
+        self.paras_name = ['neg_fct', 'neg_mrg']
         
 
     def iterate(self, t, pool):
@@ -85,8 +64,7 @@ class Server(MPBasicServer):
         if (len(self.selected_clients) < len(self.clients)) or (self.impact_factor is None):
             self.impact_factor, self.gamma = self.get_impact_factor(self.selected_clients, t)
             
-            
-        self.model = self.model + self.aggregate(models, self.impact_factor)
+        self.model = self.model + self.gamma * self.aggregate(models, self.impact_factor)
         self.update_threshold(t)
         return
 
@@ -161,7 +139,9 @@ class Client(MPBasicClient):
         self.lossfunc = torch.nn.CrossEntropyLoss()
         sample, _ = train_data[0]
         self.noise_data = NoiseDataset(sample, len(train_data))
-        self.contst_fct = 5
+        # self.contst_fct = 5
+        self.contst_fct = option['neg_fct']
+        self.contst_mrg = option['neg_mrg']
 
 
     def train(self, model, device):
@@ -185,7 +165,8 @@ class Client(MPBasicClient):
         sample, _ = batch_noise
         sample = sample.to(device)
         output_logits = model(sample)
-        loss = F.mse_loss(output_logits, -1.0 * abs(self.contst_fct) * F.one_hot(targets, num_classes=10))
+        # loss = F.mse_loss(output_logits, -1.0 * abs(self.contst_fct) * F.one_hot(targets, num_classes=10))
+        loss = F.mse_loss(output_logits, -1.0 * abs(self.contst_mrg) * F.one_hot(targets, num_classes=output_logits.shape[1]))
         return loss
     
     
@@ -201,4 +182,5 @@ class Client(MPBasicClient):
         outputs = model(tdata[0])
         loss = self.lossfunc(outputs, tdata[1])
         contrastive_loss = self.get_contrastive_loss(model, noise, tdata[1], device)
-        return loss + contrastive_loss
+        # return loss + contrastive_loss
+        return loss + self.contst_fct * contrastive_loss
