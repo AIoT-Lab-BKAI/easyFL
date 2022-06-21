@@ -73,7 +73,7 @@ class Server(MPBasicServer):
     def aggregate(self, models, p=...):
         sump = sum(p)
         p = [pk/sump for pk in p]
-        return model_sum([model_k * pk for model_k, pk in zip(models, p)], p=p)
+        return model_sum([model_k * pk for model_k, pk in zip(models, p)], p=p, temp=self.temp)
     
     
     @torch.no_grad()
