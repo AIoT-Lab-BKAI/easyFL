@@ -45,7 +45,8 @@ class Server(MPBasicServer):
         self.thr = 0.975        
         self.gamma = 1
         
-        self.paras_name = ['neg_fct', 'neg_mrg']
+        self.paras_name = ['neg_fct', 'neg_mrg', 'temp']
+        self.temp = option['temp']
         
 
     def iterate(self, t, pool):
@@ -91,6 +92,9 @@ class Server(MPBasicServer):
         # Increase frequency
         self.freq_matrix += new_freq_matrix
         self.Q_matrix = self.Q_matrix + new_similarity_matrix
+        
+        if 0 in self.Q_matrix and t > 0:
+            self.transitive_update_Q()
         return
 
 
@@ -130,6 +134,51 @@ class Server(MPBasicServer):
     
     def update_threshold(self, t):
         self.thr = min(self.thr * (1 + 0.0005)**t, 0.998)
+        return
+    
+    
+    def compute_simXY(self, simXZ, simZY):
+        sigma = torch.abs(torch.sqrt((1-simXZ**2) * (1-simZY**2)))
+        return simXZ * simZY, sigma 
+
+
+    def transitive_update_Q(self):
+        temp_Q = torch.zeros_like(self.Q_matrix)
+        temp_F = torch.zeros_like(self.freq_matrix)
+        
+        for i in range(len(self.clients)):
+            for j in range(i+1, len(self.clients)):
+                for k in range(j+1, len(self.clients)):
+                    if (self.Q_matrix[i,j] != 0) and (self.Q_matrix[i,k] != 0) and (self.Q_matrix[j,k] == 0):
+                        simi, sigma = self.compute_simXY(self.Q_matrix[i,j]/self.freq_matrix[i,j],
+                                                        self.Q_matrix[i,k]/self.freq_matrix[i,k])
+                        if sigma < 0.015 and simi > 0.998:
+                            temp_Q[j,k] += simi
+                            temp_F[j,k] += 1
+                            temp_Q[k,j] = temp_Q[j,k]
+                            temp_F[k,j] += 1
+                    
+                    elif (self.Q_matrix[i,j] != 0) and (self.Q_matrix[i,k] == 0) and (self.Q_matrix[j,k] != 0):
+                        simi, sigma = self.compute_simXY(self.Q_matrix[i,j]/self.freq_matrix[i,j],
+                                                        self.Q_matrix[j,k]/self.freq_matrix[j,k])
+                        if sigma < 0.015 and simi > 0.998:
+                            temp_Q[i,k] += simi
+                            temp_F[i,k] += 1
+                            temp_Q[k,i] = temp_Q[i,k]
+                            temp_F[k,i] += 1
+                    
+                    elif (self.Q_matrix[i,j] == 0) and (self.Q_matrix[i,k] != 0) and (self.Q_matrix[j,k] != 0):
+                        simi, sigma = self.compute_simXY(self.Q_matrix[i,k]/self.freq_matrix[i,k],
+                                                        self.Q_matrix[j,k]/self.freq_matrix[j,k])
+                        if sigma < 0.015 and simi > 0.998:
+                            temp_Q[i,j] += simi
+                            temp_F[i,j] += 1
+                            temp_Q[j,i] = temp_Q[i,j]
+                            temp_F[j,i] += 1
+                        
+        temp_Q[temp_Q > 0] = temp_Q[temp_Q > 0]/temp_F[temp_Q > 0]
+        self.Q_matrix += temp_Q
+        self.freq_matrix += (temp_F > 0) * 1.0
         return
     
 
