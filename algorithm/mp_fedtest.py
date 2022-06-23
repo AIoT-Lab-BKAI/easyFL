@@ -8,7 +8,6 @@ import os
 from algorithm.agg_utils.fedtest_utils import model_sum
 
 
-
 def compute_similarity(a, b):
     """
     Parameters:
@@ -19,7 +18,7 @@ def compute_similarity(a, b):
     sim = []
     for layer_a, layer_b in zip(a.parameters(), b.parameters()):
         x, y = torch.flatten(layer_a), torch.flatten(layer_b)
-        sim.append((x.T @ y) / (torch.norm(x) * torch.norm(y)))
+        sim.append((x.transpose(-1,0) @ y) / (torch.norm(x) * torch.norm(y)))
 
     return torch.mean(torch.tensor(sim)), sim[-1]
 
@@ -46,27 +45,8 @@ class Server(MPBasicServer):
         self.thr = 0.975        
         self.gamma = 1
         
-        self.path = f"/models/{self.task}/round_{self.num_rounds}"
-        self.file_save = f"{self.path}/{self.name}.pth"
-        
-        self.load_model_path = option['load_model_path']
-        
-        if self.load_model_path is not None:
-            if Path(self.load_model_path).exists():
-                print(f"Loading server model at round {self.num_rounds}...")
-                self.model.load_state_dict(torch.load(self.load_model_path))
-            else:
-                print(f"Exists no {self.load_model_path}")
-            
-    
-    def run(self):
-        super().run()
-        try:
-            if not Path(self.path).exists():
-                os.system(f"mkdir -p {self.path}")
-            torch.save(self.model.state_dict(), self.file_save)
-        except:
-            print("Save model failed")
+        self.paras_name = ['neg_fct', 'neg_mrg', 'temp']
+        self.temp = option['temp']
         
 
     def iterate(self, t, pool):
@@ -85,8 +65,7 @@ class Server(MPBasicServer):
         if (len(self.selected_clients) < len(self.clients)) or (self.impact_factor is None):
             self.impact_factor, self.gamma = self.get_impact_factor(self.selected_clients, t)
             
-            
-        self.model = self.model + self.aggregate(models, self.impact_factor)
+        self.model = self.model + self.gamma * self.aggregate(models, self.impact_factor)
         self.update_threshold(t)
         return
 
@@ -94,7 +73,7 @@ class Server(MPBasicServer):
     def aggregate(self, models, p=...):
         sump = sum(p)
         p = [pk/sump for pk in p]
-        return model_sum([model_k * pk for model_k, pk in zip(models, p)], p=p)
+        return model_sum([model_k * pk for model_k, pk in zip(models, p)], p=p, temp=self.temp)
     
     
     @torch.no_grad()
@@ -113,6 +92,9 @@ class Server(MPBasicServer):
         # Increase frequency
         self.freq_matrix += new_freq_matrix
         self.Q_matrix = self.Q_matrix + new_similarity_matrix
+        
+        if 0 in self.Q_matrix and t > 0:
+            self.transitive_update_Q()
         return
 
 
@@ -154,6 +136,51 @@ class Server(MPBasicServer):
         self.thr = min(self.thr * (1 + 0.0005)**t, 0.998)
         return
     
+    
+    def compute_simXY(self, simXZ, simZY):
+        sigma = torch.abs(torch.sqrt((1-simXZ**2) * (1-simZY**2)))
+        return simXZ * simZY, sigma 
+
+
+    def transitive_update_Q(self):
+        temp_Q = torch.zeros_like(self.Q_matrix)
+        temp_F = torch.zeros_like(self.freq_matrix)
+        
+        for i in range(len(self.clients)):
+            for j in range(i+1, len(self.clients)):
+                for k in range(j+1, len(self.clients)):
+                    if (self.Q_matrix[i,j] != 0) and (self.Q_matrix[i,k] != 0) and (self.Q_matrix[j,k] == 0):
+                        simi, sigma = self.compute_simXY(self.Q_matrix[i,j]/self.freq_matrix[i,j],
+                                                        self.Q_matrix[i,k]/self.freq_matrix[i,k])
+                        if sigma < 0.015 and simi > 0.998:
+                            temp_Q[j,k] += simi
+                            temp_F[j,k] += 1
+                            temp_Q[k,j] = temp_Q[j,k]
+                            temp_F[k,j] += 1
+                    
+                    elif (self.Q_matrix[i,j] != 0) and (self.Q_matrix[i,k] == 0) and (self.Q_matrix[j,k] != 0):
+                        simi, sigma = self.compute_simXY(self.Q_matrix[i,j]/self.freq_matrix[i,j],
+                                                        self.Q_matrix[j,k]/self.freq_matrix[j,k])
+                        if sigma < 0.015 and simi > 0.998:
+                            temp_Q[i,k] += simi
+                            temp_F[i,k] += 1
+                            temp_Q[k,i] = temp_Q[i,k]
+                            temp_F[k,i] += 1
+                    
+                    elif (self.Q_matrix[i,j] == 0) and (self.Q_matrix[i,k] != 0) and (self.Q_matrix[j,k] != 0):
+                        simi, sigma = self.compute_simXY(self.Q_matrix[i,k]/self.freq_matrix[i,k],
+                                                        self.Q_matrix[j,k]/self.freq_matrix[j,k])
+                        if sigma < 0.015 and simi > 0.998:
+                            temp_Q[i,j] += simi
+                            temp_F[i,j] += 1
+                            temp_Q[j,i] = temp_Q[i,j]
+                            temp_F[j,i] += 1
+                        
+        temp_Q[temp_Q > 0] = temp_Q[temp_Q > 0]/temp_F[temp_Q > 0]
+        self.Q_matrix += temp_Q
+        self.freq_matrix += (temp_F > 0) * 1.0
+        return
+    
 
 class Client(MPBasicClient):
     def __init__(self, option, name='', train_data=None, valid_data=None):
@@ -161,7 +188,9 @@ class Client(MPBasicClient):
         self.lossfunc = torch.nn.CrossEntropyLoss()
         sample, _ = train_data[0]
         self.noise_data = NoiseDataset(sample, len(train_data))
-        self.contst_fct = 5
+        # self.contst_fct = 5
+        self.contst_fct = option['neg_fct']
+        self.contst_mrg = option['neg_mrg']
 
 
     def train(self, model, device):
@@ -185,7 +214,8 @@ class Client(MPBasicClient):
         sample, _ = batch_noise
         sample = sample.to(device)
         output_logits = model(sample)
-        loss = F.mse_loss(output_logits, -1.0 * abs(self.contst_fct) * F.one_hot(targets, num_classes=10))
+        # loss = F.mse_loss(output_logits, -1.0 * abs(self.contst_fct) * F.one_hot(targets, num_classes=10))
+        loss = F.mse_loss(output_logits, -1.0 * abs(self.contst_mrg) * F.one_hot(targets, num_classes=output_logits.shape[1]))
         return loss
     
     
@@ -201,4 +231,5 @@ class Client(MPBasicClient):
         outputs = model(tdata[0])
         loss = self.lossfunc(outputs, tdata[1])
         contrastive_loss = self.get_contrastive_loss(model, noise, tdata[1], device)
-        return loss + contrastive_loss
+        # return loss + contrastive_loss
+        return loss + self.contst_fct * contrastive_loss

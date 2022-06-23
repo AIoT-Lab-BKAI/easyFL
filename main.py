@@ -63,7 +63,7 @@ class MyLogger(flw.Logger):
                     "Validating Accuracy":  self.output['mean_valid_accs'][-1],
                     "Mean Client Accuracy": self.output['mean_curve'][-1],
                     "Std Client Accuracy":  self.output['var_curve'][-1],
-                    "Inference Time":  self.output['inference_time'][-1]
+                    "Inference Time":       self.output['inference_time'][-1]
                 }
             )
 
@@ -87,7 +87,9 @@ def main():
             project="easyFL", 
             entity="aiotlab",
             group=option['task'],
-            name=option['algorithm'],
+            name=f"{option['algorithm']}_{option['neg_fct']}_{option['neg_mrg']}_{option['temp']}"
+                if option['algorithm'] == 'fedtest' or option['algorithm'] == 'mp_fedtest'
+                else option['algorithm'],
             config=option
         )
         
