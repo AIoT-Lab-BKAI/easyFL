@@ -56,6 +56,16 @@ class Server(BasicServer):
                                                 transforms.Normalize((0.4914, 0.4822, 0.4465),
                                                                     (0.2023, 0.1994, 0.2010))
                                                 ]))
+            
+        elif dataset_name == 'cifar10':
+            train_dataset = datasets.CIFAR10(data_folder, 
+                                            train=True, 
+                                            download=False,
+                                            transform=transforms.Compose([
+                                                transforms.ToTensor(), 
+                                                transforms.Normalize((0.4914, 0.4822, 0.4465),
+                                                                    (0.2023, 0.1994, 0.2010))
+                                                ]))
         
         self.train_dataset = CustomDataset(train_dataset, read_json_idx(single_set_idx))
         self.optimizer = optim.Adam(self.model.parameters())
