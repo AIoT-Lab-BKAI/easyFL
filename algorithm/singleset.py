@@ -11,14 +11,14 @@ import json
 
 
 class PillDataset(Dataset):
-    def __init__(self, user_idx, img_folder_path="", idx_dict=None, label_dict=None, map_label_dict=None):
-        super().__init__()
-        self.user_idx = user_idx
-        self.idx = idx_dict[str(user_idx)]
-        self.img_folder_path = img_folder_path
-        self.label_dict = label_dict
-        self.map_label_dict = map_label_dict
-        self.transform = transforms.Compose([transforms.Resize((224,224)),transforms.ToTensor()])
+    # def __init__(self, user_idx, img_folder_path="", idx_dict=None, label_dict=None, map_label_dict=None):
+    #     super().__init__()
+    #     self.user_idx = user_idx
+    #     self.idx = idx_dict[str(user_idx)]
+    #     self.img_folder_path = img_folder_path
+    #     self.label_dict = label_dict
+    #     self.map_label_dict = map_label_dict
+    #     self.transform = transforms.Compose([transforms.Resize((224,224)),transforms.ToTensor()])
         
     def __init__(self, user_idxes=[], img_folder_path="", idx_dict=None, label_dict=None, map_label_dict=None):
         super().__init__()
@@ -122,7 +122,7 @@ class Server(BasicServer):
             with open(option['dataidx_path'] +"/server_dataset/img_label_dict.json",'r') as f:
                 server_img_label_dict = json.load(f)  
             
-            self.test_data = PillDataset(0, f"{option['data_folder']}/server_dataset/pill_cropped", server_user_group_img, server_img_label_dict, label_hash)
+            self.test_data = PillDataset([0], f"{option['data_folder']}/server_dataset/pill_cropped", server_user_group_img, server_img_label_dict, label_hash)
             n_clients = len(user_group_img)
             self.train_dataset = PillDataset([idx for idx in range(n_clients)], f"{option['data_folder']}/client_dataset/pill_cropped", user_group_img, img_label_dict, label_hash)
         
