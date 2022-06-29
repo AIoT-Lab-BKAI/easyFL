@@ -74,6 +74,8 @@ def read_option():
     parser.add_argument('--neg_mrg', help="Margin for negative learning (Fedtest)", type=float, default="5.0")
     parser.add_argument('--temp', help="Temperature for extreme assembling aggregation (Fedtest)", type=float, default="1.0")
     
+    parser.add_argument('--kd_fct', help="Factor for negative learning (Fedtest)", type=float, default="1.0")
+    
     try: option = vars(parser.parse_args())
     except IOError as msg: parser.error(str(msg))
     return option

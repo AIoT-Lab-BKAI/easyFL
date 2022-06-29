@@ -21,4 +21,4 @@ singleset/
 benchmark/cifar10/data
 benchmark/cifar100/data
 wandb/
-benchmark/pilldataset/data/pill3*
+benchmark/pilldataset/data/pill*
