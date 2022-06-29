@@ -553,6 +553,12 @@ class CustomDataset(Dataset):
         return image, label
 
 
+import matplotlib.pyplot as plt
+def imshow(img, name="img.png"):
+    plt.imshow(img)
+    plt.savefig(name)
+
+
 class DirtyDataset(Dataset):
     def __init__(self, dataset, idxs, seed, dirty_rate=0.2, magnitude=1):
         self.dataset = dataset
@@ -561,7 +567,8 @@ class DirtyDataset(Dataset):
         self.noise_magnitude = magnitude
         dirty_quantity = int(dirty_rate * len(self.idxs))
         self.dirty_dataidx = np.random.choice(self.idxs, dirty_quantity, replace=False)
-
+        # self.max_magnitude = torch.max(self.dataset.data[0])
+    
     def __len__(self):
         return len(self.idxs)
 
@@ -569,7 +576,12 @@ class DirtyDataset(Dataset):
         image, label = self.dataset[self.idxs[item]]
         if item in self.dirty_dataidx:
             torch.manual_seed(self.seed)
-            image = image/256 + torch.randn_like(image) * self.noise_magnitude
+            random.seed(self.seed)
+            np.random.seed(self.seed)
+            noise = torch.rand(*image.shape) * self.noise_magnitude * 30
+            noise = noise.to(torch.uint8)
+            image = image + noise.to(torch.uint8)
+            
         return image, label
 
 
