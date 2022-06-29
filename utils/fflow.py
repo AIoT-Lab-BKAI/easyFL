@@ -74,6 +74,8 @@ def read_option():
     parser.add_argument('--neg_mrg', help="Margin for negative learning (Fedtest)", type=float, default="5.0")
     parser.add_argument('--temp', help="Temperature for extreme assembling aggregation (Fedtest)", type=float, default="1.0")
     
+    parser.add_argument('--kd_fct', help="Temperature for extreme assembling aggregation (Fedtest)", type=float, default="1.0")
+    
     try: option = vars(parser.parse_args())
     except IOError as msg: parser.error(str(msg))
     return option
@@ -97,9 +99,9 @@ def initialize(option):
     utils.fmodule.TaskCalculator.setOP(getattr(importlib.import_module('torch.optim'), option['optimizer']))
     utils.fmodule.Model = getattr(importlib.import_module(bmk_model_path), 'Model')
     if bmk_name == "pilldataset":
-        task_reader = getattr(importlib.import_module(bmk_core_path), 'TaskReader')(taskpath=option['dataidx_filename'],data_folder=option['data_folder'],dataidx_path=option['dataidx_path'])
+        task_reader = getattr(importlib.import_module(bmk_core_path), 'TaskReader')(taskpath=option['dataidx_filename'], data_folder=option['data_folder'], dataidx_path=option['dataidx_path'])
     else:
-        task_reader = getattr(importlib.import_module(bmk_core_path), 'TaskReader')(taskpath=option['dataidx_filename'],)
+        task_reader = getattr(importlib.import_module(bmk_core_path), 'TaskReader')(taskpath=option['dataidx_filename'], data_folder=option['data_folder'])
     train_datas, test_data, num_clients = task_reader.read_data()
     print("done")
 
