@@ -74,6 +74,9 @@ def read_option():
     parser.add_argument('--neg_mrg', help="Margin for negative learning (Fedtest)", type=float, default="5.0")
     parser.add_argument('--temp', help="Temperature for extreme assembling aggregation (Fedtest)", type=float, default="1.0")
     
+    parser.add_argument('--noise_magnitude', help="(Dirty dataset only)", type=float, default="1.0")
+    parser.add_argument('--dirty_rate', help="(Dirty dataset only)", type=float, default="0.2")
+    
     try: option = vars(parser.parse_args())
     except IOError as msg: parser.error(str(msg))
     return option
@@ -97,9 +100,11 @@ def initialize(option):
     utils.fmodule.TaskCalculator.setOP(getattr(importlib.import_module('torch.optim'), option['optimizer']))
     utils.fmodule.Model = getattr(importlib.import_module(bmk_model_path), 'Model')
     if bmk_name == "pilldataset":
-        task_reader = getattr(importlib.import_module(bmk_core_path), 'TaskReader')(taskpath=option['dataidx_filename'],data_folder=option['data_folder'],dataidx_path=option['dataidx_path'])
+        task_reader = getattr(importlib.import_module(bmk_core_path), 'TaskReader')(taskpath=option['dataidx_filename'], data_folder=option['data_folder'],dataidx_path=option['dataidx_path'])
+    elif bmk_name == "dirtymnist":
+        task_reader = getattr(importlib.import_module(bmk_core_path), 'TaskReader')(taskpath=option['dataidx_filename'], noise_magnitude=option['noise_magnitude'], dirty_rate=option['dirty_rate'], data_folder=option['data_folder'])
     else:
-        task_reader = getattr(importlib.import_module(bmk_core_path), 'TaskReader')(taskpath=option['dataidx_filename'],)
+        task_reader = getattr(importlib.import_module(bmk_core_path), 'TaskReader')(taskpath=option['dataidx_filename'], data_folder=option['data_folder'], )
     train_datas, test_data, num_clients = task_reader.read_data()
     print("done")
 
@@ -120,7 +125,9 @@ def initialize(option):
 def output_filename(option, server):
     header = "{}_".format(option["algorithm"])
     for para in server.paras_name: header = header + para + "{}_".format(option[para])
-    output_name = header + "M{}_R{}_B{}_E{}_LR{:.4f}_P{:.2f}_S{}_LD{:.3f}_WD{:.3f}_DR{:.2f}_AC{:.2f}.json".format(
+    output_name = header + "D{}_NM{}_M{}_R{}_B{}_E{}_LR{:.4f}_P{:.2f}_S{}_LD{:.3f}_WD{:.3f}_DR{:.2f}_AC{:.2f}.json".format(
+        option['dirty_rate'],
+        option['noise_magnitude'],
         option['model'],
         option['num_rounds'],
         option['batch_size'],

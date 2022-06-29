@@ -459,7 +459,7 @@ class XYTaskReader(BasicTaskReader):
         return train_datas, valid_datas, test_data, feddata['client_names']
     
 class CusTomTaskReader(BasicTaskReader):
-    def __init__(self, taskpath,train_dataset, test_dataset):
+    def __init__(self, taskpath, train_dataset, test_dataset):
         super().__init__(taskpath)
         self.test_dataset = test_dataset
         self.train_dataset = train_dataset
@@ -476,6 +476,27 @@ class CusTomTaskReader(BasicTaskReader):
         train_data = [CustomDataset(self.train_dataset,data_idx[idx]) for idx in range(n_clients)]
         test_data = self.test_dataset
         return train_data, test_data, n_clients
+
+
+class DirtyTaskReader(CusTomTaskReader):
+    def __init__(self, taskpath, train_dataset, test_dataset, noise_magnitude=1, dirty_rate=0.2):
+        super().__init__(taskpath, train_dataset, test_dataset)
+        self.noise_magnitude = noise_magnitude
+        self.dirty_rate = dirty_rate
+        
+    def read_data(self):
+        data_idx = self.load_dataset_idx('dataset_idx/'+ self.taskpath)
+        n_clients = len(data_idx)
+        train_data = []
+        for idx in range(n_clients):
+            train_data.append(DirtyDataset(self.train_dataset, 
+                                    data_idx[idx], 
+                                    seed=idx, 
+                                    magnitude=self.noise_magnitude,
+                                    dirty_rate=self.dirty_rate))
+        test_data = self.test_dataset
+        return train_data, test_data, n_clients
+    
     
 class IDXTaskReader(BasicTaskReader):
     def __init__(self, taskpath=''):
@@ -530,7 +551,28 @@ class CustomDataset(Dataset):
     def __getitem__(self, item):
         image, label = self.dataset[self.idxs[item]]
         return image, label
-    
+
+
+class DirtyDataset(Dataset):
+    def __init__(self, dataset, idxs, seed, dirty_rate=0.2, magnitude=1):
+        self.dataset = dataset
+        self.idxs = list(idxs)
+        self.seed = seed
+        self.noise_magnitude = magnitude
+        dirty_quantity = int(dirty_rate * len(self.idxs))
+        self.dirty_dataidx = np.random.choice(self.idxs, dirty_quantity, replace=False)
+
+    def __len__(self):
+        return len(self.idxs)
+
+    def __getitem__(self, item):
+        image, label = self.dataset[self.idxs[item]]
+        if item in self.dirty_dataidx:
+            torch.manual_seed(self.seed)
+            image = image/256 + torch.randn_like(image) * self.noise_magnitude
+        return image, label
+
+
 class XYDataset(Dataset):
     def __init__(self, X=[], Y=[], totensor = True):
         """ Init Dataset with pairs of features and labels/annotations.

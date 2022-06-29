@@ -84,12 +84,10 @@ def main():
     
     if option['wandb']:
         wandb.init(
-            project="easyFL", 
+            project="dirtyFL", 
             entity="aiotlab",
             group=option['task'],
-            name=f"{option['algorithm']}_{option['neg_fct']}_{option['neg_mrg']}_{option['temp']}"
-                if option['algorithm'] == 'fedtest' or option['algorithm'] == 'mp_fedtest'
-                else option['algorithm'],
+            name=f"{option['algorithm']}_{option['dirty_rate']}_{option['noise_magnitude']}",
             config=option
         )
         
