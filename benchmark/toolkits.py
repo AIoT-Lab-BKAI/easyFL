@@ -15,6 +15,7 @@ imbalance:
     iid:            6 Vol: only the vol of local dataset varies.
     niid:           7 Vol: for generating synthetic data
 """
+from pathlib import Path
 import torch
 import ujson
 import numpy as np
@@ -478,24 +479,31 @@ class CusTomTaskReader(BasicTaskReader):
         return train_data, test_data, n_clients
 
 
-class DirtyTaskReader(CusTomTaskReader):
+class DirtyTaskReader(BasicTaskReader):        
     def __init__(self, taskpath, train_dataset, test_dataset, noise_magnitude=1, dirty_rate=0.2):
-        super().__init__(taskpath, train_dataset, test_dataset)
+        super().__init__(taskpath)
         self.noise_magnitude = noise_magnitude
         self.dirty_rate = dirty_rate
+        self.test_dataset = test_dataset
+        self.train_dataset = train_dataset
+        self.taskpath = taskpath
+    
+    def load_dataset_idx(self,path="data"):
+        import json
+        list_idx = json.load(open(path, 'r'))
+        return {int(k): v for k, v in list_idx.items()}
         
     def read_data(self):
         data_idx = self.load_dataset_idx('dataset_idx/'+ self.taskpath)
         n_clients = len(data_idx)
-        train_data = []
-        for idx in range(n_clients):
-            train_data.append(DirtyDataset(self.train_dataset, 
+        train_datas = [DirtyDataset(self.train_dataset, 
                                     data_idx[idx], 
                                     seed=idx, 
                                     magnitude=self.noise_magnitude,
-                                    dirty_rate=self.dirty_rate))
+                                    dirty_rate=self.dirty_rate) for idx in range(n_clients)]
         test_data = self.test_dataset
-        return train_data, test_data, n_clients
+        print("Here return dirty training datasets for clients, clean test dataset for server")
+        return train_datas, test_data, n_clients
     
     
 class IDXTaskReader(BasicTaskReader):
@@ -515,6 +523,7 @@ class IDXTaskReader(BasicTaskReader):
         train_datas = [IDXDataset(feddata[name]['dtrain']) for name in feddata['client_names']]
         valid_datas = [IDXDataset(feddata[name]['dvalid']) for name in feddata['client_names']]
         return train_datas, valid_datas, test_data, feddata['client_names']
+
 
 class PillDataset(Dataset):
     def __init__(self,user_idx,img_folder_path="",idx_dict=None,label_dict=None,map_label_dict=None):
@@ -554,34 +563,42 @@ class CustomDataset(Dataset):
 
 
 import matplotlib.pyplot as plt
-def imshow(img, name="img.png"):
-    plt.imshow(img)
-    plt.savefig(name)
+import torchvision.transforms as T
 
+def imshow(img, dir = "pics", name="img.png"):
+    if not Path(name).exists():
+        os.system(f"mkdir -p {dir}")
+        
+    plt.imshow(img.squeeze().numpy())
+    plt.savefig(dir + "/" + name)
 
 class DirtyDataset(Dataset):
+    count = 0
     def __init__(self, dataset, idxs, seed, dirty_rate=0.2, magnitude=1):
         self.dataset = dataset
         self.idxs = list(idxs)
         self.seed = seed
-        self.noise_magnitude = magnitude
         dirty_quantity = int(dirty_rate * len(self.idxs))
         self.dirty_dataidx = np.random.choice(self.idxs, dirty_quantity, replace=False)
-        # self.max_magnitude = torch.max(self.dataset.data[0])
-    
+        sample = dataset.data[0]
+        self.rotater = T.RandomRotation(degrees=(90, 270))
+        self.resize_cropper = T.RandomResizedCrop(size=sample.shape)
+        self.blurrer = T.GaussianBlur(kernel_size=(5, 9), sigma=(magnitude, 5))
+        
     def __len__(self):
         return len(self.idxs)
 
     def __getitem__(self, item):
+        random.seed(self.seed) # apply this seed to img transforms
         image, label = self.dataset[self.idxs[item]]
-        if item in self.dirty_dataidx:
-            torch.manual_seed(self.seed)
-            random.seed(self.seed)
-            np.random.seed(self.seed)
-            noise = torch.rand(*image.shape) * self.noise_magnitude * 30
-            noise = noise.to(torch.uint8)
-            image = image + noise.to(torch.uint8)
-            
+        if self.idxs[item] in self.dirty_dataidx:
+            # if DirtyDataset.count < 10:
+            #     imshow(image, "pics_noise3", f"{item}_before.png")
+            # image = image + self.noise
+            image = self.blurrer(self.resize_cropper(self.rotater(image)))
+            # if DirtyDataset.count < 10:
+            #     imshow(image, "pics_noise3", f"{item}_after.png")
+            #     DirtyDataset.count += 1
         return image, label
 
 

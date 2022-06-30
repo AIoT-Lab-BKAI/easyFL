@@ -304,7 +304,7 @@ class BasicClient():
         self.drop_rate = 0 if option['net_drop']<0.01 else np.random.beta(option['net_drop'], 1, 1).item()
         self.active_rate = 1 if option['net_active']>99998 else np.random.beta(option['net_active'], 1, 1).item()
         self.wandb = option['wandb']
-
+    
     def train(self, model):
         """
         Standard local training procedure. Train the transmitted model with local training dataset.
