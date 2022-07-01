@@ -199,11 +199,12 @@ class Client(MPBasicClient):
     
     def spec_regularization(self, penultimate_layer):
         return torch.sum(torch.pow(torch.sum(penultimate_layer, dim=1, keepdim=True), 2))
+        # return torch.sum(torch.pow(penultimate_layer @ torch.ones(penultimate_layer.shape[1], 1), 2))
 
     
     def get_loss(self, model, data, device=None):
         tdata = self.data_to_device(data, device)
         outputs = model(tdata[0])
         loss = self.lossfunc(outputs, tdata[1])
-        penul_reg = get_penultimate_layer(model)
+        penul_reg = self.spec_regularization(get_penultimate_layer(model))
         return loss + 0.1 * penul_reg

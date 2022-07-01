@@ -47,7 +47,7 @@ def modeldict_sum(mds, special_aggregate_method=None, p=[], temp=1, bias=False):
     
     last_layers_weight = []
     last_layers_bias = []
-    last_layer = get_module_from_model(model)[-1]._parameters['weight']
+    # last_layer = get_module_from_model(model)[-1]._parameters['weight']
     
     for wid in range(len(mds)):
         for layer in keys:
@@ -84,3 +84,7 @@ def get_module_from_model(model, res = None):
         for name in ch_names:
             get_module_from_model(model.__getattr__(name), res)
     return res
+
+def get_penultimate_layer(model):
+    penul = get_module_from_model(model)[-1]._parameters['weight']
+    return penul

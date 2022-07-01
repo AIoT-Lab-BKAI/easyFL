@@ -87,7 +87,7 @@ class Server(MPBasicServer):
         
         self.gamma = 1
         self.device = torch.device(f"cuda:{self.server_gpu_id}")
-        
+        self.paras_name = ['kd_fct']
     
     def iterate(self, t, pool):
         self.selected_clients = self.sample()
@@ -171,7 +171,7 @@ class Client(MPBasicClient):
     def __init__(self, option, name='', train_data=None, valid_data=None):
         super(Client, self).__init__(option, name, train_data, valid_data)
         self.lossfunc = nn.CrossEntropyLoss()
-        
+        self.kd_fct = option['kd_fct']
         
     def train(self, model, device):
         model = model.to(device)
@@ -187,7 +187,7 @@ class Client(MPBasicClient):
             for batch_id, batch_data in enumerate(data_loader):
                 model.zero_grad()
                 loss, kl_loss = self.get_loss(model, src_model, batch_data, device)
-                loss = loss + kl_loss
+                loss = loss + self.kd_fct * kl_loss
                 loss.backward()
                 optimizer.step()
         return

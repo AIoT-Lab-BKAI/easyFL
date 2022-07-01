@@ -89,6 +89,8 @@ class Server(BasicServer):
         self.gamma = 1
         self.device = torch.device("cuda")
         
+        self.paras_name = ['kd_fct']
+        
     
     def iterate(self, t):
         self.selected_clients = self.sample()
@@ -101,9 +103,7 @@ class Server(BasicServer):
 
         if not self.selected_clients:
             return
-        
-        start = time.time()
-        
+                
         self.update_Q_matrix(models, self.selected_clients, t)
         if (len(self.selected_clients) < len(self.clients)) or (self.impact_factor is None):
             self.impact_factor, self.gamma = self.get_impact_factor(self.selected_clients, t)
@@ -111,10 +111,6 @@ class Server(BasicServer):
         model_diff = self.aggregate(model_diffs, p = self.impact_factor)
         self.model = self.model + self.gamma * model_diff
         self.update_threshold(t)
-        
-        end = time.time()
-        if self.wandb:
-            wandb.log({"Aggregation_time": end-start})
             
         return
     
@@ -232,7 +228,7 @@ class Client(BasicClient):
     def __init__(self, option, name='', train_data=None, valid_data=None):
         super(Client, self).__init__(option, name, train_data, valid_data)
         self.lossfunc = nn.CrossEntropyLoss()
-        
+        self.kd_fct = option['kd_fct']
         
     def train(self, model, device='cuda'):
         model = model.to(device)
@@ -248,7 +244,7 @@ class Client(BasicClient):
             for batch_id, batch_data in enumerate(data_loader):
                 model.zero_grad()
                 loss, kl_loss = self.get_loss(model, src_model, batch_data, device)
-                loss = loss + kl_loss
+                loss = loss + self.kd_fct * kl_loss
                 loss.backward()
                 optimizer.step()
         return
