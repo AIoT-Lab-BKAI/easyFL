@@ -8,6 +8,7 @@ import wandb
 class MyLogger(flw.Logger):
     def __init__(self):
         super().__init__()
+        self.max_acc = 0
         
     def log(self, server=None):
         if server==None: return
@@ -53,6 +54,8 @@ class MyLogger(flw.Logger):
         print(self.temp.format("Std of Client Accuracy:", self.output['var_curve'][-1]))
         print(self.temp.format("Mean of Inference Time:", self.output['inference_time'][-1]))
         
+        self.max_acc = max(self.max_acc, test_metric)
+
         # wandb record
         if server.wandb:
             wandb.log(
@@ -63,7 +66,8 @@ class MyLogger(flw.Logger):
                     "Validating Accuracy":  self.output['mean_valid_accs'][-1],
                     "Mean Client Accuracy": self.output['mean_curve'][-1],
                     "Std Client Accuracy":  self.output['var_curve'][-1],
-                    "Inference Time":       self.output['inference_time'][-1]
+                    "Inference Time":       self.output['inference_time'][-1],
+                    "Max Testing Accuracy": self.max_acc
                 }
             )
 
@@ -92,9 +96,6 @@ def main():
                 else option['algorithm'],
             config=option
         )
-        
-        wandb.define_metric("Testing Accuracy", summary="max")
-        wandb.define_metric("Inference Time", summary="mean")
     
     print("CONFIG =>", option)
     # start federated optimization
