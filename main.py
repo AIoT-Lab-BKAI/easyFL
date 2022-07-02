@@ -87,8 +87,8 @@ def main():
             project="easyFL", 
             entity="aiotlab",
             group=option['task'],
-            name=f"{option['algorithm']}_{option['neg_fct']}_{option['neg_mrg']}_{option['temp']}"
-                if option['algorithm'] == 'fedtest' or option['algorithm'] == 'mp_fedtest'
+            name=f"{option['algorithm']}_{option['kd_fct']}"
+                if 'fedsdiv' in option['algorithm']
                 else option['algorithm'],
             config=option
         )
