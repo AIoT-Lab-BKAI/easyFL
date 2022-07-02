@@ -56,13 +56,10 @@ class MPBasicServer(BasicServer):
         # check whether all the clients have dropped out, because the dropped clients will be deleted from self.selected_clients
         if not self.selected_clients: return
         # aggregate: pk = 1/K as default where K=len(selected_clients)
-        start = time.time()
         device0 = torch.device(f"cuda:{self.server_gpu_id}")
         models = [i.to(device0) for i in models]
         self.model = self.aggregate(models, p = [1.0 * self.client_vols[cid]/self.data_vol for cid in self.selected_clients])
-        end = time.time()
-        if self.wandb:
-            wandb.log({"Aggregation_time": end-start})
+
         return
 
     def communicate(self, selected_clients, pool):

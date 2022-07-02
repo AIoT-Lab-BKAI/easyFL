@@ -128,7 +128,7 @@ class Server(BasicServer):
                     if (self.Q_matrix[i,j] != 0) and (self.Q_matrix[i,k] != 0) and (self.Q_matrix[j,k] == 0):
                         simi, sigma = self.compute_simXY(self.Q_matrix[i,j]/self.freq_matrix[i,j],
                                                         self.Q_matrix[i,k]/self.freq_matrix[i,k])
-                        if sigma < 0.015 and simi > 0.998:
+                        if sigma < 0.015 and simi > self.thr:
                             temp_Q[j,k] += simi
                             temp_F[j,k] += 1
                             temp_Q[k,j] = temp_Q[j,k]
@@ -138,7 +138,7 @@ class Server(BasicServer):
                     elif (self.Q_matrix[i,j] != 0) and (self.Q_matrix[i,k] == 0) and (self.Q_matrix[j,k] != 0):
                         simi, sigma = self.compute_simXY(self.Q_matrix[i,j]/self.freq_matrix[i,j],
                                                         self.Q_matrix[j,k]/self.freq_matrix[j,k])
-                        if sigma < 0.015 and simi > 0.998:
+                        if sigma < 0.015 and simi > self.thr:
                             temp_Q[i,k] += simi
                             temp_F[i,k] += 1
                             temp_Q[k,i] = temp_Q[i,k]
@@ -148,7 +148,7 @@ class Server(BasicServer):
                     elif (self.Q_matrix[i,j] == 0) and (self.Q_matrix[i,k] != 0) and (self.Q_matrix[j,k] != 0):
                         simi, sigma = self.compute_simXY(self.Q_matrix[i,k]/self.freq_matrix[i,k],
                                                         self.Q_matrix[j,k]/self.freq_matrix[j,k])
-                        if sigma < 0.015 and simi > 0.998:
+                        if sigma < 0.015 and simi > self.thr:
                             temp_Q[i,j] += simi
                             temp_F[i,j] += 1
                             temp_Q[j,i] = temp_Q[i,j]
@@ -220,7 +220,7 @@ class Server(BasicServer):
         return impact_factor_frac.detach().cpu().tolist(), gamma.detach().cpu().item()
     
     def update_threshold(self, t):
-        self.thr = min(self.thr * (1 + 0.0005)**t, 0.998)
+        self.thr = min(self.thr * (1 + 0.0005)**t, self.thr)
         return
 
 

@@ -16,11 +16,7 @@ class Server(BasicServer):
         self.selected_clients = self.sample()
         models, train_losses = self.communicate(self.selected_clients)
         if not self.selected_clients: return
-        start = time.time()
         self.model = self.aggregate(models)
-        end = time.time()
-        if self.wandb:
-            wandb.log({"Aggregation_time": end-start})
         return
 
     def aggregate(self, models):
