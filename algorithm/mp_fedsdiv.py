@@ -82,12 +82,12 @@ class Server(MPBasicServer):
         self.freq_matrix = torch.zeros_like(self.Q_matrix)
 
         self.impact_factor = None
-        self.thr = 0.975
+        self.thr = option['sthr']
         # self.optimal_ = np.array([1/6] * 6 + [1] * 4)
         
         self.gamma = 1
         self.device = torch.device(f"cuda:{self.server_gpu_id}")
-        self.paras_name = ['kd_fct']
+        self.paras_name = ['kd_fct', 'sthr']
     
     def iterate(self, t, pool):
         self.selected_clients = self.sample()

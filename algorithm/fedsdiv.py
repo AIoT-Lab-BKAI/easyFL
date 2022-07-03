@@ -82,12 +82,12 @@ class Server(BasicServer):
         self.freq_matrix = torch.zeros_like(self.Q_matrix)
 
         self.impact_factor = None
-        self.thr = 0.975
+        self.thr = option['sthr']
         
         self.gamma = 1
         self.device = torch.device("cuda")
         
-        self.paras_name = ['kd_fct']
+        self.paras_name = ['kd_fct', 'sthr']
     
     def iterate(self, t):
         self.selected_clients = self.sample()

@@ -72,7 +72,7 @@ def compute_similarity(a, b):
         x, y = torch.flatten(layer_a), torch.flatten(layer_b)
         sim.append((x.transpose(-1,0) @ y) / (torch.norm(x) * torch.norm(y)))
 
-    return torch.mean(torch.tensor(sim)), sim[-1]
+    return torch.mean(torch.tensor(sim)), sim[-2]
 
 
 class Server(BasicServer):
@@ -81,15 +81,22 @@ class Server(BasicServer):
 
         self.Q_matrix = torch.zeros([len(self.clients), len(self.clients)])
         self.freq_matrix = torch.zeros_like(self.Q_matrix)
-        self.confidence = torch.ones_like(self.Q_matrix)
         
         self.impact_factor = None
-        self.thr = 0.975
+        self.thr = option['sthr']
         
         self.gamma = 1
         self.device = torch.device("cuda")
         
-        self.paras_name = ['kd_fct']
+        # self.Q_matrix[0:30,0:30] = 1
+        # self.Q_matrix[30:60,0:60] = 1
+        # self.Q_matrix[60:80,60:80] = 1
+        # self.Q_matrix[80:90,80:90] = 1
+        # self.Q_matrix[90:100,90:100] = 1
+        
+        # self.freq_matrix += 1
+        
+        self.paras_name = ['kd_fct', 'sthr']
         
     
     def iterate(self, t):
@@ -180,6 +187,7 @@ class Server(BasicServer):
                     
         # Increase frequency
         self.freq_matrix += new_freq_matrix
+        np.savetxt(f"Freq/round_{t}.txt", self.freq_matrix.numpy(), fmt='%d')
         self.Q_matrix = self.Q_matrix + new_similarity_matrix
         
         if 0 in self.Q_matrix and t > 0:
@@ -192,14 +200,19 @@ class Server(BasicServer):
         Q_asterisk_mtx = self.Q_matrix/(self.freq_matrix)
         Q_asterisk_mtx = self.remove_inf_nan(Q_asterisk_mtx)
         
-        # np.savetxt(f"Q_matrix/round_{t}.txt", Q_asterisk_mtx.numpy(), fmt='%.5f')
+        # print(Q_asterisk_mtx[self.freq_matrix > 0.0])
+        np.savetxt(f"Q_matrix/round_{t}.txt", Q_asterisk_mtx.numpy(), fmt='%.5f')
         
         min_Q = torch.min(Q_asterisk_mtx[Q_asterisk_mtx > 0.0])
         max_Q = torch.max(Q_asterisk_mtx[Q_asterisk_mtx > 0.0])
+        print(max_Q, min_Q, max_Q - min_Q)
         Q_asterisk_mtx = torch.abs((Q_asterisk_mtx - min_Q)/(max_Q - min_Q) * (self.freq_matrix > 0.0))
         
+        # print(Q_asterisk_mtx[self.freq_matrix > 0.0])
+        
+        # np.savetxt(f"Maxmin/max-min_{t}.txt", Q_asterisk_mtx.numpy(), fmt='%.5f')
         Q_asterisk_mtx = Q_asterisk_mtx > self.thr
-        # np.savetxt(f"Q_matrix/cluster_{t}.txt", Q_asterisk_mtx.numpy(), fmt='%d')
+        # np.savetxt(f"Cluster/cluster_{t}.txt", Q_asterisk_mtx.numpy(), fmt='%d')
         
         impact_factor = 1/torch.sum(Q_asterisk_mtx, dim=0)
         impact_factor = self.remove_inf_nan(impact_factor)
