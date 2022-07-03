@@ -91,7 +91,7 @@ def main():
             project="easyFL", 
             entity="aiotlab",
             group=option['task'],
-            name=f"{option['algorithm']}_{option['kd_fct']}_ideal"
+            name=f"{option['algorithm']}_{option['kd_fct']}_{option['sthr']}"
                 if 'fedsdiv' in option['algorithm']
                 else option['algorithm'],
             config=option
