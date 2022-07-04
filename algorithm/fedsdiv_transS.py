@@ -117,7 +117,7 @@ class Server(BasicServer):
         
         model_diff = self.aggregate(model_diffs, p = self.impact_factor)
         self.model = self.model + self.gamma * model_diff
-        self.update_threshold(t)
+        # self.update_threshold(t)
             
         return
     
@@ -135,7 +135,7 @@ class Server(BasicServer):
                     if (self.Q_matrix[i,j] != 0) and (self.Q_matrix[i,k] != 0) and (self.Q_matrix[j,k] == 0):
                         simi, sigma = self.compute_simXY(self.Q_matrix[i,j]/self.freq_matrix[i,j],
                                                         self.Q_matrix[i,k]/self.freq_matrix[i,k])
-                        if sigma < 0.015 and simi > self.thr:
+                        if sigma < 0.02 and simi > self.thr:
                             temp_Q[j,k] += simi
                             temp_F[j,k] += 1
                             temp_Q[k,j] = temp_Q[j,k]
@@ -145,7 +145,7 @@ class Server(BasicServer):
                     elif (self.Q_matrix[i,j] != 0) and (self.Q_matrix[i,k] == 0) and (self.Q_matrix[j,k] != 0):
                         simi, sigma = self.compute_simXY(self.Q_matrix[i,j]/self.freq_matrix[i,j],
                                                         self.Q_matrix[j,k]/self.freq_matrix[j,k])
-                        if sigma < 0.015 and simi > self.thr:
+                        if sigma < 0.02 and simi > self.thr:
                             temp_Q[i,k] += simi
                             temp_F[i,k] += 1
                             temp_Q[k,i] = temp_Q[i,k]
@@ -155,7 +155,7 @@ class Server(BasicServer):
                     elif (self.Q_matrix[i,j] == 0) and (self.Q_matrix[i,k] != 0) and (self.Q_matrix[j,k] != 0):
                         simi, sigma = self.compute_simXY(self.Q_matrix[i,k]/self.freq_matrix[i,k],
                                                         self.Q_matrix[j,k]/self.freq_matrix[j,k])
-                        if sigma < 0.015 and simi > self.thr:
+                        if sigma < 0.02 and simi > self.thr:
                             temp_Q[i,j] += simi
                             temp_F[i,j] += 1
                             temp_Q[j,i] = temp_Q[i,j]
@@ -187,10 +187,9 @@ class Server(BasicServer):
                     
         # Increase frequency
         self.freq_matrix += new_freq_matrix
-        # np.savetxt(f"Freq/round_{t}.txt", self.freq_matrix.numpy(), fmt='%d')
         self.Q_matrix = self.Q_matrix + new_similarity_matrix
         
-        if 0 in self.Q_matrix and t > 0:
+        if 0 in self.freq_matrix and t > 0:
             self.transitive_update_Q()
         return
 
@@ -201,18 +200,18 @@ class Server(BasicServer):
         Q_asterisk_mtx = self.remove_inf_nan(Q_asterisk_mtx)
         
         # print(Q_asterisk_mtx[self.freq_matrix > 0.0])
-        # np.savetxt(f"Q_matrix/round_{t}.txt", Q_asterisk_mtx.numpy(), fmt='%.5f')
+        # np.savetxt(f"Q_matrix/trans/round_{t}.txt", Q_asterisk_mtx.numpy(), fmt='%.5f')
         
         min_Q = torch.min(Q_asterisk_mtx[Q_asterisk_mtx > 0.0])
         max_Q = torch.max(Q_asterisk_mtx[Q_asterisk_mtx > 0.0])
-        print(max_Q, min_Q, max_Q - min_Q)
         Q_asterisk_mtx = torch.abs((Q_asterisk_mtx - min_Q)/(max_Q - min_Q) * (self.freq_matrix > 0.0))
         
         # print(Q_asterisk_mtx[self.freq_matrix > 0.0])
         
-        # np.savetxt(f"Maxmin/max-min_{t}.txt", Q_asterisk_mtx.numpy(), fmt='%.5f')
-        Q_asterisk_mtx = Q_asterisk_mtx > self.thr
-        # np.savetxt(f"Cluster/cluster_{t}.txt", Q_asterisk_mtx.numpy(), fmt='%d')
+        # np.savetxt(f"Maxmin/trans/max-min_{t}.txt", Q_asterisk_mtx.numpy(), fmt='%.5f')
+        Q_asterisk_mtx = (Q_asterisk_mtx > self.thr) * 1.0
+        Q_asterisk_mtx = ((Q_asterisk_mtx.T @ Q_asterisk_mtx) > 0) * 1.0        # Enhance Transitive clustering matrix
+        # np.savetxt(f"Cluster/trans/cluster_{t}.txt", Q_asterisk_mtx.numpy(), fmt='%d')
         
         impact_factor = 1/torch.sum(Q_asterisk_mtx, dim=0)
         impact_factor = self.remove_inf_nan(impact_factor)
@@ -233,7 +232,7 @@ class Server(BasicServer):
         return impact_factor_frac.detach().cpu().tolist(), gamma.detach().cpu().item()
     
     def update_threshold(self, t):
-        self.thr = min(self.thr * (1 + 0.0005)**t, 0.9998)
+        self.thr = min(self.thr * (1 + 0.0005)**t, 0.985)
         return
 
 
