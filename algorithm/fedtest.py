@@ -42,10 +42,10 @@ class Server(BasicServer):
         self.freq_matrix = torch.zeros_like(self.Q_matrix)
 
         self.impact_factor = None
-        self.thr = 0.975        
+        self.thr = option['sthr']        
         self.gamma = 1
         
-        self.paras_name = ['neg_fct', 'neg_mrg', 'temp']
+        self.paras_name = ['neg_fct', 'neg_mrg', 'temp', 'sthr']
         self.temp = option['temp']
         
 
@@ -152,7 +152,7 @@ class Server(BasicServer):
                     if (self.Q_matrix[i,j] != 0) and (self.Q_matrix[i,k] != 0) and (self.Q_matrix[j,k] == 0):
                         simi, sigma = self.compute_simXY(self.Q_matrix[i,j]/self.freq_matrix[i,j],
                                                         self.Q_matrix[i,k]/self.freq_matrix[i,k])
-                        if sigma < 0.015 and simi > 0.998:
+                        if sigma < 0.015 and simi > self.thr:
                             temp_Q[j,k] += simi
                             temp_F[j,k] += 1
                             temp_Q[k,j] = temp_Q[j,k]
@@ -161,7 +161,7 @@ class Server(BasicServer):
                     elif (self.Q_matrix[i,j] != 0) and (self.Q_matrix[i,k] == 0) and (self.Q_matrix[j,k] != 0):
                         simi, sigma = self.compute_simXY(self.Q_matrix[i,j]/self.freq_matrix[i,j],
                                                         self.Q_matrix[j,k]/self.freq_matrix[j,k])
-                        if sigma < 0.015 and simi > 0.998:
+                        if sigma < 0.015 and simi > self.thr:
                             temp_Q[i,k] += simi
                             temp_F[i,k] += 1
                             temp_Q[k,i] = temp_Q[i,k]
@@ -170,7 +170,7 @@ class Server(BasicServer):
                     elif (self.Q_matrix[i,j] == 0) and (self.Q_matrix[i,k] != 0) and (self.Q_matrix[j,k] != 0):
                         simi, sigma = self.compute_simXY(self.Q_matrix[i,k]/self.freq_matrix[i,k],
                                                         self.Q_matrix[j,k]/self.freq_matrix[j,k])
-                        if sigma < 0.015 and simi > 0.998:
+                        if sigma < 0.015 and simi > self.thr:
                             temp_Q[i,j] += simi
                             temp_F[i,j] += 1
                             temp_Q[j,i] = temp_Q[i,j]

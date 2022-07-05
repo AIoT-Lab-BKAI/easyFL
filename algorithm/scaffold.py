@@ -28,11 +28,7 @@ class Server(BasicServer):
         dys, dcs = self.communicate(self.selected_clients)
         if self.selected_clients == []: return
         # aggregate
-        start = time.time()
         self.model, self.cg = self.aggregate(dys, dcs)
-        end = time.time()
-        if self.wandb:
-            wandb.log({"Aggregation_time": end-start})
         return
 
     def aggregate(self, dys, dcs):  # c_list is c_i^+
