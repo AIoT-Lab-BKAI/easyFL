@@ -86,14 +86,16 @@ def main():
     # initialize server
     server = flw.initialize(option)
     
+    runname = ""
+    for para in server.paras_name:
+        runname = runname + para + "{}_".format(option[para])
+    
     if option['wandb']:
         wandb.init(
             project="easyFL", 
             entity="aiotlab",
             group=option['task'],
-            name=f"{option['algorithm']}_{option['kd_fct']}_{option['sthr']}"
-                if 'fedsdiv' in option['algorithm']
-                else option['algorithm'],
+            name=runname,
             config=option
         )
     
