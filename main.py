@@ -86,7 +86,7 @@ def main():
     # initialize server
     server = flw.initialize(option)
     
-    runname = ""
+    runname = f"{option['algorithm']}_"
     for para in server.paras_name:
         runname = runname + para + "{}_".format(option[para])
     
@@ -95,7 +95,7 @@ def main():
             project="easyFL", 
             entity="aiotlab",
             group=option['task'],
-            name=runname,
+            name=runname[:-1],
             config=option
         )
     
