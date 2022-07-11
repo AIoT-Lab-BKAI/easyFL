@@ -7,7 +7,7 @@ The update model at server is modified as:
 In which: lr = client_per_turn / all_clients
           z  = new_clients_this_turn / client_per_turn
 """
-from .fedbase import BasicServer, BasicClient
+from .mp_fedbase import MPBasicServer, MPBasicClient
 from utils import fmodule
 
 import torch.nn as nn
@@ -72,10 +72,10 @@ def compute_similarity(a, b):
         x, y = torch.flatten(layer_a), torch.flatten(layer_b)
         sim.append((x.transpose(-1,0) @ y) / (torch.norm(x) * torch.norm(y)))
 
-    return torch.mean(torch.tensor(sim)), sim[-2]
+    return torch.mean(torch.tensor(sim)), sim[-1]
 
 
-class Server(BasicServer):
+class Server(MPBasicServer):
     def __init__(self, option, model, clients, test_data=None):
         super(Server, self).__init__(option, model, clients, test_data)
 
@@ -88,21 +88,21 @@ class Server(BasicServer):
         self.gamma = 1
         self.device = torch.device("cuda")
         
-        self.Q_matrix[0:30,0:30] = 1
-        self.Q_matrix[30:60,0:60] = 1
-        self.Q_matrix[60:80,60:80] = 1
-        self.Q_matrix[80:90,80:90] = 1
-        self.Q_matrix[90:100,90:100] = 1
+        # self.Q_matrix[0:30,0:30] = 1
+        # self.Q_matrix[30:60,0:60] = 1
+        # self.Q_matrix[60:80,60:80] = 1
+        # self.Q_matrix[80:90,80:90] = 1
+        # self.Q_matrix[90:100,90:100] = 1
         
-        self.freq_matrix += 1
+        # self.freq_matrix += 1
         
         self.paras_name = ['kd_fct', 'sthr']
         
     
-    def iterate(self, t):
+    def iterate(self, t, pool):
         self.selected_clients = self.sample()
         # print("Selected:", self.selected_clients)
-        models, train_losses = self.communicate(self.selected_clients)
+        models, train_losses = self.communicate(self.selected_clients, pool)
         models = [model.to(self.device) for model in models]
         
         self.model = self.model.to(self.device)
@@ -111,9 +111,9 @@ class Server(BasicServer):
         if not self.selected_clients:
             return
                 
-        # self.update_Q_matrix(models, self.selected_clients, t)
-        # if (len(self.selected_clients) < len(self.clients)) or (self.impact_factor is None):
-        self.impact_factor, self.gamma = self.get_impact_factor(self.selected_clients, t)
+        self.update_Q_matrix(models, self.selected_clients, t)
+        if (len(self.selected_clients) < len(self.clients)) or (self.impact_factor is None):
+            self.impact_factor, self.gamma = self.get_impact_factor(self.selected_clients, t)
         
         model_diff = self.aggregate(model_diffs, p = self.impact_factor)
         self.model = self.model + self.gamma * model_diff
@@ -200,7 +200,7 @@ class Server(BasicServer):
         Q_asterisk_mtx = self.remove_inf_nan(Q_asterisk_mtx)
         
         # print(Q_asterisk_mtx[self.freq_matrix > 0.0])
-        # np.savetxt(f"Q_matrix/trans/round_{t}.txt", Q_asterisk_mtx.numpy(), fmt='%.5f')
+        # np.savetxt(f"Q_matrix/round_{t}.txt", Q_asterisk_mtx.numpy(), fmt='%.5f')
         
         min_Q = torch.min(Q_asterisk_mtx[Q_asterisk_mtx > 0.0])
         max_Q = torch.max(Q_asterisk_mtx[Q_asterisk_mtx > 0.0])
@@ -208,10 +208,10 @@ class Server(BasicServer):
         
         # print(Q_asterisk_mtx[self.freq_matrix > 0.0])
         
-        # np.savetxt(f"Maxmin/trans/max-min_{t}.txt", Q_asterisk_mtx.numpy(), fmt='%.5f')
+        # np.savetxt(f"Maxmin/round_{t}.txt", Q_asterisk_mtx.numpy(), fmt='%.5f')
         Q_asterisk_mtx = (Q_asterisk_mtx > self.thr) * 1.0
         Q_asterisk_mtx = ((Q_asterisk_mtx.T @ Q_asterisk_mtx) > 0) * 1.0        # Enhance Transitive clustering matrix
-        # np.savetxt(f"Cluster/trans/cluster_{t}.txt", Q_asterisk_mtx.numpy(), fmt='%d')
+        # np.savetxt(f"Cluster/round_{t}.txt", Q_asterisk_mtx.numpy(), fmt='%d')
         
         impact_factor = 1/torch.sum(Q_asterisk_mtx, dim=0)
         impact_factor = self.remove_inf_nan(impact_factor)
@@ -236,7 +236,7 @@ class Server(BasicServer):
         return
 
 
-class Client(BasicClient):
+class Client(MPBasicClient):
     def __init__(self, option, name='', train_data=None, valid_data=None):
         super(Client, self).__init__(option, name, train_data, valid_data)
         self.lossfunc = nn.CrossEntropyLoss()
