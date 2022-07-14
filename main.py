@@ -1,3 +1,4 @@
+from builtins import breakpoint
 import utils.fflow as flw
 import numpy as np
 import torch
@@ -76,7 +77,7 @@ def main():
     option = flw.read_option()
     os.environ['MASTER_ADDR'] = "localhost"
     os.environ['MASTER_PORT'] = '8888'
-    os.environ['WORLD_SIZE'] = str(3)
+    os.environ['WORLD_SIZE'] = str(3)   # number of gpus
     # set random seed
     flw.setup_seed(option['seed'])
     # initialize server

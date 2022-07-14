@@ -15,6 +15,7 @@ imbalance:
     iid:            6 Vol: only the vol of local dataset varies.
     niid:           7 Vol: for generating synthetic data
 """
+from builtins import breakpoint
 from pathlib import Path
 import torch
 import ujson
@@ -26,7 +27,8 @@ import zipfile
 import os
 import ssl
 from torch.utils.data import Dataset, DataLoader
-import torch
+import torch.nn as nn
+import torch.nn.functional as F
 ssl._create_default_https_context = ssl._create_unverified_context
 import importlib
 from torchvision import transforms, datasets
@@ -34,6 +36,7 @@ import json
 import os
 from PIL import Image
 import time
+from benchmark.uncertainty_loss import one_hot_embedding, edl_mse_loss
 
 def set_random_seed(seed=0):
     """Set random seed"""
@@ -392,13 +395,31 @@ class ClassifyCalculator(BasicTaskCalculator):
     def __init__(self, device):
         super(ClassifyCalculator, self).__init__(device)
         self.lossfunc = torch.nn.CrossEntropyLoss()
+        self.num_classes = 10
         self.DataLoader = DataLoader
+        self.lossfunc_Dir = DirichletLoss(num_classes= self.num_classes, annealing_step= 10, device= device)
 
-    def get_loss(self, model, data, device=None):
+
+    def get_loss_not_uncertainty(self, model, data, device=None):
         tdata = self.data_to_device(data, device)
         outputs = model(tdata[0])
         loss = self.lossfunc(outputs, tdata[1])
         return loss
+    
+    def get_loss(self, model, data, epoch, device=None):
+        tdata = self.data_to_device(data, device)
+        outputs = model(tdata[0]) # batchsize * num_class
+        y = one_hot_embedding(tdata[1], self.num_classes)
+        # loss = self.lossfunc(outputs, tdata[1])
+        # loss = self.lossMSE(outputs, tdata[1].float())
+        loss = self.lossfunc_Dir(outputs, y.float(), epoch)
+        ## compute uncertainty
+        evidence = F.relu(outputs)
+        alpha = evidence + 1
+        # print(alpha)
+        u = self.num_classes / torch.sum(alpha, dim=1, keepdim=True)
+        unc = torch.sum(u)
+        return loss, unc
 
     @torch.no_grad()
     def get_evaluation(self, model, data):
@@ -431,6 +452,16 @@ class ClassifyCalculator(BasicTaskCalculator):
         if self.DataLoader == None:
             raise NotImplementedError("DataLoader Not Found.")
         return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, drop_last=droplast)
+
+class DirichletLoss(nn.Module):
+    def __init__(self, num_classes, annealing_step, device):
+        super(DirichletLoss, self).__init__()
+        self.num_classes = num_classes
+        self.annealing_step = annealing_step
+        self.device = device
+        
+    def forward(self, output, target, epoch_num):
+        return edl_mse_loss(output, target, epoch_num, self.num_classes, self.annealing_step, self.device)
 
 class BasicTaskReader:
     def __init__(self, taskpath=''):
@@ -480,7 +511,7 @@ class CusTomTaskReader(BasicTaskReader):
 
 
 class DirtyTaskReader(BasicTaskReader):        
-    def __init__(self, taskpath, train_dataset, test_dataset, noise_magnitude=1, dirty_rate=0.2):
+    def __init__(self, taskpath, train_dataset, test_dataset, noise_magnitude=1, dirty_rate=None):
         super().__init__(taskpath)
         self.noise_magnitude = noise_magnitude
         self.dirty_rate = dirty_rate
@@ -500,7 +531,7 @@ class DirtyTaskReader(BasicTaskReader):
                                     data_idx[idx], 
                                     seed=idx, 
                                     magnitude=self.noise_magnitude,
-                                    dirty_rate=self.dirty_rate) for idx in range(n_clients)]
+                                    dirty_rate=self.dirty_rate[idx]) for idx in range(n_clients)]
         test_data = self.test_dataset
         print("Here return dirty training datasets for clients, clean test dataset for server")
         return train_datas, test_data, n_clients
@@ -568,8 +599,9 @@ import torchvision.transforms as T
 def imshow(img, dir = "pics", name="img.png"):
     if not Path(name).exists():
         os.system(f"mkdir -p {dir}")
-        
-    plt.imshow(img.squeeze().numpy())
+    # breakpoint()
+    # plt.imshow(img)
+    plt.imshow(img.permute(1,2,0))
     plt.savefig(dir + "/" + name)
 
 class DirtyDataset(Dataset):
@@ -579,28 +611,50 @@ class DirtyDataset(Dataset):
         self.idxs = list(idxs)
         self.seed = seed
         dirty_quantity = int(dirty_rate * len(self.idxs))
+        
+        np.random.seed(self.seed)
         self.dirty_dataidx = np.random.choice(self.idxs, dirty_quantity, replace=False)
+        # if seed in [0, 1]:
+        #     print(f'client {seed}, dirty {self.dirty_dataidx}')
+        with open(f'./results/dirty_dataidx/{seed}.json', 'w') as f:
+            json.dump(self.dirty_dataidx.tolist(), f)
         sample = dataset.data[0]
         self.rotater = T.RandomRotation(degrees=(90, 270))
-        self.resize_cropper = T.RandomResizedCrop(size=sample.shape)
-        self.blurrer = T.GaussianBlur(kernel_size=(5, 9), sigma=(magnitude, 5))
+        # self.resize_cropper = T.RandomResizedCrop(size=sample.shape)
+        self.blurrer = T.GaussianBlur(kernel_size=(5, 9), sigma=(0.1, 2))
+        self.addgaussiannoise = AddGaussianNoise(magnitude, 1)
+        
+        self.beta = 1
+        self.beta_idxs = self.idxs
         
     def __len__(self):
-        return len(self.idxs)
+        return len(self.beta_idxs)
 
     def __getitem__(self, item):
         random.seed(self.seed) # apply this seed to img transforms
-        image, label = self.dataset[self.idxs[item]]
-        if self.idxs[item] in self.dirty_dataidx:
-            # if DirtyDataset.count < 10:
-            #     imshow(image, "pics_noise3", f"{item}_before.png")
+        image, label = self.dataset[self.beta_idxs[item]]
+        if self.beta_idxs[item] in self.dirty_dataidx:
+            if DirtyDataset.count < 10:
+                imshow(image, "pics_noise", f"{item}_before.png")
             # image = image + self.noise
-            image = self.blurrer(self.resize_cropper(self.rotater(image)))
-            # if DirtyDataset.count < 10:
-            #     imshow(image, "pics_noise3", f"{item}_after.png")
-            #     DirtyDataset.count += 1
+            image = self.blurrer(self.addgaussiannoise(self.rotater(image)))
+            image = (image - torch.min(image))/(torch.max(image) - torch.min(image))
+            
+            if DirtyDataset.count < 10:
+                imshow(image, "pics_noise", f"{item}_after.png")
+                DirtyDataset.count += 1
         return image, label
 
+class AddGaussianNoise(object):
+    def __init__(self, mean=0., std=1.):
+        self.std = std
+        self.mean = mean
+        
+    def __call__(self, tensor):
+        return tensor + torch.randn(tensor.size()) * self.std + self.mean
+    
+    def __repr__(self):
+        return self.__class__.__name__ + '(mean={0}, std={1})'.format(self.mean, self.std)
 
 class XYDataset(Dataset):
     def __init__(self, X=[], Y=[], totensor = True):

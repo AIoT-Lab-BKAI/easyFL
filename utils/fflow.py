@@ -1,3 +1,4 @@
+from xmlrpc.client import Boolean
 import numpy as np
 import argparse
 import random
@@ -30,10 +31,11 @@ def read_option():
     parser.add_argument('--num_rounds', help='number of communication rounds', type=int, default=20)
     parser.add_argument('--proportion', help='proportion of clients sampled per round', type=float, default=0.2)
     # hyper-parameters of local training
-    parser.add_argument('--num_epochs', help='number of epochs when clients trainset on data;', type=int, default=5)
-    parser.add_argument('--learning_rate', help='learning rate for inner solver;', type=float, default=0.001)
-    parser.add_argument('--batch_size', help='batch size when clients trainset on data;', type=int, default=64)
-    parser.add_argument('--optimizer', help='select the optimizer for gd', type=str, choices=optimizer_list, default='SGD')
+    parser.add_argument('--num_epochs', help='number of epochs when clients train on data;', type=int, default=5)
+    parser.add_argument('--num_epochs_round_0', help='number of epochs at round 0 when clients train on data;', type=int, default=20)
+    parser.add_argument('--learning_rate', help='learning rate for inner solver;', type=float, default=0.0001)
+    parser.add_argument('--batch_size', help='batch size when clients train on data;', type=int, default=64)
+    parser.add_argument('--optimizer', help='select the optimizer for gd', type=str, choices=optimizer_list, default='Adam')
     parser.add_argument('--momentum', help='momentum of local update', type=float, default=0)
 
     # machine environment settings
@@ -45,10 +47,10 @@ def read_option():
     parser.add_argument('--gpu', default=0, type=int)
     # the simulating system settings of clients
     
-    # constructing the heterogeity of the network
+    # constructing the heterogeneity of the network
     parser.add_argument('--net_drop', help="controlling the dropout of clients after being selected in each communication round according to distribution Beta(drop,1)", type=float, default=0)
     parser.add_argument('--net_active', help="controlling the probability of clients being active and obey distribution Beta(active,1)", type=float, default=99999)
-    # constructing the heterogeity of computing capability
+    # constructing the heterogeneity of computing capability
     parser.add_argument('--capability', help="controlling the difference of local computing capability of each client", type=float, default=0)
 
     # hyper-parameters of different algorithms
@@ -75,7 +77,10 @@ def read_option():
     parser.add_argument('--temp', help="Temperature for extreme assembling aggregation (Fedtest)", type=float, default="1.0")
     
     parser.add_argument('--noise_magnitude', help="(Dirty dataset only)", type=float, default="1.0")
-    parser.add_argument('--dirty_rate', help="(Dirty dataset only)", type=float, default="0.2")
+    parser.add_argument('--dirty_rate', help="(Dirty dataset only)", nargs='+', type=float)   
+    parser.add_argument('--result_file_name', help="file name of result.txt", type=str, required=False)
+    parser.add_argument('--uncertainty', help="whether to use uncertainty", type=int, default=1)
+    
     
     try: option = vars(parser.parse_args())
     except IOError as msg: parser.error(str(msg))
@@ -102,6 +107,8 @@ def initialize(option):
     if bmk_name == "pilldataset":
         task_reader = getattr(importlib.import_module(bmk_core_path), 'TaskReader')(taskpath=option['dataidx_filename'], data_folder=option['data_folder'],dataidx_path=option['dataidx_path'])
     elif bmk_name == "dirtymnist":
+        task_reader = getattr(importlib.import_module(bmk_core_path), 'TaskReader')(taskpath=option['dataidx_filename'], noise_magnitude=option['noise_magnitude'], dirty_rate=option['dirty_rate'], data_folder=option['data_folder'])
+    elif bmk_name == "dirtycifar10":
         task_reader = getattr(importlib.import_module(bmk_core_path), 'TaskReader')(taskpath=option['dataidx_filename'], noise_magnitude=option['noise_magnitude'], dirty_rate=option['dirty_rate'], data_folder=option['data_folder'])
     else:
         task_reader = getattr(importlib.import_module(bmk_core_path), 'TaskReader')(taskpath=option['dataidx_filename'], data_folder=option['data_folder'], )
