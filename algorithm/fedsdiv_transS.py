@@ -72,7 +72,7 @@ def compute_similarity(a, b):
         x, y = torch.flatten(layer_a), torch.flatten(layer_b)
         sim.append((x.transpose(-1,0) @ y) / (torch.norm(x) * torch.norm(y)))
 
-    return torch.mean(torch.tensor(sim)), sim[-2]
+    return torch.mean(torch.tensor(sim)), sim[-1]
 
 
 class Server(BasicServer):
