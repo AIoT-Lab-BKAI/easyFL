@@ -371,6 +371,7 @@ class BasicClient():
         self.active_rate = 1 if option['net_active']>99998 else np.random.beta(option['net_active'], 1, 1).item()
         self.wandb = option['wandb']
         self.uncertainty = option['uncertainty']
+        self.file_log_per_epoch = option['file_log_per_epoch']
     
     def train(self, model, beta=1, current_round=0):
         """
@@ -403,7 +404,8 @@ class BasicClient():
             device = 'cuda' if torch.cuda.is_available() else 'cpu'
             model = model.to(device)
             if current_round != 0:
-                seed = self.name*100 + current_round
+                # seed = self.name*100 + current_round
+                seed = self.name + current_round*10
                 np.random.seed(seed)
                 self.train_data.beta = beta
                 self.train_data.beta_idxs = np.random.choice(self.train_data.idxs, int(beta*len(self.train_data.idxs)), replace=False).tolist()
@@ -421,14 +423,14 @@ class BasicClient():
                 total_loss = 0.0
                 for batch_id, batch_data in enumerate(data_loader):
                     model.zero_grad()
-                    loss, unc = self.calculator.get_loss(model, batch_data, iter)
+                    loss, unc = self.calculator.get_loss(model, batch_data, iter, device)
                     loss.backward()
                     optimizer.step() 
                     uncertainty += unc.cpu().detach().numpy() 
                     total_loss += loss
                 uncertainty = uncertainty / len(data_loader.dataset)
                 total_loss /= len(self.train_data)
-                with open('./results/result_unc.csv', 'a') as f:
+                with open(f'./results/{self.file_log_per_epoch}', 'a') as f:
                     writer = csv.writer(f)
                     line = [iter, total_loss.item(), uncertainty]
                     writer.writerow(line)

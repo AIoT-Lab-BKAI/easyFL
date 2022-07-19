@@ -7,7 +7,9 @@ import utils.fflow as flw
 import torch.multiprocessing as mp
 import torch
 import wandb
-
+import json
+import numpy as np
+import csv
 class MPBasicServer(BasicServer):
     def __init__(self, option, model, clients, test_data=None):
         super().__init__(option, model, clients, test_data)
@@ -23,6 +25,7 @@ class MPBasicServer(BasicServer):
         pool = mp.Pool(self.num_threads)
         logger.time_start('Total Time Cost')
         for round in range(self.num_rounds+1):
+            self.current_round = round
             print("--------------Round {}--------------".format(round))
             logger.time_start('Time Cost')
 
@@ -33,7 +36,9 @@ class MPBasicServer(BasicServer):
 
             logger.time_end('Time Cost')
             if logger.check_if_log(round, self.eval_interval): logger.log(self)
-
+            with open(f'results/{self.result_file_name}', 'w') as f:
+                
+                    json.dump(self.result, f)
         print("=================End==================")
         logger.time_end('Total Time Cost')
         # save results as .json file
@@ -52,13 +57,48 @@ class MPBasicServer(BasicServer):
         # sample clients: MD sampling as default but with replacement=False
         self.selected_clients = self.sample()
         # training
-        models, train_losses = self.communicate(self.selected_clients, pool)
+        # models, train_losses = self.communicate(self.selected_clients, pool)
+        models, packages_received_from_clients = self.communicate(self.selected_clients, pool)
+        
+        list_uncertainty = []
+        for i in range(len(self.selected_clients)):
+                result_i = {
+                     "round": int(self.current_round),
+                     "client": int(self.selected_clients[i]),
+                     "len_train_data": len(packages_received_from_clients[i]["data_idxs"]),
+                     "data_idxs": packages_received_from_clients[i]["data_idxs"], #if self.current_round == 0 else packages_received_from_clients[i]["data_idxs"].tolist() ,
+                     "Acc_global": float(packages_received_from_clients[i]["Acc_global"]),
+                     "acc_local": float(packages_received_from_clients[i]["acc_local"]),
+                     "uncertainty": float(packages_received_from_clients[i]["uncertainty"].item())
+                     }
+                list_uncertainty.append(packages_received_from_clients[i]["uncertainty"].item())
+                self.result.append(result_i)
+        
+        if self.current_round == 0:
+            # beta[i] = ...
+            # based on list_uncertainty
+            self.beta[0] = 1
+            self.beta[1] = 0.9
+            self.beta[2] = 0.8
+            self.beta[3] = 0.7
+            self.beta[4] = 0.6
+            self.beta[5] = 0.5
+            self.beta[6] = 0.6
+            self.beta[7] = 0.7
+            self.beta[8] = 0.8
+            self.beta[9] = 1
+            
         # check whether all the clients have dropped out, because the dropped clients will be deleted from self.selected_clients
         if not self.selected_clients: return
         # aggregate: pk = 1/K as default where K=len(selected_clients)
         device0 = torch.device(f"cuda:{self.server_gpu_id}")
         models = [i.to(device0) for i in models]
-        self.model = self.aggregate(models, p = [1.0 * self.client_vols[cid]/self.data_vol for cid in self.selected_clients])
+        # self.model = self.aggregate(models, p = [1.0 * self.client_vols[cid]/self.data_vol for cid in self.selected_clients])
+        if self.current_round != 0:
+            self.client_vols = [c.datavol for c in self.clients]
+            self.data_vol = sum(self.client_vols)
+            self.model = self.aggregate(models, p = [1.0 * self.client_vols[cid]/self.data_vol for cid in self.selected_clients])
+            print(f'Done aggregate at round {self.current_round}')
         return
 
     def communicate(self, selected_clients, pool):
@@ -149,7 +189,7 @@ class MPBasicClient(BasicClient):
         super().__init__(option, name, train_data, valid_data)
 
 
-    def train(self, model, device):
+    def train(self, model, device, beta=1, current_round=0):
         """
         Standard local training procedure. Train the transmitted model with local training dataset.
         :param
@@ -158,17 +198,74 @@ class MPBasicClient(BasicClient):
         :return
         """
         model = model.to(device)
-        model.train()
+        # model.train()
         
-        data_loader = self.calculator.get_data_loader(self.train_data, batch_size=self.batch_size)
-        optimizer = self.calculator.get_optimizer(self.optimizer_name, model, lr = self.learning_rate, weight_decay=self.weight_decay, momentum=self.momentum)
-        for iter in range(self.epochs):
-            for batch_id, batch_data in enumerate(data_loader):
-                model.zero_grad()
-                loss = self.calculator.get_loss(model, batch_data, device)
-                loss.backward()
-                optimizer.step()
-        return
+        # data_loader = self.calculator.get_data_loader(self.train_data, batch_size=self.batch_size)
+        # optimizer = self.calculator.get_optimizer(self.optimizer_name, model, lr = self.learning_rate, weight_decay=self.weight_decay, momentum=self.momentum)
+        # for iter in range(self.epochs):
+        #     for batch_id, batch_data in enumerate(data_loader):
+        #         model.zero_grad()
+        #         loss = self.calculator.get_loss(model, batch_data, device)
+        #         loss.backward()
+        #         optimizer.step()
+        # return
+        if self.uncertainty == 0:
+            model.train()
+            # device = 'cuda' if torch.cuda.is_available() else 'cpu'
+            # model = model.to(device)
+            print(len(self.train_data))
+            data_loader = self.calculator.get_data_loader(self.train_data, batch_size=self.batch_size)
+            optimizer = self.calculator.get_optimizer(self.optimizer_name, model, lr = self.learning_rate, weight_decay=self.weight_decay, momentum=self.momentum)
+            if current_round == 0:
+                num_epochs = self.epochs_round_0
+            else:
+                num_epochs = self.epochs
+            for iter in range(self.epochs):
+                for batch_id, batch_data in enumerate(data_loader):
+                    model.zero_grad()
+                    loss = self.calculator.get_loss_not_uncertainty(model, batch_data, device)
+                    loss.backward()
+                    optimizer.step()
+            return np.array(0), self.train_data.idxs
+            # train function at clients
+        else:
+            model.train()
+            # device = 'cuda' if torch.cuda.is_available() else 'cpu'
+            # model = model.to(device)
+            if current_round != 0:
+                # seed = self.name*100 + current_round
+                seed = self.name + current_round*10
+                print(f"name {self.name}, current_round {current_round}")
+                np.random.seed(seed)
+                self.train_data.beta = beta
+                self.train_data.beta_idxs = np.random.choice(self.train_data.idxs, int(beta*len(self.train_data.idxs)), replace=False).tolist()
+            print(len(self.train_data))
+            data_loader = self.calculator.get_data_loader(self.train_data, batch_size=self.batch_size)
+            
+            optimizer = self.calculator.get_optimizer(self.optimizer_name, model, lr = self.learning_rate, weight_decay=self.weight_decay, momentum=self.momentum)
+            if current_round == 0:
+                num_epochs = self.epochs_round_0
+            else:
+                num_epochs = self.epochs
+                
+            for iter in range(num_epochs):
+                uncertainty = 0.0
+                total_loss = 0.0
+                for batch_id, batch_data in enumerate(data_loader):
+                    model.zero_grad()
+                    loss, unc = self.calculator.get_loss(model, batch_data, iter, device)
+                    loss.backward()
+                    optimizer.step() 
+                    uncertainty += unc.cpu().detach().numpy() 
+                    total_loss += loss
+                uncertainty = uncertainty / len(data_loader.dataset)
+                total_loss /= len(self.train_data)
+                with open('./results/mp_result_unc.csv', 'a') as f:
+                    writer = csv.writer(f)
+                    line = [iter, total_loss.item(), uncertainty]
+                    writer.writerow(line)
+                    
+            return uncertainty, self.train_data.beta_idxs
 
 
     def test(self, model, dataflag='valid', device='cpu'):
@@ -210,10 +307,17 @@ class MPBasicClient(BasicClient):
         :return:
             client_pkg: the package to be send to the server
         """
-        model = self.unpack(svr_pkg)
-        loss = self.train_loss(model, device)
-        self.train(model, device)
-        cpkg = self.pack(model, loss)
+        # model = self.unpack(svr_pkg)
+        # loss = self.train_loss(model, device)
+        # self.train(model, device)
+        # cpkg = self.pack(model, loss)
+        
+        model, beta, round = self.unpack(svr_pkg)
+        Acc_global, loss_global = self.test(model)
+        uncertainty, data_idxs = self.train(model, device, beta, round)
+        acc_local, loss_local = self.test(model)
+        cpkg = self.pack(model, data_idxs, Acc_global, acc_local, uncertainty)
+        
         return cpkg
 
 

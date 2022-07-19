@@ -80,6 +80,7 @@ def read_option():
     parser.add_argument('--dirty_rate', help="(Dirty dataset only)", nargs='+', type=float)   
     parser.add_argument('--result_file_name', help="file name of result.txt", type=str, required=False)
     parser.add_argument('--uncertainty', help="whether to use uncertainty", type=int, default=1)
+    parser.add_argument('--file_log_per_epoch', help="file to log result per epoch", type=str, required=True)
     
     
     try: option = vars(parser.parse_args())
