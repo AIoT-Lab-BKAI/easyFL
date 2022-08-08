@@ -37,6 +37,7 @@ import os
 from PIL import Image
 import time
 from benchmark.uncertainty_loss import one_hot_embedding, edl_mse_loss
+import csv
 
 def set_random_seed(seed=0):
     """Set random seed"""
@@ -613,11 +614,11 @@ class DirtyDataset(Dataset):
         dirty_quantity = int(dirty_rate * len(self.idxs))
         
         np.random.seed(self.seed)
-        self.dirty_dataidx = np.random.choice(self.idxs, dirty_quantity, replace=False)
+        self.dirty_dataidx = np.random.choice(self.idxs, dirty_quantity, replace=False).tolist()
         # if seed in [0, 1]:
         #     print(f'client {seed}, dirty {self.dirty_dataidx}')
         with open(f'./results/dirty_dataidx/{seed}.json', 'w') as f:
-            json.dump(self.dirty_dataidx.tolist(), f)
+            json.dump(self.dirty_dataidx, f)
         sample = dataset.data[0]
         self.rotater = T.RandomRotation(degrees=(90, 270))
         # self.resize_cropper = T.RandomResizedCrop(size=sample.shape)
@@ -626,7 +627,14 @@ class DirtyDataset(Dataset):
         
         self.beta = 1
         self.beta_idxs = self.idxs
-        
+        # if self.seed == 5:
+        #     self.unintersection = [799,10367,24040,4525,9740,30433,34981,38428,49085,38691,15420,19526,31483,39870,6922,1136,22780,16351,18410,4409]
+            # with open('./results/csv/unintersection.csv', 'r') as f:
+            #     # reader = csv.reader(f)
+            #     bre
+            #     for row in reader:
+                    # self.unintersection= row
+
     def __len__(self):
         return len(self.beta_idxs)
 
@@ -634,15 +642,20 @@ class DirtyDataset(Dataset):
         random.seed(self.seed) # apply this seed to img transforms
         image, label = self.dataset[self.beta_idxs[item]]
         if self.beta_idxs[item] in self.dirty_dataidx:
-            if DirtyDataset.count < 10:
-                imshow(image, "pics_noise", f"{item}_before.png")
+            if DirtyDataset.count < 2:
+                imshow(image, "pics_noise", f"{self.beta_idxs[item]}_before.png")
             # image = image + self.noise
             image = self.blurrer(self.addgaussiannoise(self.rotater(image)))
             image = (image - torch.min(image))/(torch.max(image) - torch.min(image))
             
-            if DirtyDataset.count < 10:
-                imshow(image, "pics_noise", f"{item}_after.png")
+            self.dirty_dataidx.remove(self.beta_idxs[item])
+            if DirtyDataset.count < 2:
+                imshow(image, "pics_noise", f"{self.beta_idxs[item]}_after.png")
                 DirtyDataset.count += 1
+        # else:
+        #     if self.seed == 5:
+        #         if self.beta_idxs[item] in self.unintersection:
+        #             imshow(image, "pics_unintersection_low", f"{item}.png")
         return image, label
 
 class AddGaussianNoise(object):

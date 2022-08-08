@@ -74,9 +74,12 @@ class BasicServer():
             logger.time_end('Time Cost')
             if logger.check_if_log(round, self.eval_interval): logger.log(self)
 
-            with open(f'results/{self.result_file_name}', 'w') as f:
+            with open(f'results/result/{self.result_file_name}', 'w') as f:
                 
                     json.dump(self.result, f)
+            
+            path_save_model = f'./results/checkpoints/{self.result_file_name}'
+            torch.save(self.model.state_dict(), path_save_model)
         print("=================End==================")
         logger.time_end('Total Time Cost')
         # save results as .json file
@@ -123,25 +126,25 @@ class BasicServer():
             # f.write(result)
             
         # check whether all the clients have dropped out, because the dropped clients will be deleted from self.selected_clients
-        if self.current_round == 0:
+        if self.current_round == 20:
             # beta[i] = ...
             # based on list_uncertainty
-            self.beta[0] = 1
-            self.beta[1] = 0.9
-            self.beta[2] = 0.8
-            self.beta[3] = 0.7
-            self.beta[4] = 0.6
-            self.beta[5] = 0.5
-            self.beta[6] = 0.6
-            self.beta[7] = 0.7
-            self.beta[8] = 0.8
-            self.beta[9] = 1
+            self.beta[0] = 0.1
+            self.beta[1] = 0.1
+            self.beta[2] = 0.1
+            self.beta[3] = 0.1
+            self.beta[4] = 0.1
+            self.beta[5] = 0.1
+            self.beta[6] = 0.1
+            self.beta[7] = 0.1
+            self.beta[8] = 0.1
+            self.beta[9] = 0.1
             
 
         if not self.selected_clients: return
         # aggregate: pk = 1/K as default where K=len(selected_clients)
         start = time.time()
-        if self.current_round != 0:
+        if self.current_round != -1:
             self.client_vols = [c.datavol for c in self.clients]
             self.data_vol = sum(self.client_vols)
             self.model = self.aggregate(models, p = [1.0 * self.client_vols[cid]/self.data_vol for cid in self.selected_clients])
@@ -263,8 +266,8 @@ class BasicServer():
             # the default setting that is introduced by FedProx
             selected_clients = list(np.random.choice(all_clients, self.clients_per_round, replace=True, p=[nk / self.data_vol for nk in self.client_vols]))
         # drop the selected but inactive clients
-        if self.current_round == 0:
-            selected_clients = all_clients
+        # if self.current_round == 0:
+        #     selected_clients = all_clients
         selected_clients = list(set(active_clients).intersection(selected_clients))
         return selected_clients
 
@@ -403,13 +406,13 @@ class BasicClient():
             model.train()
             device = 'cuda' if torch.cuda.is_available() else 'cpu'
             model = model.to(device)
-            if current_round != 0:
+            if current_round >= 20:
                 # seed = self.name*100 + current_round
                 seed = self.name + current_round*10
                 np.random.seed(seed)
                 self.train_data.beta = beta
                 self.train_data.beta_idxs = np.random.choice(self.train_data.idxs, int(beta*len(self.train_data.idxs)), replace=False).tolist()
-            print(len(self.train_data))
+            print(len(self.train_data.beta_idxs))
             data_loader = self.calculator.get_data_loader(self.train_data, batch_size=self.batch_size)
             
             optimizer = self.calculator.get_optimizer(self.optimizer_name, model, lr = self.learning_rate, weight_decay=self.weight_decay, momentum=self.momentum)
@@ -430,7 +433,7 @@ class BasicClient():
                     total_loss += loss
                 uncertainty = uncertainty / len(data_loader.dataset)
                 total_loss /= len(self.train_data)
-                with open(f'./results/{self.file_log_per_epoch}', 'a') as f:
+                with open(f'./results/log_per_epoch/{self.file_log_per_epoch}', 'a') as f:
                     writer = csv.writer(f)
                     line = [iter, total_loss.item(), uncertainty]
                     writer.writerow(line)

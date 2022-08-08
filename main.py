@@ -88,7 +88,7 @@ def main():
             project="dirtyFL", 
             entity="aiotlab",
             group=option['task'],
-            name=f"{option['algorithm']}_{option['dirty_rate']}_{option['noise_magnitude']}",
+            name=f"{option['algorithm']}_{option['dirty_rate']}_{option['result_file_name']}",
             config=option
         )
         
