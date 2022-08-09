@@ -24,3 +24,5 @@ wandb/
 benchmark/pilldataset/data/pill3*
 invest/
 pics*
+stat.ipynb
+data/
