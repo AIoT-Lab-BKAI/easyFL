@@ -24,7 +24,7 @@ class MPBasicServer(BasicServer):
         """
         pool = mp.Pool(self.num_threads)
         logger.time_start('Total Time Cost')
-        for round in range(self.num_rounds+1):
+        for round in range(1, self.num_rounds+1):
             self.current_round = round
             print("--------------Round {}--------------".format(round))
             logger.time_start('Time Cost')

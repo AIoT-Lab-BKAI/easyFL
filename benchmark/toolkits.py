@@ -422,6 +422,16 @@ class ClassifyCalculator(BasicTaskCalculator):
         unc = torch.sum(u)
         return loss, unc
 
+    def get_uncertainty(self, model, data):
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        data = data.to(device)
+        model = model.to(device)
+        output = model(torch.unsqueeze(data, dim=0))
+        evidence = F.relu(output)
+        alpha = evidence + 1
+        uncertainty = self.num_classes/ torch.sum(alpha, dim=1)
+        return uncertainty
+
     @torch.no_grad()
     def get_evaluation(self, model, data):
         tdata = self.data_to_device(data)
@@ -619,14 +629,14 @@ class DirtyDataset(Dataset):
         #     print(f'client {seed}, dirty {self.dirty_dataidx}')
         with open(f'./results/dirty_dataidx/{seed}.json', 'w') as f:
             json.dump(self.dirty_dataidx, f)
-        sample = dataset.data[0]
+        # sample = dataset.data[0]
         self.rotater = T.RandomRotation(degrees=(90, 270))
         # self.resize_cropper = T.RandomResizedCrop(size=sample.shape)
         self.blurrer = T.GaussianBlur(kernel_size=(5, 9), sigma=(0.1, 2))
         self.addgaussiannoise = AddGaussianNoise(magnitude, 1)
         
-        self.beta = 1
-        self.beta_idxs = self.idxs
+        # self.beta = 1
+        # self.beta_idxs = self.idxs
         # if self.seed == 5:
         #     self.unintersection = [799,10367,24040,4525,9740,30433,34981,38428,49085,38691,15420,19526,31483,39870,6922,1136,22780,16351,18410,4409]
             # with open('./results/csv/unintersection.csv', 'r') as f:
@@ -636,21 +646,21 @@ class DirtyDataset(Dataset):
                     # self.unintersection= row
 
     def __len__(self):
-        return len(self.beta_idxs)
+        return len(self.idxs)
 
     def __getitem__(self, item):
         random.seed(self.seed) # apply this seed to img transforms
-        image, label = self.dataset[self.beta_idxs[item]]
-        if self.beta_idxs[item] in self.dirty_dataidx:
+        image, label = self.dataset[self.idxs[item]]
+        if self.idxs[item] in self.dirty_dataidx:
             if DirtyDataset.count < 2:
-                imshow(image, "pics_noise", f"{self.beta_idxs[item]}_before.png")
+                imshow(image, "pics_noise", f"{self.idxs[item]}_before.png")
             # image = image + self.noise
             image = self.blurrer(self.addgaussiannoise(self.rotater(image)))
             image = (image - torch.min(image))/(torch.max(image) - torch.min(image))
             
-            self.dirty_dataidx.remove(self.beta_idxs[item])
+            self.dirty_dataidx.remove(self.idxs[item])
             if DirtyDataset.count < 2:
-                imshow(image, "pics_noise", f"{self.beta_idxs[item]}_after.png")
+                imshow(image, "pics_noise", f"{self.idxs[item]}_after.png")
                 DirtyDataset.count += 1
         # else:
         #     if self.seed == 5:

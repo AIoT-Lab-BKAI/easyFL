@@ -50,7 +50,7 @@ class BasicServer():
         self.log_folder = option['log_folder']
         self.wandb = option['wandb']
         
-        self.beta = [1 for _ in range(self.num_clients)]
+        # self.beta = [1 for _ in range(self.num_clients)]
         self.result_file_name = option['result_file_name']
         self.result = []
         # for idx in range(self.num_clients):
@@ -61,7 +61,7 @@ class BasicServer():
         Start the federated learning symtem where the global model is trained iteratively.
         """
         logger.time_start('Total Time Cost')
-        for round in range(self.num_rounds):
+        for round in range(1, self.num_rounds + 1):
             self.current_round = round
             print("--------------Round {}--------------".format(round))
             logger.time_start('Time Cost')
@@ -74,11 +74,11 @@ class BasicServer():
             logger.time_end('Time Cost')
             if logger.check_if_log(round, self.eval_interval): logger.log(self)
 
-            with open(f'results/result/{self.result_file_name}', 'w') as f:
+            # with open(f'results/result/{self.result_file_name}', 'w') as f:
                 
-                    json.dump(self.result, f)
+            #         json.dump(self.result, f)
             
-            path_save_model = f'./results/checkpoints/{self.result_file_name}'
+            path_save_model = './results/checkpoints/{}_v2.pt'.format(self.option['model'])
             torch.save(self.model.state_dict(), path_save_model)
         print("=================End==================")
         logger.time_end('Total Time Cost')
@@ -103,19 +103,19 @@ class BasicServer():
         # result = []
         # for idx in range(len(self.selected_clients)):
         #     result[self.selected_clients[idx]] = {}
-        list_uncertainty = []
-        for i in range(len(self.selected_clients)):
-                result_i = {
-                     "round": int(self.current_round),
-                     "client": int(self.selected_clients[i]),
-                     "len_train_data": len(packages_received_from_clients[i]["data_idxs"]),
-                     "data_idxs": packages_received_from_clients[i]["data_idxs"], #if self.current_round == 0 else packages_received_from_clients[i]["data_idxs"].tolist() ,
-                     "Acc_global": float(packages_received_from_clients[i]["Acc_global"]),
-                     "acc_local": float(packages_received_from_clients[i]["acc_local"]),
-                     "uncertainty": float(packages_received_from_clients[i]["uncertainty"].item())
-                     }
-                list_uncertainty.append(packages_received_from_clients[i]["uncertainty"].item())
-                self.result.append(result_i)
+        # list_uncertainty = []
+        # for i in range(len(self.selected_clients)):
+        #         result_i = {
+        #              "round": int(self.current_round),
+        #              "client": int(self.selected_clients[i]),
+        #              "len_train_data": len(packages_received_from_clients[i]["data_idxs"]),
+        #              "data_idxs": packages_received_from_clients[i]["data_idxs"], #if self.current_round == 0 else packages_received_from_clients[i]["data_idxs"].tolist() ,
+        #              "Acc_global": float(packages_received_from_clients[i]["Acc_global"]),
+        #              "acc_local": float(packages_received_from_clients[i]["acc_local"]),
+        #              "uncertainty": float(packages_received_from_clients[i]["uncertainty"].item())
+        #              }
+        #         list_uncertainty.append(packages_received_from_clients[i]["uncertainty"].item())
+        #         self.result.append(result_i)
             # result.append(result_i)
         
         # with open(f'results/{self.result_file_name}', 'w') as f:
@@ -126,19 +126,19 @@ class BasicServer():
             # f.write(result)
             
         # check whether all the clients have dropped out, because the dropped clients will be deleted from self.selected_clients
-        if self.current_round == 20:
+        # if self.current_round == 20:
             # beta[i] = ...
             # based on list_uncertainty
-            self.beta[0] = 0.1
-            self.beta[1] = 0.1
-            self.beta[2] = 0.1
-            self.beta[3] = 0.1
-            self.beta[4] = 0.1
-            self.beta[5] = 0.1
-            self.beta[6] = 0.1
-            self.beta[7] = 0.1
-            self.beta[8] = 0.1
-            self.beta[9] = 0.1
+            # self.beta[0] = 0.1
+            # self.beta[1] = 0.1
+            # self.beta[2] = 0.1
+            # self.beta[3] = 0.1
+            # self.beta[4] = 0.1
+            # self.beta[5] = 0.1
+            # self.beta[6] = 0.1
+            # self.beta[7] = 0.1
+            # self.beta[8] = 0.1
+            # self.beta[9] = 0.1
             
 
         if not self.selected_clients: return
@@ -205,7 +205,7 @@ class BasicServer():
         """
         return {
             "model" : copy.deepcopy(self.model),
-            "beta" : self.beta[client_id],
+            # "beta" : self.beta[client_id],
             "round" : self.current_round
         }
 
@@ -375,8 +375,9 @@ class BasicClient():
         self.wandb = option['wandb']
         self.uncertainty = option['uncertainty']
         self.file_log_per_epoch = option['file_log_per_epoch']
-    
-    def train(self, model, beta=1, current_round=0):
+        self.option = option
+
+    def train(self, model, current_round=0):
         """
         Standard local training procedure. Train the transmitted model with local training dataset.
         :param
@@ -406,13 +407,13 @@ class BasicClient():
             model.train()
             device = 'cuda' if torch.cuda.is_available() else 'cpu'
             model = model.to(device)
-            if current_round >= 20:
-                # seed = self.name*100 + current_round
-                seed = self.name + current_round*10
-                np.random.seed(seed)
-                self.train_data.beta = beta
-                self.train_data.beta_idxs = np.random.choice(self.train_data.idxs, int(beta*len(self.train_data.idxs)), replace=False).tolist()
-            print(len(self.train_data.beta_idxs))
+            # if current_round >= 20:
+            #     # seed = self.name*100 + current_round
+            #     seed = self.name + current_round*10
+            #     np.random.seed(seed)
+            #     self.train_data.beta = beta
+            #     self.train_data.beta_idxs = np.random.choice(self.train_data.idxs, int(beta*len(self.train_data.idxs)), replace=False).tolist()
+            print(len(self.train_data))
             data_loader = self.calculator.get_data_loader(self.train_data, batch_size=self.batch_size)
             
             optimizer = self.calculator.get_optimizer(self.optimizer_name, model, lr = self.learning_rate, weight_decay=self.weight_decay, momentum=self.momentum)
@@ -433,12 +434,12 @@ class BasicClient():
                     total_loss += loss
                 uncertainty = uncertainty / len(data_loader.dataset)
                 total_loss /= len(self.train_data)
-                with open(f'./results/log_per_epoch/{self.file_log_per_epoch}', 'a') as f:
-                    writer = csv.writer(f)
-                    line = [iter, total_loss.item(), uncertainty]
-                    writer.writerow(line)
+                # with open(f'./results/log_per_epoch/{self.file_log_per_epoch}', 'a') as f:
+                #     writer = csv.writer(f)
+                #     line = [iter, total_loss.item(), uncertainty]
+                #     writer.writerow(line)
                     
-            return uncertainty, self.train_data.beta_idxs
+            return uncertainty, self.train_data.idxs
 
     def test(self, model, dataflag='valid', device='cpu'):
         """
@@ -473,7 +474,9 @@ class BasicClient():
             the unpacked information that can be rewritten
         """
         # unpack the received package
-        return received_pkg['model'], received_pkg['beta'], received_pkg['round']
+        # return received_pkg['model'], received_pkg['beta'], received_pkg['round']
+        return received_pkg['model'], received_pkg['round']
+
 
     def reply(self, svr_pkg):
         """
@@ -488,13 +491,25 @@ class BasicClient():
         :return:
             client_pkg: the package to be send to the server
         """
-        model, beta, round = self.unpack(svr_pkg)
+        model, round = self.unpack(svr_pkg)
         # loss = self.train_loss(model)
         Acc_global, loss_global = self.test(model)
-        uncertainty, data_idxs = self.train(model, beta, round)
+        uncertainty, data_idxs = self.train(model, round)
         acc_local, loss_local = self.test(model)
         cpkg = self.pack(model, data_idxs, Acc_global, acc_local, uncertainty)
+        if round == self.num_rounds:
+            self.calculate_unc_all_samples(model)
         return cpkg
+
+    def calculate_unc_all_samples(self, global_model):
+        uncertainty_dict = {}
+        for i in range(len(self.train_data)):
+            data, label = self.train_data[i]
+            uncertainty = self.calculator.get_uncertainty(global_model, data)
+            uncertainty_dict[self.train_data.idxs[i]] = uncertainty.item()
+        with open('results/uncertainty_all_samples/{}/{}.json'.format(self.option['model'], self.name), 'w') as f:
+            json.dump(uncertainty_dict, f)
+        
 
     def pack(self, model, data_idxs, Acc_global, acc_local, uncertainty):
         """
