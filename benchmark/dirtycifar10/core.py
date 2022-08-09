@@ -27,10 +27,34 @@ class TaskGen(DefaultTaskGen):
 
 
 class TaskReader(DirtyTaskReader):
-    def __init__(self, taskpath, train_dataset=None, test_dataset=None, noise_magnitude=1, dirty_rate=None, data_folder="./benchmark/cifar10/data"):
-        train_dataset = datasets.CIFAR10(data_folder, train=True, download=True, transform=transforms.Compose([transforms.ToTensor()]))
-        test_dataset = datasets.CIFAR10(data_folder, train=False, download=True, transform=transforms.Compose([transforms.ToTensor()]))
-        super().__init__(taskpath, train_dataset, test_dataset, noise_magnitude, dirty_rate)
+    def __init__(self, taskpath, train_dataset=None, test_dataset=None, noise_magnitude=1, dirty_rate=None, data_folder="./benchmark/cifar10/data", model='cnn'):
+        
+        # if model == 'cnn':
+        #     transform = transforms.ToTensor()
+        # elif model == 'resnet18':
+        #     transform = transforms.Compose([
+        #                 transforms.Resize(224),
+        #                 # transforms.CenterCrop(224),
+        #                 transforms.ToTensor(),
+        #                 # transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        #                 ])
+        # elif model == 'mobilenet_v2':
+        #     transform = transforms.Compose([
+        #                 transforms.Resize(256),
+        #                 transforms.CenterCrop(224),
+        #                 transforms.ToTensor(),
+        #                 # transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        #                 ])
+        # elif model == 'inception_v3':
+        #     transform = transforms.Compose([
+        #                 transforms.Resize(299),
+        #                 transforms.CenterCrop(299),
+        #                 transforms.ToTensor(),
+        #                 # transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        #                 ])
+        train_dataset = datasets.CIFAR10(data_folder, train=True, download=True, transform=transforms.ToTensor())
+        test_dataset = datasets.CIFAR10(data_folder, train=False, download=True, transform=transforms.ToTensor())
+        super().__init__(taskpath, train_dataset, test_dataset, noise_magnitude, dirty_rate, model)
 
 class TaskCalculator(ClassifyCalculator):
     def __init__(self, device):

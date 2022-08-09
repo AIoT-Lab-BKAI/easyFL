@@ -512,13 +512,14 @@ class CusTomTaskReader(BasicTaskReader):
 
 
 class DirtyTaskReader(BasicTaskReader):        
-    def __init__(self, taskpath, train_dataset, test_dataset, noise_magnitude=1, dirty_rate=None):
+    def __init__(self, taskpath, train_dataset, test_dataset, noise_magnitude=1, dirty_rate=None, model='cnn'):
         super().__init__(taskpath)
         self.noise_magnitude = noise_magnitude
         self.dirty_rate = dirty_rate
         self.test_dataset = test_dataset
         self.train_dataset = train_dataset
         self.taskpath = taskpath
+        self.model = model
     
     def load_dataset_idx(self,path="data"):
         import json
@@ -532,7 +533,8 @@ class DirtyTaskReader(BasicTaskReader):
                                     data_idx[idx], 
                                     seed=idx, 
                                     magnitude=self.noise_magnitude,
-                                    dirty_rate=self.dirty_rate[idx]) for idx in range(n_clients)]
+                                    dirty_rate=self.dirty_rate[idx],
+                                    model=self.model) for idx in range(n_clients)]
         test_data = self.test_dataset
         print("Here return dirty training datasets for clients, clean test dataset for server")
         return train_datas, test_data, n_clients
@@ -607,12 +609,34 @@ def imshow(img, dir = "pics", name="img.png"):
 
 class DirtyDataset(Dataset):
     count = 0
-    def __init__(self, dataset, idxs, seed, dirty_rate=0.2, magnitude=1):
+    def __init__(self, dataset, idxs, seed, dirty_rate=0.2, magnitude=1, model='cnn'):
         self.dataset = dataset
         self.idxs = list(idxs)
         self.seed = seed
         dirty_quantity = int(dirty_rate * len(self.idxs))
-        
+        if model == 'cnn':
+            self.transform = transforms.ToTensor()
+        elif model == 'resnet18':
+            self.transform = transforms.Compose([
+                        transforms.Resize(224),
+                        # transforms.CenterCrop(224),
+                        # transforms.ToTensor(),
+                        # transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+                        ])
+        elif model == 'mobilenet_v2':
+            self.transform = transforms.Compose([
+                        transforms.Resize(256),
+                        transforms.CenterCrop(224),
+                        transforms.ToTensor(),
+                        # transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+                        ])
+        elif model == 'inception_v3':
+            self.transform = transforms.Compose([
+                        transforms.Resize(299),
+                        transforms.CenterCrop(299),
+                        transforms.ToTensor(),
+                        # transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+                        ])
         np.random.seed(self.seed)
         self.dirty_dataidx = np.random.choice(self.idxs, dirty_quantity, replace=False).tolist()
         # if seed in [0, 1]:
@@ -623,7 +647,7 @@ class DirtyDataset(Dataset):
         self.rotater = T.RandomRotation(degrees=(90, 270))
         # self.resize_cropper = T.RandomResizedCrop(size=sample.shape)
         self.blurrer = T.GaussianBlur(kernel_size=(5, 9), sigma=(0.1, 2))
-        self.addgaussiannoise = AddGaussianNoise(magnitude, 1)
+        self.addgaussiannoise = AddGaussianNoise(magnitude, 2)
         
         self.beta = 1
         self.beta_idxs = self.idxs
@@ -656,6 +680,7 @@ class DirtyDataset(Dataset):
         #     if self.seed == 5:
         #         if self.beta_idxs[item] in self.unintersection:
         #             imshow(image, "pics_unintersection_low", f"{item}.png")
+        image=self.transform(image)
         return image, label
 
 class AddGaussianNoise(object):

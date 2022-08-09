@@ -47,7 +47,7 @@ class MPBasicServer(BasicServer):
             os.system(f"mkdir -p {filepath}")
         logger.save(os.path.join(filepath, flw.output_filename(self.option, self)))
 
-        path_save_model = f'./results/checkpoints'
+        path_save_model = './results/checkpoints/{}.pt'.format(self.option['model'])
         torch.save(self.model.state_dict(), path_save_model)
 
     def iterate(self, t, pool):
