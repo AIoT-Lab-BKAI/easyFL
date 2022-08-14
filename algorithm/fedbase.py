@@ -507,7 +507,10 @@ class BasicClient():
             data, label = self.train_data[i]
             uncertainty = self.calculator.get_uncertainty(global_model, data)
             uncertainty_dict[self.train_data.idxs[i]] = uncertainty.item()
-        with open('results/uncertainty_all_samples/{}/{}.json'.format(self.option['model'], self.name), 'w') as f:
+        PATH = 'results/uncertainty_all_samples/{}/{}.json'.format(self.option['model'], self.name)
+        if not os.path.exists(PATH):
+            os.makedirs(PATH)
+        with open(PATH, 'w') as f:
             json.dump(uncertainty_dict, f)
         
 

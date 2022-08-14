@@ -633,7 +633,7 @@ class DirtyDataset(Dataset):
         self.rotater = T.RandomRotation(degrees=(90, 270))
         # self.resize_cropper = T.RandomResizedCrop(size=sample.shape)
         self.blurrer = T.GaussianBlur(kernel_size=(5, 9), sigma=(0.1, 2))
-        self.addgaussiannoise = AddGaussianNoise(magnitude, 1)
+        self.addgaussiannoise = AddGaussianNoise(magnitude, 2)
         
         # self.beta = 1
         # self.beta_idxs = self.idxs
@@ -658,7 +658,7 @@ class DirtyDataset(Dataset):
             image = self.blurrer(self.addgaussiannoise(self.rotater(image)))
             image = (image - torch.min(image))/(torch.max(image) - torch.min(image))
             
-            self.dirty_dataidx.remove(self.idxs[item])
+            # self.dirty_dataidx.remove(self.idxs[item])
             if DirtyDataset.count < 2:
                 imshow(image, "pics_noise", f"{self.idxs[item]}_after.png")
                 DirtyDataset.count += 1

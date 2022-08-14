@@ -1,5 +1,6 @@
 from pathlib import Path
 import time
+from turtle import mode
 from algorithm.fedbase import BasicServer, BasicClient
 from main import logger
 import os
@@ -39,6 +40,8 @@ class MPBasicServer(BasicServer):
             with open(f'results/result/{self.result_file_name}', 'w') as f:
                 
                     json.dump(self.result, f)
+            path_save_model = './results/checkpoints/{}_100rounds.pt'.format(self.option['model'])
+            torch.save(self.model.state_dict(), path_save_model)
         print("=================End==================")
         logger.time_end('Total Time Cost')
         # save results as .json file
@@ -47,8 +50,8 @@ class MPBasicServer(BasicServer):
             os.system(f"mkdir -p {filepath}")
         logger.save(os.path.join(filepath, flw.output_filename(self.option, self)))
 
-        path_save_model = f'./results/checkpoints'
-        torch.save(self.model.state_dict(), path_save_model)
+        # path_save_model = f'./results/checkpoints'
+        # torch.save(self.model.state_dict(), path_save_model)
 
     def iterate(self, t, pool):
         """
@@ -77,19 +80,19 @@ class MPBasicServer(BasicServer):
                 list_uncertainty.append(packages_received_from_clients[i]["uncertainty"].item())
                 self.result.append(result_i)
         
-        if self.current_round == 20:
-            # beta[i] = ...
-            # based on list_uncertainty
-            self.beta[0] = 0.1
-            self.beta[1] = 0.1
-            self.beta[2] = 0.1
-            self.beta[3] = 0.1
-            self.beta[4] = 0.1
-            self.beta[5] = 0.1
-            self.beta[6] = 0.1
-            self.beta[7] = 0.1
-            self.beta[8] = 0.1
-            self.beta[9] = 0.1
+        # if self.current_round == 20:
+        #     # beta[i] = ...
+        #     # based on list_uncertainty
+        #     self.beta[0] = 0.1
+        #     self.beta[1] = 0.1
+        #     self.beta[2] = 0.1
+        #     self.beta[3] = 0.1
+        #     self.beta[4] = 0.1
+        #     self.beta[5] = 0.1
+        #     self.beta[6] = 0.1
+        #     self.beta[7] = 0.1
+        #     self.beta[8] = 0.1
+        #     self.beta[9] = 0.1
             
         # check whether all the clients have dropped out, because the dropped clients will be deleted from self.selected_clients
         if not self.selected_clients: return
@@ -192,7 +195,7 @@ class MPBasicClient(BasicClient):
         super().__init__(option, name, train_data, valid_data)
 
 
-    def train(self, model, device, beta=1, current_round=0):
+    def train(self, model, device, current_round=0):
         """
         Standard local training procedure. Train the transmitted model with local training dataset.
         :param
@@ -235,14 +238,14 @@ class MPBasicClient(BasicClient):
             model.train()
             # device = 'cuda' if torch.cuda.is_available() else 'cpu'
             # model = model.to(device)
-            if current_round >= 20:
-                # seed = self.name*100 + current_round
-                seed = self.name + current_round*10
-                print(f"name {self.name}, current_round {current_round}")
-                np.random.seed(seed)
-                self.train_data.beta = beta
-                self.train_data.beta_idxs = np.random.choice(self.train_data.idxs, int(beta*len(self.train_data.idxs)), replace=False).tolist()
-            print(len(self.train_data.beta_idxs))
+            # if current_round >= 20:
+            #     # seed = self.name*100 + current_round
+            #     seed = self.name + current_round*10
+            #     print(f"name {self.name}, current_round {current_round}")
+            #     np.random.seed(seed)
+            #     self.train_data.beta = beta
+            #     self.train_data.beta_idxs = np.random.choice(self.train_data.idxs, int(beta*len(self.train_data.idxs)), replace=False).tolist()
+            print(len(self.train_data.idxs))
             data_loader = self.calculator.get_data_loader(self.train_data, batch_size=self.batch_size)
             
             optimizer = self.calculator.get_optimizer(self.optimizer_name, model, lr = self.learning_rate, weight_decay=self.weight_decay, momentum=self.momentum)
@@ -263,12 +266,12 @@ class MPBasicClient(BasicClient):
                     total_loss += loss
                 uncertainty = uncertainty / len(data_loader.dataset)
                 total_loss /= len(self.train_data)
-                with open(f'./results/log_per_epoch/{self.file_log_per_epoch}', 'a') as f:
-                    writer = csv.writer(f)
-                    line = [iter, total_loss.item(), uncertainty]
-                    writer.writerow(line)
+                # with open(f'./results/log_per_epoch/{self.file_log_per_epoch}', 'a') as f:
+                #     writer = csv.writer(f)
+                #     line = [iter, total_loss.item(), uncertainty]
+                #     writer.writerow(line)
                     
-            return uncertainty, self.train_data.beta_idxs
+            return uncertainty, self.train_data.idxs
 
 
     def test(self, model, dataflag='valid', device='cpu'):
@@ -310,19 +313,30 @@ class MPBasicClient(BasicClient):
         :return:
             client_pkg: the package to be send to the server
         """
-        # model = self.unpack(svr_pkg)
-        # loss = self.train_loss(model, device)
-        # self.train(model, device)
-        # cpkg = self.pack(model, loss)
-        
-        model, beta, round = self.unpack(svr_pkg)
+        model, round = self.unpack(svr_pkg)
+        # loss = self.train_loss(model)
+        if round in [25, 50, 75, 100]:
+            self.calculate_unc_all_samples(model, round)
+            
         Acc_global, loss_global = self.test(model)
-        uncertainty, data_idxs = self.train(model, device, beta, round)
+        uncertainty, data_idxs = self.train(model, device, round)
         acc_local, loss_local = self.test(model)
         cpkg = self.pack(model, data_idxs, Acc_global, acc_local, uncertainty)
         
         return cpkg
 
+    def calculate_unc_all_samples(self, global_model, current_round):
+        uncertainty_dict = {}
+        for i in range(len(self.train_data)):
+            data, label = self.train_data[i]
+            uncertainty = self.calculator.get_uncertainty(global_model, data)
+            uncertainty_dict[self.train_data.idxs[i]] = uncertainty.item()
+
+        PATH = 'results/uncertainty_all_samples/{}/{}'.format(self.option['model'], current_round)
+        if not os.path.exists(PATH):
+            os.makedirs(PATH)
+        with open(PATH + f'/{self.name}.json', 'w') as f:
+            json.dump(uncertainty_dict, f)
 
     def train_loss(self, model, device):
         """
