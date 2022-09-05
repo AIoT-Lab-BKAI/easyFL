@@ -16,6 +16,7 @@ imbalance:
     niid:           7 Vol: for generating synthetic data
 """
 from builtins import breakpoint
+from dataclasses import replace
 from pathlib import Path
 import torch
 import ujson
@@ -620,6 +621,7 @@ class DirtyDataset(Dataset):
     def __init__(self, dataset, idxs, seed, dirty_rate=0.2, magnitude=1):
         self.dataset = dataset
         self.idxs = list(idxs)
+        self.origin_idxs = list(idxs)
         self.seed = seed
         dirty_quantity = int(dirty_rate * len(self.idxs))
         
@@ -627,9 +629,13 @@ class DirtyDataset(Dataset):
         self.dirty_dataidx = np.random.choice(self.idxs, dirty_quantity, replace=False).tolist()
         # if seed in [0, 1]:
         #     print(f'client {seed}, dirty {self.dirty_dataidx}')
-        with open(f'./results/dirty_dataidx/{seed}.json', 'w') as f:
+        with open(f'./results/dirty_dataidx_50/{seed}.json', 'w') as f:
             json.dump(self.dirty_dataidx, f)
-        # sample = dataset.data[0]
+        
+        # with open(f'predict_unclean_idx/{seed}.json', 'r') as f:
+        #     predict_unclean_idx = json.load(f)
+        # np.random.seed(self.seed)
+        # self.idxs = list(set(self.idxs) - set(np.random.choice(self.dirty_dataidx, int(0.2*len(self.dirty_dataidx)), replace=False).tolist()))
         self.rotater = T.RandomRotation(degrees=(90, 270))
         # self.resize_cropper = T.RandomResizedCrop(size=sample.shape)
         self.blurrer = T.GaussianBlur(kernel_size=(5, 9), sigma=(0.1, 2))
@@ -645,6 +651,12 @@ class DirtyDataset(Dataset):
             #     for row in reader:
                     # self.unintersection= row
 
+    def remove_noise(self, percent):
+        self.idxs = list(set(self.idxs) - set(np.random.choice(self.dirty_dataidx, int(percent*len(self.dirty_dataidx)), replace=False).tolist()))
+
+    def reverse_idx(self):
+        self.idxs = self.origin_idxs
+
     def __len__(self):
         return len(self.idxs)
 
@@ -653,19 +665,16 @@ class DirtyDataset(Dataset):
         image, label = self.dataset[self.idxs[item]]
         if self.idxs[item] in self.dirty_dataidx:
             if DirtyDataset.count < 2:
-                imshow(image, "pics_noise", f"{self.idxs[item]}_before.png")
+                imshow(image, "pics_noise_50", f"{self.idxs[item]}_before.png")
             # image = image + self.noise
             image = self.blurrer(self.addgaussiannoise(self.rotater(image)))
             image = (image - torch.min(image))/(torch.max(image) - torch.min(image))
             
             # self.dirty_dataidx.remove(self.idxs[item])
             if DirtyDataset.count < 2:
-                imshow(image, "pics_noise", f"{self.idxs[item]}_after.png")
+                imshow(image, "pics_noise_50", f"{self.idxs[item]}_after.png")
                 DirtyDataset.count += 1
-        # else:
-        #     if self.seed == 5:
-        #         if self.beta_idxs[item] in self.unintersection:
-        #             imshow(image, "pics_unintersection_low", f"{item}.png")
+        
         return image, label
 
 class AddGaussianNoise(object):
@@ -674,6 +683,7 @@ class AddGaussianNoise(object):
         self.mean = mean
         
     def __call__(self, tensor):
+        torch.manual_seed(1000)
         return tensor + torch.randn(tensor.size()) * self.std + self.mean
     
     def __repr__(self):

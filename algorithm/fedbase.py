@@ -55,6 +55,9 @@ class BasicServer():
         self.result = []
         # for idx in range(self.num_clients):
         #     self.result[idx] = {}
+        if self.option['percent_noise_remove'] !=0:
+            self.model.load_state_dict(torch.load('results/checkpoints/resnet18_check_uncertainty_converge_2.pt'))
+
 
     def run(self):
         """
@@ -221,7 +224,8 @@ class BasicServer():
         models = [cp["model"] for cp in packages_received_from_clients]
         # train_losses = [cp["train_loss"] for cp in packages_received_from_clients]
         # return models, train_losses
-        return models, packages_received_from_clients
+        # return models, packages_received_from_clients
+        return models
 
     def global_lr_scheduler(self, current_round):
         """
@@ -401,7 +405,7 @@ class BasicClient():
                     loss = self.calculator.get_loss_not_uncertainty(model, batch_data, device)
                     loss.backward()
                     optimizer.step()
-            return np.array(0), self.train_data.idxs
+            # return np.array(0), self.train_data.idxs
             # train function at clients
         else:
             model.train()
@@ -493,12 +497,16 @@ class BasicClient():
         """
         model, round = self.unpack(svr_pkg)
         # loss = self.train_loss(model)
-        Acc_global, loss_global = self.test(model)
-        uncertainty, data_idxs = self.train(model, round)
-        acc_local, loss_local = self.test(model)
-        cpkg = self.pack(model, data_idxs, Acc_global, acc_local, uncertainty)
-        if round == self.num_rounds:
-            self.calculate_unc_all_samples(model)
+        # Acc_global, loss_global = self.test(model)
+        # uncertainty, data_idxs = self.train(model, round)
+        # acc_local, loss_local = self.test(model)
+        # cpkg = self.pack(model, data_idxs, Acc_global, acc_local, uncertainty)
+        # if round == self.num_rounds:
+            # self.calculate_unc_all_samples(model)
+        if round in [25, 50, 75, 100]:
+            self.calculate_unc_all_samples(model, round)
+        self.train(model, round)
+        cpkg = self.pack(model)
         return cpkg
 
     def calculate_unc_all_samples(self, global_model):
@@ -514,7 +522,7 @@ class BasicClient():
             json.dump(uncertainty_dict, f)
         
 
-    def pack(self, model, data_idxs, Acc_global, acc_local, uncertainty):
+    def pack(self, model):
         """
         Packing the package to be send to the server. The operations of compression
         of encryption of the package should be done here.
@@ -526,10 +534,10 @@ class BasicClient():
         """
         return {
             "model" : model,
-            "data_idxs": data_idxs,
-            "Acc_global": Acc_global,
-            "acc_local": acc_local,
-            "uncertainty": uncertainty
+            # "data_idxs": data_idxs,
+            # "Acc_global": Acc_global,
+            # "acc_local": acc_local,
+            # "uncertainty": uncertainty
         }
 
     def is_active(self):

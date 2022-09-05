@@ -1,3 +1,4 @@
+from optparse import Option
 from pathlib import Path
 import time
 from turtle import mode
@@ -18,7 +19,33 @@ class MPBasicServer(BasicServer):
         self.num_threads = option['num_threads_per_gpu'] * self.gpus
         self.server_gpu_id = option['server_gpu_id']
         self.log_folder = option['log_folder']
-
+    
+    def check_converge(self, round):
+        number_predict_noise = 0
+        previous_number_predict_noise = 0
+        PATH = 'results/uncertainty_all_samples/{}/{}/{}'.format(self.option['model'],self.option['file_save_model'], round)
+        for i in range(0, 10):
+            with open(PATH + f'/{i}.json', 'r') as f:
+                list_uncertainty = json.load(f)
+            for key in list_uncertainty.keys():
+                if list_uncertainty[key] == 1:
+                    number_predict_noise += 1
+        
+        Pre_PATH = 'results/uncertainty_all_samples/{}/{}/{}'.format(self.option['model'],self.option['file_save_model'], round-1)
+        for i in range(0, 10):
+            with open(Pre_PATH + f'/{i}.json', 'r') as f:
+                list_uncertainty = json.load(f)
+            for key in list_uncertainty.keys():
+                if list_uncertainty[key] == 1:
+                    previous_number_predict_noise += 1
+        
+        if number_predict_noise < 26000 and number_predict_noise > 25000 and abs(number_predict_noise - previous_number_predict_noise) < 200:
+            print(number_predict_noise)
+            print(previous_number_predict_noise)
+            return True
+        else:
+            return False
+    
     def run(self):
         """
         Start the federated learning symtem where the global model is trained iteratively.
@@ -37,11 +64,15 @@ class MPBasicServer(BasicServer):
 
             logger.time_end('Time Cost')
             if logger.check_if_log(round, self.eval_interval): logger.log(self)
-            with open(f'results/result/{self.result_file_name}', 'w') as f:
+            # with open(f'results/result/{self.result_file_name}', 'w') as f:
                 
-                    json.dump(self.result, f)
-            path_save_model = './results/checkpoints/{}_100rounds.pt'.format(self.option['model'])
+            #         json.dump(self.result, f)
+            path_save_model = './results/checkpoints/{}_{}.pt'.format(self.option['model'], self.option['file_save_model'])
             torch.save(self.model.state_dict(), path_save_model)
+            if self.option['percent_noise_remove'] == 0:
+                if round >= 25:
+                    if (self.check_converge(round) == True):
+                        break
         print("=================End==================")
         logger.time_end('Total Time Cost')
         # save results as .json file
@@ -64,21 +95,22 @@ class MPBasicServer(BasicServer):
         self.selected_clients = self.sample()
         # training
         # models, train_losses = self.communicate(self.selected_clients, pool)
-        models, packages_received_from_clients = self.communicate(self.selected_clients, pool)
+        # models, packages_received_from_clients = self.communicate(self.selected_clients, pool)
+        models = self.communicate(self.selected_clients, pool)
         
-        list_uncertainty = []
-        for i in range(len(self.selected_clients)):
-                result_i = {
-                     "round": int(self.current_round),
-                     "client": int(self.selected_clients[i]),
-                     "len_train_data": len(packages_received_from_clients[i]["data_idxs"]),
-                     "data_idxs": packages_received_from_clients[i]["data_idxs"], #if self.current_round == 0 else packages_received_from_clients[i]["data_idxs"].tolist() ,
-                     "Acc_global": float(packages_received_from_clients[i]["Acc_global"]),
-                     "acc_local": float(packages_received_from_clients[i]["acc_local"]),
-                     "uncertainty": float(packages_received_from_clients[i]["uncertainty"].item())
-                     }
-                list_uncertainty.append(packages_received_from_clients[i]["uncertainty"].item())
-                self.result.append(result_i)
+        # list_uncertainty = []
+        # for i in range(len(self.selected_clients)):
+        #         result_i = {
+        #              "round": int(self.current_round),
+        #              "client": int(self.selected_clients[i]),
+        #              "len_train_data": len(packages_received_from_clients[i]["data_idxs"]),
+        #              "data_idxs": packages_received_from_clients[i]["data_idxs"], #if self.current_round == 0 else packages_received_from_clients[i]["data_idxs"].tolist() ,
+        #              "Acc_global": float(packages_received_from_clients[i]["Acc_global"]),
+        #              "acc_local": float(packages_received_from_clients[i]["acc_local"]),
+        #              "uncertainty": float(packages_received_from_clients[i]["uncertainty"].item())
+        #              }
+        #         list_uncertainty.append(packages_received_from_clients[i]["uncertainty"].item())
+        #         self.result.append(result_i)
         
         # if self.current_round == 20:
         #     # beta[i] = ...
@@ -219,7 +251,7 @@ class MPBasicClient(BasicClient):
             model.train()
             # device = 'cuda' if torch.cuda.is_available() else 'cpu'
             # model = model.to(device)
-            print(len(self.train_data))
+            print(len(self.train_data.idxs))
             data_loader = self.calculator.get_data_loader(self.train_data, batch_size=self.batch_size)
             optimizer = self.calculator.get_optimizer(self.optimizer_name, model, lr = self.learning_rate, weight_decay=self.weight_decay, momentum=self.momentum)
             if current_round == 0:
@@ -232,10 +264,12 @@ class MPBasicClient(BasicClient):
                     loss = self.calculator.get_loss_not_uncertainty(model, batch_data, device)
                     loss.backward()
                     optimizer.step()
-            return np.array(0), self.train_data.idxs
+            # return np.array(0), self.train_data.idxs
             # train function at clients
         else:
             model.train()
+            if self.option['percent_noise_remove'] != 0:
+                self.train_data.remove_noise(percent=self.option['percent_noise_remove'])
             # device = 'cuda' if torch.cuda.is_available() else 'cpu'
             # model = model.to(device)
             # if current_round >= 20:
@@ -271,7 +305,9 @@ class MPBasicClient(BasicClient):
                 #     line = [iter, total_loss.item(), uncertainty]
                 #     writer.writerow(line)
                     
-            return uncertainty, self.train_data.idxs
+            # return uncertainty, self.train_data.idxs
+            if self.option['percent_noise_remove'] != 0:
+                self.train_data.reverse_idx()
 
 
     def test(self, model, dataflag='valid', device='cpu'):
@@ -315,13 +351,19 @@ class MPBasicClient(BasicClient):
         """
         model, round = self.unpack(svr_pkg)
         # loss = self.train_loss(model)
-        if round in [25, 50, 75, 100]:
-            self.calculate_unc_all_samples(model, round)
-            
-        Acc_global, loss_global = self.test(model)
-        uncertainty, data_idxs = self.train(model, device, round)
-        acc_local, loss_local = self.test(model)
-        cpkg = self.pack(model, data_idxs, Acc_global, acc_local, uncertainty)
+        # if round in [25, 50, 75, 100]:
+        #     self.calculate_unc_all_samples(model, round)
+        if self.option['percent_noise_remove'] == 0:
+            if round >= 24:
+                self.calculate_unc_all_samples(model, round)    
+
+        # Acc_global, loss_global = self.test(model)
+        # uncertainty, data_idxs = self.train(model, device, round)
+        # acc_local, loss_local = self.test(model)
+        # cpkg = self.pack(model, data_idxs, Acc_global, acc_local, uncertainty)
+
+        self.train(model, device, round)
+        cpkg = self.pack(model)
         
         return cpkg
 
@@ -332,7 +374,7 @@ class MPBasicClient(BasicClient):
             uncertainty = self.calculator.get_uncertainty(global_model, data)
             uncertainty_dict[self.train_data.idxs[i]] = uncertainty.item()
 
-        PATH = 'results/uncertainty_all_samples/{}/{}'.format(self.option['model'], current_round)
+        PATH = 'results/uncertainty_all_samples/{}/{}/{}'.format(self.option['model'],self.option['file_save_model'], current_round)
         if not os.path.exists(PATH):
             os.makedirs(PATH)
         with open(PATH + f'/{self.name}.json', 'w') as f:

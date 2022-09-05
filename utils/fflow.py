@@ -81,6 +81,9 @@ def read_option():
     parser.add_argument('--result_file_name', help="file name of result.txt", type=str, required=False)
     parser.add_argument('--uncertainty', help="whether to use uncertainty", type=int, default=1)
     parser.add_argument('--file_log_per_epoch', help="file to log result per epoch", type=str, required=True)
+    parser.add_argument('--file_save_model', help="file to save model.pt", type=str, required=True)
+    parser.add_argument('--percent_noise_remove', help='percent_noise_remove', type=float)
+
     
     
     try: option = vars(parser.parse_args())
@@ -133,7 +136,7 @@ def initialize(option):
 def output_filename(option, server):
     header = "{}_".format(option["algorithm"])
     for para in server.paras_name: header = header + para + "{}_".format(option[para])
-    output_name = header + "D{}_NM{}_M{}_R{}_B{}_E{}_LR{:.4f}_P{:.2f}_S{}_LD{:.3f}_WD{:.3f}_DR{:.2f}_AC{:.2f}.json".format(
+    output_name = header + "D{}_NM{}_M{}_R{}_B{}_E{}_LR{:.4f}_P{:.2f}_S{}_LD{:.3f}_WD{:.3f}_DR{:.2f}_AC{:.2f}_RF{}.json".format(
         option['dirty_rate'],
         option['noise_magnitude'],
         option['model'],
@@ -146,7 +149,8 @@ def output_filename(option, server):
         option['lr_scheduler']+option['learning_rate_decay'],
         option['weight_decay'],
         option['net_drop'],
-        option['net_active'])
+        option['net_active'],
+        option['result_file_name'])
     return output_name
 
 class Logger:
