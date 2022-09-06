@@ -13,8 +13,12 @@ def unfreeze_model(model):
         param.requires_grad = True
 
 def separate_module(model):
-    feature_generator = None
-    classifier = None
+    layers = [module for module in model.modules() if not isinstance(module, torch.nn.Sequential)]
+    layers = layers[1:]
+
+    feature_generator = torch.nn.Sequential(layers[:-1])
+    classifier = torch.nn.Sequential(layers[-1])
+
     return feature_generator, classifier
 
 class Server(BasicServer):
