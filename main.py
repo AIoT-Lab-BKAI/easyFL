@@ -22,13 +22,12 @@ class MyLogger(flw.Logger):
                 "test_losses":[],
                 "valid_accs":[],
                 "client_accs":{},
-                "mean_valid_accs":[],
-                "inference_time": []
+                "mean_valid_accs":[]
             }
         if "mp_" in server.name:
-            test_metric, test_loss, inference_time = server.test(device=torch.device('cuda'))
+            test_metric, test_loss, _ = server.test(device=torch.device('cuda'))
         else:
-            test_metric, test_loss, inference_time = server.test(device="cuda")
+            test_metric, test_loss, _ = server.test(device="cuda")
         
         valid_metrics, valid_losses = server.test_on_clients(self.current_round, 'valid', 'cuda')
         # train_metrics, train_losses = server.test_on_clients(self.current_round, 'train', 'cuda')
@@ -41,7 +40,6 @@ class MyLogger(flw.Logger):
         self.output['mean_valid_accs'].append(1.0*sum([ck * acc for ck, acc in zip(server.client_vols, valid_metrics)])/server.data_vol)
         self.output['mean_curve'].append(np.mean(valid_metrics))
         self.output['var_curve'].append(np.std(valid_metrics))
-        self.output['inference_time'].append(inference_time)
         
         for cid in range(server.num_clients):
             self.output['client_accs'][server.clients[cid].name]=[self.output['valid_accs'][i][cid] for i in range(len(self.output['valid_accs']))]
@@ -52,7 +50,6 @@ class MyLogger(flw.Logger):
         print(self.temp.format("Validating Accuracy:", self.output['mean_valid_accs'][-1]))
         print(self.temp.format("Mean of Client Accuracy:", self.output['mean_curve'][-1]))
         print(self.temp.format("Std of Client Accuracy:", self.output['var_curve'][-1]))
-        print(self.temp.format("Mean of Inference Time:", self.output['inference_time'][-1]))
         
         self.max_acc = max(self.max_acc, test_metric)
 
@@ -66,7 +63,6 @@ class MyLogger(flw.Logger):
                     "Validating Accuracy":  self.output['mean_valid_accs'][-1],
                     "Mean Client Accuracy": self.output['mean_curve'][-1],
                     "Std Client Accuracy":  self.output['var_curve'][-1],
-                    "Inference Time":       self.output['inference_time'][-1],
                     "Max Testing Accuracy": self.max_acc
                 }
             )
@@ -92,7 +88,7 @@ def main():
     
     if option['wandb']:
         wandb.init(
-            project="easyFL", 
+            project="sparseFL", 
             entity="aiotlab",
             group=option['task'],
             name=runname[:-1],

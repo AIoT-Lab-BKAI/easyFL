@@ -412,13 +412,11 @@ class ClassifyCalculator(BasicTaskCalculator):
         """Metric = Accuracy"""
         tdata = self.data_to_device(data, device)
         model = model.to(device)
-        start = time.time()
         outputs = model(tdata[0])
-        end = time.time()
         loss = self.lossfunc(outputs, tdata[-1])
         y_pred = outputs.data.max(1, keepdim=True)[1]
         correct = y_pred.eq(tdata[1].data.view_as(y_pred)).long().cpu().sum()
-        return (1.0 * correct / len(tdata[1])).item(), loss.item(), (end - start)
+        return (1.0 * correct / len(tdata[1])).item(), loss.item()
 
     def data_to_device(self, data, device=None):
         if device is None:

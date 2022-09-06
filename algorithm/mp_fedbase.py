@@ -114,19 +114,16 @@ class MPBasicServer(BasicServer):
             model.eval()
             loss = 0
             eval_metric = 0
-            inference_metric = 0
             data_loader = self.calculator.get_data_loader(self.test_data, batch_size=64)
             for batch_id, batch_data in enumerate(data_loader):
-                bmean_eval_metric, bmean_loss, inference_time = self.calculator.test(model, batch_data, device)
+                bmean_eval_metric, bmean_loss = self.calculator.test(model, batch_data, device)
                 loss += bmean_loss * len(batch_data[1])
                 eval_metric += bmean_eval_metric * len(batch_data[1])
-                inference_metric += inference_time
             eval_metric /= len(self.test_data)
             loss /= len(self.test_data)
-            inference_metric /= len(self.test_data)
-            return eval_metric, loss, inference_metric
+            return eval_metric, loss
         else: 
-            return -1, -1, -1
+            return -1, -1
 
     def test_on_clients(self, round, dataflag='valid', device='cuda'):
         """
