@@ -17,7 +17,7 @@ def separate_module(model):
     layers = layers[1:]
 
     feature_generator = torch.nn.Sequential(layers[:-1])
-    classifier = torch.nn.Sequential(layers[-1])
+    classifier = layers[-1]
 
     return feature_generator, classifier
 
@@ -86,8 +86,8 @@ class Client(BasicClient):
 
                 tdata = self.data_to_device(batch_data, device)
                 feature = Fgenerator(tdata[0])
-                outputs = Classifier(feature)
-                adv_outputs = Adv_Classifier(feature)
+                outputs = Classifier(feature.flatten(1))
+                adv_outputs = Adv_Classifier(feature.flatten(1))
 
                 loss = self.lossfunc(outputs, tdata[1])
                 adv_loss = self.lossfunc(adv_outputs, tdata[1])
@@ -118,8 +118,8 @@ class Client(BasicClient):
 
                 tdata = self.data_to_device(batch_data, device)
                 feature = Fgenerator(tdata[0])
-                outputs = Classifier(feature)
-                adv_outputs = Adv_Classifier(feature)
+                outputs = Classifier(feature.flatten(1))
+                adv_outputs = Adv_Classifier(feature.flatten(1))
 
                 loss = self.lossfunc(outputs, tdata[1])
                 adv_loss = self.lossfunc(adv_outputs, tdata[1])
