@@ -1,8 +1,35 @@
-from msilib.schema import Class
 from .fedbase import BasicServer, BasicClient
 import torch, copy
 from itertools import chain
+from torch import nn
+import torch.nn.functional as F
+from utils.fmodule import FModule
+from benchmark.toolkits import ClassifyCalculator
 
+class Feature_generator(FModule):
+    def __init__(self):
+        super().__init__()
+        self.conv1 = nn.Conv2d(in_channels=1, out_channels=32, kernel_size=5, padding=2)
+        self.conv2 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=5, padding=2)
+        self.fc1 = nn.Linear(3136, 512)
+
+    def forward(self, x):
+        x = x.view((x.shape[0],28,28))
+        x = x.unsqueeze(1)
+        x = F.max_pool2d(F.relu(self.conv1(x)), 2)
+        x = F.max_pool2d(F.relu(self.conv2(x)), 2)
+        x = x.view(-1, x.shape[1]*x.shape[2]*x.shape[3])
+        x = F.relu(self.fc1(x))
+        return x
+
+class Classifier(FModule):
+    def __init__(self):
+        super().__init__()
+        self.fc2 = nn.Linear(512, 10)
+    
+    def forward(self, x):
+        x = self.fc2(x)
+        return x
 
 def freeze_model(model):
     for param in model.parameters():
@@ -12,26 +39,30 @@ def unfreeze_model(model):
     for param in model.parameters():
         param.requires_grad = True
 
-def separate_module(model):
-    layers = [module for module in model.modules() if not isinstance(module, torch.nn.Sequential)]
-    layers = layers[1:]
+class MyCalculator(ClassifyCalculator):
+    @torch.no_grad()
+    def test(self, feature_generator, classifier, data, device=None):
+        """Metric = Accuracy"""
+        tdata = self.data_to_device(data, device)
+        feature_generator = feature_generator.to(device)
+        classifier = classifier.to(device)
 
-    feature_generator = torch.nn.Sequential(layers[:-1])
-    classifier = layers[-1]
+        feature = feature_generator(tdata[0])
+        outputs = classifier(feature)
+        loss = self.lossfunc(outputs, tdata[-1])
 
-    return feature_generator, classifier
+        y_pred = outputs.data.max(1, keepdim=True)[1]
+        correct = y_pred.eq(tdata[1].data.view_as(y_pred)).long().cpu().sum()
+        return (1.0 * correct / len(tdata[1])).item(), loss.item()
+
 
 class Server(BasicServer):
     def __init__(self, option, model, clients, test_data = None):
         super(Server, self).__init__(option, model, clients, test_data)
-        self.feature_generator, self.classifier = separate_module(model)
+        self.feature_generator = Feature_generator()
+        self.classifier = Classifier()
+        self.calculator = MyCalculator(device='cuda')
         return
-
-    def communicate_with(self, client_id):
-        svr_pkg = self.pack(client_id)
-        if self.clients[client_id].is_drop(): 
-            return None
-        return self.clients[client_id].reply(svr_pkg)
 
     def pack(self, client_id):
         return {
@@ -56,16 +87,38 @@ class Server(BasicServer):
         self.classifier = self.aggregate(Classifiers, p = impact_factors)
         return
 
+    def test(self, model=None, device='cpu'):
+        if self.test_data:
+            self.feature_generator.eval()
+            self.classifier.eval()
+            loss = 0
+            eval_metric = 0
+            data_loader = self.calculator.get_data_loader(self.test_data, batch_size=64)
+            for batch_id, batch_data in enumerate(data_loader):
+                bmean_eval_metric, bmean_loss = self.calculator.test(self.feature_generator, self.classifier, batch_data, device)                
+                loss += bmean_loss * len(batch_data[1])
+                eval_metric += bmean_eval_metric * len(batch_data[1])
+            eval_metric /= len(self.test_data)
+            loss /= len(self.test_data)
+            return eval_metric, loss
+        else: 
+            return -1,-1
+    
+    def test_on_clients(self, round, dataflag='valid', device='cpu'):
+        evals, losses = [], []
+        for c in self.clients:
+            eval_value, loss = c.test(self.feature_generator, self.classifier, dataflag, device)
+            evals.append(eval_value)
+            losses.append(loss)
+        return evals, losses
 
 class Client(BasicClient):
     def __init__(self, option, name='', train_data=None, valid_data=None):
         super(Client, self).__init__(option, name, train_data, valid_data)
-        self.lossfunc = torch.nn.CrossEntropyLoss()
-        self.divergence = torch.nn.KLDivLoss()
         self.epochs = int(self.epochs/2)
-
-    def data_to_device(self, data, device=None):
-        return data[0].to(device), data[1].to(device)
+        self.divergence = nn.KLDivLoss()
+        self.lossfunc = nn.CrossEntropyLoss()
+        self.calculator = MyCalculator('cuda')
 
     def phase_one_training(self, Fgenerator, Classifier, Adv_Classifier, device):
         freeze_model(Fgenerator)
@@ -77,17 +130,17 @@ class Client(BasicClient):
         Fgenerator.train(False)
         
         data_loader = self.calculator.get_data_loader(self.train_data, batch_size=self.batch_size)
-        optimizer = torch.optim.Adam([Classifier.parameters(), Adv_Classifier.parameters()], lr=self.learning_rate, weight_decay=self.weight_decay, amsgrad=True)
+        optimizer = torch.optim.Adam(chain(Classifier.parameters(), Adv_Classifier.parameters()), lr=self.learning_rate, weight_decay=self.weight_decay, amsgrad=True)
 
         for iter in range(self.epochs):
             for batch_id, batch_data in enumerate(data_loader):
                 Fgenerator.zero_grad()
                 Classifier.zero_grad()
 
-                tdata = self.data_to_device(batch_data, device)
+                tdata = self.calculator.data_to_device(batch_data, device)
                 feature = Fgenerator(tdata[0])
-                outputs = Classifier(feature.flatten(1))
-                adv_outputs = Adv_Classifier(feature.flatten(1))
+                outputs = Classifier(feature)
+                adv_outputs = Adv_Classifier(feature)
 
                 loss = self.lossfunc(outputs, tdata[1])
                 adv_loss = self.lossfunc(adv_outputs, tdata[1])
@@ -116,10 +169,10 @@ class Client(BasicClient):
                 Fgenerator.zero_grad()
                 Classifier.zero_grad()
 
-                tdata = self.data_to_device(batch_data, device)
+                tdata = self.calculator.data_to_device(batch_data, device)
                 feature = Fgenerator(tdata[0])
-                outputs = Classifier(feature.flatten(1))
-                adv_outputs = Adv_Classifier(feature.flatten(1))
+                outputs = Classifier(feature)
+                adv_outputs = Adv_Classifier(feature)
 
                 loss = self.lossfunc(outputs, tdata[1])
                 adv_loss = self.lossfunc(adv_outputs, tdata[1])
@@ -154,3 +207,18 @@ class Client(BasicClient):
             "Fgenerator" : Fgenerator,
             "Classifier" : Classifier,
         }
+
+    def test(self, feature_generator, classifier, dataflag='valid', device='cpu'):
+        dataset = self.train_data
+        feature_generator.eval()
+        classifier.eval()
+        loss = 0
+        eval_metric = 0
+        data_loader = self.calculator.get_data_loader(dataset, batch_size=4)
+        for batch_id, batch_data in enumerate(data_loader):
+            bmean_eval_metric, bmean_loss = self.calculator.test(feature_generator, classifier, batch_data, device)
+            loss += bmean_loss * len(batch_data[1])
+            eval_metric += bmean_eval_metric * len(batch_data[1])
+        eval_metric =1.0 * eval_metric / len(dataset)
+        loss = 1.0 * loss / len(dataset)
+        return eval_metric, loss
