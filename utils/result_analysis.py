@@ -65,7 +65,8 @@ def draw_curve(dicts, curve='train_losses', legends = [], final_round = -1):
                  linestyle=linestyle_tuple[i%len(linestyle_tuple)], 
                  color=color_list[i%(len(color_list))])
         if final_round>0: plt.xlim((0, final_round))
-    plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.2), ncol=1)
+    # plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.2), ncol=1)
+    plt.legend(loc='best', ncol=1)
     return
 
 def filename_filter(fnames=[], filter={}):
@@ -194,30 +195,21 @@ def main_func(task, headers, flt):
 if __name__ == '__main__':
     # task+record
     headers = [
-        # 'mp_fedkdr',
-        'fedtest',
-        # 'mp_fedtestv2',
-        # 'mp_fedtestv3',
-        # 'mp_fedtestv4',
-        # 'mp_fedtestv5',
-        # 'mp_fedtestv6',
-        # 'mp_fedtestULT',
-        # 'mp_fedsdivv5',
-        # 'mp_fedprox',
-        # 'scaffold',
-        # 'mp_fedavg',
-        # 'mp_fedkdrv2'
+        'scaffold',
+        'fedavg', 
+        'feddyn',
+        'fedfsl-mi-adv'
     ]
     flt = {
         # 'E': '8',
         # 'B': '8',
         # 'LR': '0.01',
-        'R': '100',
-        # 'P': '0.01',
+        'R': '500',
+        'P': '1',
         # 'S': '0',
     }
     for s in [1]:
-        task = f'mnist_clustered_N10_K10_invest/mnist/client_cluster/MNIST-client-cluster-quantitative'
+        task = f'mnist_sparse_N10_K10/mnist/sparse/10client/mnist_sparse'
         try:
             main_func(task, headers, flt)
         except ValueError:

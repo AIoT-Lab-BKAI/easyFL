@@ -28,7 +28,7 @@ class Classifier(FModule):
         self.fc2 = nn.Linear(512, 10)
     
     def forward(self, x):
-        x = self.fc2(x)
+        x = F.softmax(self.fc2(x), dim=0)
         return x
 
 def freeze_model(model):
@@ -66,25 +66,25 @@ class Server(BasicServer):
 
     def pack(self, client_id):
         return {
-            "Fgenerator" : copy.deepcopy(self.feature_generator),
-            "Classifier" : copy.deepcopy(self.classifier)
+            "fgenerator" : copy.deepcopy(self.feature_generator),
+            "classifier" : copy.deepcopy(self.classifier)
         }
 
     def unpack(self, packages_received_from_clients):
-        Fgenerators = [cp["Fgenerator"] for cp in packages_received_from_clients]
-        Classifiers = [cp["Classifier"] for cp in packages_received_from_clients]
-        return Fgenerators, Classifiers
+        fgenerators = [cp["fgenerator"] for cp in packages_received_from_clients]
+        classifiers = [cp["classifier"] for cp in packages_received_from_clients]
+        return fgenerators, classifiers
 
     def iterate(self, t):
         self.selected_clients = self.sample()
-        Fgenerators, Classifiers = self.communicate(self.selected_clients)
+        fgenerators, classifiers = self.communicate(self.selected_clients)
 
         if not self.selected_clients: 
             return
 
         impact_factors = [1.0 * self.client_vols[cid]/self.data_vol for cid in self.selected_clients]
-        self.feature_generator = self.aggregate(Fgenerators, p = impact_factors)
-        self.classifier = self.aggregate(Classifiers, p = impact_factors)
+        self.feature_generator = self.aggregate(fgenerators, p = impact_factors)
+        self.classifier = self.aggregate(classifiers, p = impact_factors)
         return
 
     def test(self, model=None, device='cpu'):
@@ -120,92 +120,84 @@ class Client(BasicClient):
         self.lossfunc = nn.CrossEntropyLoss()
         self.calculator = MyCalculator('cuda')
 
-    def phase_one_training(self, Fgenerator, Classifier, Adv_Classifier, device):
-        freeze_model(Fgenerator)
-        unfreeze_model(Classifier)
-        unfreeze_model(Adv_Classifier)
-
-        Classifier.train(True)
-        Adv_Classifier.train(True)
-        Fgenerator.train(False)
+    def phase_one_training(self, fgenerator, classifier, Adv_classifier, device):
+        freeze_model(fgenerator)
+        unfreeze_model(classifier)
+        unfreeze_model(Adv_classifier)
         
         data_loader = self.calculator.get_data_loader(self.train_data, batch_size=self.batch_size)
-        optimizer = torch.optim.Adam(chain(Classifier.parameters(), Adv_Classifier.parameters()), lr=self.learning_rate, weight_decay=self.weight_decay, amsgrad=True)
+        optimizer = torch.optim.Adam(chain(classifier.parameters(), Adv_classifier.parameters()), lr=self.learning_rate, weight_decay=self.weight_decay, amsgrad=True)
 
         for iter in range(self.epochs):
             for batch_id, batch_data in enumerate(data_loader):
-                Fgenerator.zero_grad()
-                Classifier.zero_grad()
+                fgenerator.zero_grad()
+                classifier.zero_grad()
 
                 tdata = self.calculator.data_to_device(batch_data, device)
-                feature = Fgenerator(tdata[0])
-                outputs = Classifier(feature)
-                adv_outputs = Adv_Classifier(feature)
+                feature = fgenerator(tdata[0])
+                outputs = classifier(feature)
+                adv_outputs = Adv_classifier(feature)
 
                 loss = self.lossfunc(outputs, tdata[1])
                 adv_loss = self.lossfunc(adv_outputs, tdata[1])
                 adv_divergence = self.divergence(outputs, adv_outputs)
-
+                
                 total_loss = loss + adv_loss - 0.1 * adv_divergence
-
+                
                 total_loss.backward()
                 optimizer.step()
         return
 
-    def phase_two_training(self, Fgenerator, Classifier, Adv_Classifier, device):
-        unfreeze_model(Fgenerator)
-        freeze_model(Classifier)
-        freeze_model(Adv_Classifier)
-
-        Classifier.train(False)
-        Adv_Classifier.train(False)
-        Fgenerator.train(True)
+    def phase_two_training(self, fgenerator, classifier, Adv_classifier, device):
+        unfreeze_model(fgenerator)
+        freeze_model(classifier)
+        freeze_model(Adv_classifier)
         
         data_loader = self.calculator.get_data_loader(self.train_data, batch_size=self.batch_size)
-        optimizer = torch.optim.Adam(Fgenerator.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay, amsgrad=True)
+        optimizer = torch.optim.Adam(fgenerator.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay, amsgrad=True)
 
         for iter in range(self.epochs):
             for batch_id, batch_data in enumerate(data_loader):
-                Fgenerator.zero_grad()
-                Classifier.zero_grad()
+                fgenerator.zero_grad()
+                classifier.zero_grad()
 
                 tdata = self.calculator.data_to_device(batch_data, device)
-                feature = Fgenerator(tdata[0])
-                outputs = Classifier(feature)
-                adv_outputs = Adv_Classifier(feature)
+                feature = fgenerator(tdata[0])
+                outputs = classifier(feature)
+                adv_outputs = Adv_classifier(feature)
 
                 loss = self.lossfunc(outputs, tdata[1])
                 adv_loss = self.lossfunc(adv_outputs, tdata[1])
                 adv_divergence = self.divergence(outputs, adv_outputs)
 
                 total_loss = loss + adv_loss + 0.1 * adv_divergence
-
                 total_loss.backward()
                 optimizer.step()
         return
 
     def unpack(self, received_pkg):
-        return received_pkg['Fgenerator'], received_pkg['Classifier']
+        return received_pkg['fgenerator'], received_pkg['classifier']
 
     def reply(self, svr_pkg):
-        Fgenerator, Classifier = self.unpack(svr_pkg)
-        Adv_Classifier = copy.deepcopy(Classifier)
+        fgenerator, classifier = self.unpack(svr_pkg)
+        # Adv_classifier = copy.deepcopy(classifier)
+        Adv_classifier = Classifier()
 
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        Fgenerator = Fgenerator.to(device)
-        Classifier = Classifier.to(device)
-        Adv_Classifier = Adv_Classifier.to(device)
+        fgenerator = fgenerator.to(device)
+        classifier = classifier.to(device)
+        Adv_classifier = Adv_classifier.to(device)
 
-        self.phase_one_training(Fgenerator, Classifier, Adv_Classifier, device)
-        self.phase_two_training(Fgenerator, Classifier, Adv_Classifier, device)
+        self.phase_one_training(fgenerator, classifier, Adv_classifier, device)
+        self.phase_two_training(fgenerator, classifier, Adv_classifier, device)
 
-        cpkg = self.pack(Fgenerator, Classifier)
+        cpkg = self.pack(fgenerator, classifier)
         return cpkg
 
-    def pack(self, Fgenerator, Classifier):
+    def pack(self, fgenerator, classifier):
         return {
-            "Fgenerator" : Fgenerator,
-            "Classifier" : Classifier,
+            "fgenerator" : fgenerator,
+            "classifier" : classifier,
         }
 
     def test(self, feature_generator, classifier, dataflag='valid', device='cpu'):
