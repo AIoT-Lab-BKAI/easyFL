@@ -1,4 +1,4 @@
-from .fedbase import BasicServer, BasicClient
+from .mp_fedbase import MPBasicServer, MPBasicClient
 import torch, copy
 from itertools import chain
 from torch import nn
@@ -56,7 +56,7 @@ class MyCalculator(ClassifyCalculator):
         return (1.0 * correct / len(tdata[1])).item(), loss.item()
 
 
-class Server(BasicServer):
+class Server(MPBasicServer):
     def __init__(self, option, model, clients, test_data = None):
         super(Server, self).__init__(option, model, clients, test_data)
         self.feature_generator = Feature_generator()
@@ -75,9 +75,9 @@ class Server(BasicServer):
         classifiers = [cp["classifier"] for cp in packages_received_from_clients]
         return fgenerators, classifiers
 
-    def iterate(self, t):
+    def iterate(self, t, pool):
         self.selected_clients = self.sample()
-        fgenerators, classifiers = self.communicate(self.selected_clients)
+        fgenerators, classifiers = self.communicate(self.selected_clients, pool)
 
         if not self.selected_clients: 
             return
@@ -87,7 +87,7 @@ class Server(BasicServer):
         self.classifier = self.aggregate(classifiers, p = impact_factors)
         return
 
-    def test(self, model=None, device='cpu'):
+    def test(self, model=None, device='cuda'):
         if self.test_data:
             self.feature_generator.eval()
             self.classifier.eval()
@@ -104,7 +104,7 @@ class Server(BasicServer):
         else: 
             return -1,-1
     
-    def test_on_clients(self, round, dataflag='valid', device='cpu'):
+    def test_on_clients(self, round, dataflag='valid', device='cuda'):
         evals, losses = [], []
         for c in self.clients:
             eval_value, loss = c.test(self.feature_generator, self.classifier, dataflag, device)
@@ -112,7 +112,8 @@ class Server(BasicServer):
             losses.append(loss)
         return evals, losses
 
-class Client(BasicClient):
+
+class Client(MPBasicClient):
     def __init__(self, option, name='', train_data=None, valid_data=None):
         super(Client, self).__init__(option, name, train_data, valid_data)
         self.epochs = int(self.epochs/2)
@@ -178,12 +179,11 @@ class Client(BasicClient):
     def unpack(self, received_pkg):
         return received_pkg['fgenerator'], received_pkg['classifier']
 
-    def reply(self, svr_pkg):
+    def reply(self, svr_pkg, device):
         fgenerator, classifier = self.unpack(svr_pkg)
         Adv_classifier = copy.deepcopy(classifier)
         # Adv_classifier = Classifier()
 
-        device = 'cuda' if torch.cuda.is_available() else 'cpu'
         fgenerator = fgenerator.to(device)
         classifier = classifier.to(device)
         Adv_classifier = Adv_classifier.to(device)
@@ -200,7 +200,7 @@ class Client(BasicClient):
             "classifier" : classifier,
         }
 
-    def test(self, feature_generator, classifier, dataflag='valid', device='cpu'):
+    def test(self, feature_generator, classifier, dataflag='valid', device='cuda'):
         dataset = self.train_data
         feature_generator.eval()
         classifier.eval()

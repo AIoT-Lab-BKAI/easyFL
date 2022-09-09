@@ -195,21 +195,22 @@ def main_func(task, headers, flt):
 if __name__ == '__main__':
     # task+record
     headers = [
-        'scaffold',
+        # 'scaffold',
         'fedavg', 
-        'feddyn',
+        # 'feddyn',
+        # 'mp_fedkdr',
         'fedfsl-mi-adv'
     ]
     flt = {
         # 'E': '8',
         # 'B': '8',
         # 'LR': '0.01',
-        'R': '500',
-        'P': '1',
+        # 'R': '500',
+        # 'P': '1',
         # 'S': '0',
     }
     for s in [1]:
-        task = f'mnist_sparse_N10_K10/mnist/sparse/10client/mnist_sparse'
+        task = f'mnist_cluster_rich_N50_K10/mnist/cluster_rich/50client/mnist_rich'
         try:
             main_func(task, headers, flt)
         except ValueError:
