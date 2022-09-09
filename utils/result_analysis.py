@@ -46,7 +46,7 @@ def read_data_into_dicts(task, records):
     return res
 
 def draw_curve(dicts, curve='train_losses', legends = [], final_round = -1):
-    # plt.figure(figsize=(100,100), dpi=100)
+    # plt.figure(figsize=(5,5), dpi=5)
     if not legends: legends = [d['meta']['algorithm'] for d in dicts]
     for i,dict in enumerate(dicts):
         num_rounds = dict['meta']['num_rounds']
@@ -183,6 +183,7 @@ def main_func(task, headers, flt):
         plt.title(task.split('/')[0].replace('_', ' '), pad=10)
         plt.xlabel("communication rounds")
         plt.ylabel(curve.replace('_', ' '))
+        plt.axis('tight')
         ax = plt.gca()
         plt.grid()
         plt.show()
@@ -196,10 +197,10 @@ if __name__ == '__main__':
     # task+record
     headers = [
         # 'scaffold',
-        'fedavg', 
+        'mp_fedavg', 
         # 'feddyn',
         # 'mp_fedkdr',
-        'fedfsl-mi-adv'
+        # 'mp_fedfsl-mi-adv'
     ]
     flt = {
         # 'E': '8',
@@ -210,7 +211,7 @@ if __name__ == '__main__':
         # 'S': '0',
     }
     for s in [1]:
-        task = f'mnist_cluster_rich_N50_K10/mnist/cluster_rich/50client/mnist_rich'
+        task = f'mnist_cluster_full_N5_K5/mnist/cluster_full/5client/mnist_full'
         try:
             main_func(task, headers, flt)
         except ValueError:
