@@ -61,7 +61,8 @@ class Server(MPBasicServer):
         super(Server, self).__init__(option, model, clients, test_data)
         self.feature_generator = Feature_generator()
         self.classifier = Classifier()
-        self.calculator = MyCalculator(device='cuda')
+        self.calculator = MyCalculator(device=f'cuda:{self.server_gpu_id}')
+        self.device = torch.device(f'cuda:{self.server_gpu_id}')
         return
 
     def pack(self, client_id):
@@ -78,7 +79,10 @@ class Server(MPBasicServer):
     def iterate(self, t, pool):
         self.selected_clients = self.sample()
         fgenerators, classifiers = self.communicate(self.selected_clients, pool)
-
+        
+        fgenerators = [model.to(self.device) for model in fgenerators]
+        classifiers = [model.to(self.device) for model in classifiers]
+        
         if not self.selected_clients: 
             return
 
