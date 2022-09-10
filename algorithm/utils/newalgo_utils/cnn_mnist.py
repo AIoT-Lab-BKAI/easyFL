@@ -1,3 +1,4 @@
+from itertools import chain
 from torch import nn
 import torch.nn.functional as F
 from utils.fmodule import FModule
@@ -26,22 +27,56 @@ class Classifier(FModule):
     def forward(self, x):
         x = F.softmax(self.fc2(x), dim=0)
         return x
-    
-def init():
-    return (Feature_generator(), Classifier())
-    
-def forward(model, x):
-    """
-    model = (Feature_generator, Classifier)
-    """
-    x = model[0](x)
-    x = model[1](x)
-    return x
 
-def pred_and_rep(model, x):
-    """
-    model = (Feature_generator, Classifier)
-    """
-    e = model[0](x)
-    o = model[1](e)
-    return o, e
+
+class MyModel():
+    def __init__(self):
+        self.feature_generator = Feature_generator()
+        self.classifier = Classifier()
+        
+    def __call__(self, x):
+        return self.forward(x)
+        
+    def forward(self, x):
+        x = self.feature_generator(x)
+        x = self.classifier(x)
+        return x
+    
+    def pred_and_rep(self, x):
+        e = self.feature_generator(x)
+        o = self.classifier(e)
+        return o, e
+    
+    def eval(self):
+        self.feature_generator.eval()
+        self.classifier.eval()
+        return
+        
+    def train(self, mode=True):
+        self.feature_generator.train(mode)
+        self.classifier.train(mode)
+        return
+        
+    def freeze_grad(self):
+        self.feature_generator.freeze_grad()
+        self.classifier.freeze_grad()
+        return
+    
+    def zero_grad(self):
+        self.feature_generator.zero_grad()
+        self.classifier.zero_grad()
+        return
+        
+    def to(self, option):
+        self.feature_generator = self.feature_generator.to(option)
+        self.classifier = self.classifier.to(option)
+        return self
+        
+    def update(self, newFgenerator, newClassifier):
+        self.feature_generator = newFgenerator
+        self.classifier = newClassifier
+        return
+    
+    def parameters(self):
+        return chain(self.feature_generator.parameters(), self.classifier.parameters())
+    

@@ -24,7 +24,7 @@ class MyLogger(flw.Logger):
                 "client_accs":{},
                 "mean_valid_accs":[]
             }
-        if "mp_" in server.name:
+        if "mp" in server.name[:3]:
             test_metric, test_loss = server.test(device=torch.device('cuda'))
         else:
             test_metric, test_loss = server.test(device="cuda")

@@ -1,7 +1,4 @@
-from itertools import chain
-from .mp_fedbase import MPBasicServer, MPBasicClient
-from .utils.newalgo_utils.cnn_mnist import init, forward, pred_and_rep
-from .utils.newalgo_utils.my_calculator import MyCalculator
+from .mps_fedbase import MPSBasicServer, MPSBasicClient
 import torch.nn as nn
 
 import torch
@@ -49,29 +46,26 @@ def KDR_loss(teacher_batch_input, student_batch_input, device):
     return kl
     
     
-class Server(MPBasicServer):
+class Server(MPSBasicServer):
     def __init__(self, option, model, clients, test_data = None):
         super(Server, self).__init__(option, model, clients, test_data)
-        self.model = init()
-        self.calculator = MyCalculator("cuda")
+        
     
-    
-class Client(MPBasicClient):
+class Client(MPSBasicClient):
     def __init__(self, option, name='', train_data=None, valid_data=None):
         super(Client, self).__init__(option, name, train_data, valid_data)
         self.lossfunc = nn.CrossEntropyLoss()
         self.kd_factor = 1
-        self.calculator = MyCalculator("cuda")
         
     def train(self, model, device):
-        model = (model[0].to(device).train(), model[1].to(device).train())
+        model = model.to(device)
+        model.train()
         
-        src_model = copy.deepcopy(model).to(device)
-        src_model[0].freeze_grad()  # Fgenerator
-        src_model[1].freeze_grad()  # Classifier
+        src_model = copy.deepcopy(model)
+        src_model.freeze_grad()
 
         data_loader = self.calculator.get_data_loader(self.train_data, batch_size=self.batch_size, droplast=False)
-        optimizer = self.calculator.get_optimizer(self.optimizer_name, chain(model[0].parameters(), model[1].parameters()), 
+        optimizer = self.calculator.get_optimizer(self.optimizer_name, model, 
                                                   lr = self.learning_rate, weight_decay=self.weight_decay, momentum=self.momentum)
         
         for iter in range(self.epochs):
@@ -84,18 +78,8 @@ class Client(MPBasicClient):
 
     def get_loss(self, model, src_model, data, device):
         tdata = self.calculator.data_to_device(data, device)    
-        output_s, representation_s = pred_and_rep(model, tdata[0])                  # Student
-        _ , representation_t = pred_and_rep(src_model, tdata[0])                    # Teacher
+        output_s, representation_s = model.pred_and_rep(tdata[0])                  # Student
+        _ , representation_t = src_model.pred_and_rep(tdata[0])                    # Teacher
         kl_loss = KDR_loss(representation_t, representation_s, device)        # KL divergence
         loss = self.lossfunc(output_s, tdata[1])
         return loss + kl_loss * self.kd_factor
-    
-    def unpack(self, received_pkg):
-        return received_pkg['model']
-
-    def reply(self, svr_pkg, device):
-        model = self.unpack(svr_pkg)
-        loss = self.train_loss(model, device)
-        self.train(model, device)
-        cpkg = self.pack(model, loss)
-        return cpkg
