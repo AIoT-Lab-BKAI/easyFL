@@ -1,7 +1,4 @@
-from pathlib import Path
 from .mp_fedbase import MPBasicServer, MPBasicClient
-import torch
-import os
 
 class Server(MPBasicServer):
     def __init__(self, option, model, clients, test_data = None):

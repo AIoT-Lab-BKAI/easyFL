@@ -1,5 +1,4 @@
 from .mps_fedbase import MPSBasicServer, MPSBasicClient
-from .utils.alg_utils.alg_utils import dummy_DFS_clustering
 import torch
 import json
 import copy
@@ -60,6 +59,8 @@ class Server(MPSBasicServer):
         models = [model.to("cpu") for model in models]
         head_models, head_list = self.communicate_phase_two(models, self.clusters, t, pool)
         
+        print("Heads: ", head_list)
+        
         if not self.selected_clients: 
             return
 
@@ -105,7 +106,7 @@ class Server(MPSBasicServer):
             classifiers = []
             for cid in cluster:
                 if cid != head:
-                    classifiers.append(models[cid].classifier)
+                    classifiers.append(copy.deepcopy(models[cid].classifier))
             zip_list.append({"head" : head, "head_model": models[head], "classifiers": classifiers})
             head_list.append(head)
         
@@ -194,7 +195,7 @@ class Client(MPSBasicClient):
     
     def reply_phase_two(self, svr_pkg, device):
         model, classifiers = self.unpack_phase_two(svr_pkg)
-        self.distill(model, classifiers, device)
+        # self.distill(model, classifiers, device)
         cpkg = self.pack_phase_two(model)
         return cpkg
     
@@ -218,7 +219,7 @@ class Client(MPSBasicClient):
                 # Regularization with knowledge distillation
                 kd_loss = self.compute_kd_loss(model, classifiers, batch_data, device)
                 # Total loss
-                total_loss = loss + 0.1 * kd_loss
+                total_loss = loss + 0.01 * kd_loss
                 total_loss.backward()
                 optimizer.step()
         return

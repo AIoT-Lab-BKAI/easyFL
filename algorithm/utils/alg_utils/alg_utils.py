@@ -2,70 +2,73 @@ import numpy as np
 import torch
 import copy
 
-
-def generate_branches(best_ans):
-    branches = [] # list of possible answer
-    # Adding to existing groups
-    for idx in range(1, len(best_ans)):
-        new_ans = copy.deepcopy(best_ans)
-        new_ans[idx].append(best_ans[0][0])
-        new_ans[0].pop(0)
-        branches.append(new_ans)
-
-    # Create a new group
-    new_ans = copy.deepcopy(best_ans) # [[2,3,4,5,6], [1]]
-    new_ans.append([new_ans[0].pop(0)]) # [[3,4,5,6], [1], [2]]
-    branches.append(new_ans)
-    return branches
-
-def cluster_norm(weights, cluster):
-    # cluster = [1, 2, 3, 4, 5, 6]
-    s = 0
-    for idx in cluster:
-        s += weights[idx]
-    # return np.power(2 * len(cluster), 0.5) * torch.norm(s).item()
-    return np.power(len(cluster), 1) * torch.norm(s).item()**2
+def rewrite_classifier(base_model, model):
+    mlb = get_module_from_model(base_model)
+    ml  = get_module_from_model(model)
+    
+    mpb = mlb._parameters
+    mp  = ml._parameters
+    keys = list(mpb.keys())
+    
+    mpb[keys[-1]] = mp[keys[-1]]
+    mpb[keys[-2]] = mp[keys[-2]]
+    return
 
 
-def eval_ans(weights, ans):
-    # ans = [[1, 2, 3, 4, 5, 6], [0]]
-    s = 0
-    for cluster in ans:
-        if len(cluster):
-            s += cluster_norm(weights, cluster)
-        else:
-            return None
-    # print(ans, "scores", s)
-    return s
-
-def eval_branch(weights, branches):
-    # ans is the index
-    eval_list = []
-    for ans in branches:
-        eval_list.append(eval_ans(weights, ans))
-    return eval_list
+def get_module_from_model(model, res = None):
+    if res==None: res = []
+    ch_names = [item[0] for item in model.named_children()]
+    if ch_names==[]:
+        if model._parameters:
+            res.append(model)
+    else:
+        for name in ch_names:
+            get_module_from_model(model.__getattr__(name), res)
+    return res
 
 
-def dummy_DFS_clustering(weights):
-    # print("Weights in", weights.shape)
-    best_ans = [[i for i in range(weights.shape[0])]]
-    best_score = eval_ans(weights, best_ans)
-    while True:
-        branches = generate_branches(best_ans)
-        eval_list = eval_branch(weights, branches)
-        
-        if None in eval_list:
-            # print("Exists an empty cluster! Exit")
-            break
-        
-        best_ans_idx = np.argmin(eval_list)
-        
-        if eval_list[best_ans_idx] > best_score:
-            print("Stop at ans", best_ans, "found no better solutions, scores", best_score)
-            break
-        else:
-            print("Found better ans", branches[best_ans_idx], "scores", eval_list[best_ans_idx])
-            best_ans = branches[best_ans_idx]
-            best_score = eval_list[best_ans_idx]
-            
-    return best_ans, best_score
+def get_ultimate_layer(model, tensor_name):
+    assert tensor_name in ['bias', 'weight'], "Tensor name is either \'bias\' or \'weight\'"
+    penul = get_module_from_model(model)[-1]._parameters[tensor_name]
+    return penul
+
+    
+def KDR_loss(teacher_batch_input, student_batch_input, device):
+    """
+    Compute the Knowledge-distillation based KL divergence of 2 batches of layers
+    Args:
+        teacher_batch_input: Size N x d
+        student_batch_input: Size N x c
+    
+    Method: Kernel Density Estimation (KDE)
+    Kernel: Gaussian
+    Author: Nguyen Nang Hung
+    """
+    batch_student, _ = student_batch_input.shape
+    batch_teacher, _ = teacher_batch_input.shape
+    
+    assert batch_teacher == batch_student, "Unmatched batch size"
+    
+    teacher_batch_input = teacher_batch_input.to(device).unsqueeze(1)
+    student_batch_input = student_batch_input.to(device).unsqueeze(1)
+    
+    sub_s = student_batch_input - student_batch_input.transpose(0,1)
+    sub_s_norm = torch.norm(sub_s, dim=2)
+    sub_s_norm = sub_s_norm.flatten()[1:].view(batch_student-1, batch_student+1)[:,:-1].reshape(batch_student, batch_student-1)
+    std_s = torch.std(sub_s_norm)
+    mean_s = torch.mean(sub_s_norm)
+    kernel_mtx_s = torch.pow(sub_s_norm - mean_s, 2) / (torch.pow(std_s, 2) + 0.001)
+    kernel_mtx_s = torch.exp(-1/2 * kernel_mtx_s)
+    kernel_mtx_s = kernel_mtx_s/torch.sum(kernel_mtx_s, dim=1, keepdim=True)
+    
+    sub_t = teacher_batch_input - teacher_batch_input.transpose(0,1)
+    sub_t_norm = torch.norm(sub_t, dim=2)
+    sub_t_norm = sub_t_norm.flatten()[1:].view(batch_teacher-1, batch_teacher+1)[:,:-1].reshape(batch_teacher, batch_teacher-1)
+    std_t = torch.std(sub_t_norm)
+    mean_t = torch.mean(sub_t_norm)
+    kernel_mtx_t = torch.pow(sub_t_norm - mean_t, 2) / (torch.pow(std_t, 2) + 0.001)
+    kernel_mtx_t = torch.exp(-1/2 * kernel_mtx_t)
+    kernel_mtx_t = kernel_mtx_t/torch.sum(kernel_mtx_t, dim=1, keepdim=True)
+    
+    kl = torch.sum(kernel_mtx_t * torch.log(kernel_mtx_t/kernel_mtx_s))
+    return kl

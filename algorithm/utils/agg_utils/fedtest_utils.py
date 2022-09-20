@@ -4,19 +4,6 @@ from utils.fmodule import get_module_from_model, _modeldict_sum
 import copy
 
 
-@torch.no_grad()
-def special_aggregate(last_layer_list, p=[], temp=1):
-    P, Q = 0, 0
-
-    for last_layer, scale in zip(last_layer_list, p):
-        last_layer = last_layer / scale
-        alpha = torch.norm(last_layer, dim=1, keepdim=True) * torch.mean((last_layer > 0) * 1.0, dim=1, keepdim=True)
-        P += torch.pow(alpha, temp) * last_layer
-        Q += torch.pow(alpha, temp)
-    
-    return torch.nan_to_num(P/Q, 0)
-
-
 def model_sum(ms, p=[], temp=1, bias=False):
     if not ms: return None
     op_with_graph = sum([mi.ingraph for mi in ms]) > 0

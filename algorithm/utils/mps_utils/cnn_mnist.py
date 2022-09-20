@@ -33,8 +33,9 @@ class Classifier(FModule):
         return copy.deepcopy(self.fc2.weight).detach().cpu()
 
 
-class MyModel():
+class MyModel(FModule):
     def __init__(self):
+        super().__init__()
         self.feature_generator = Feature_generator()
         self.classifier = Classifier()
         
