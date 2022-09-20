@@ -2,6 +2,7 @@ from itertools import chain
 from torch import nn
 import torch.nn.functional as F
 from utils.fmodule import FModule
+import copy
 
 class Feature_generator(FModule):
     def __init__(self):
@@ -27,6 +28,9 @@ class Classifier(FModule):
     def forward(self, x):
         x = F.softmax(self.fc2(x), dim=0)
         return x
+    
+    def flatten(self):
+        return copy.deepcopy(self.fc2.weight).detach().cpu()
 
 
 class MyModel():
@@ -60,7 +64,7 @@ class MyModel():
     def freeze_grad(self):
         self.feature_generator.freeze_grad()
         self.classifier.freeze_grad()
-        return
+        return self
     
     def zero_grad(self):
         self.feature_generator.zero_grad()

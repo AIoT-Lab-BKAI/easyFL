@@ -1,5 +1,5 @@
 from .mp_fedbase import MPBasicServer, MPBasicClient
-from .utils.newalgo_utils.cnn_mnist import MyModel
+from .utils.mps_utils.cnn_mnist import MyModel
 import torch
     
 class MPSBasicServer(MPBasicServer):
