@@ -52,17 +52,19 @@ class Server(MPSBasicServer):
         super(Server, self).__init__(option, model, clients, test_data)
         self.records = {}
         self.clusters = [[0,1,2,3,4], [5,6,7,8,9]]
-               
+    
     def iterate(self, t, pool):
         self.selected_clients = self.sample()
         models, train_losses = self.communicate(self.selected_clients, pool)
+        
+        models = [model.to("cpu") for model in models]
         head_models, head_list = self.communicate_phase_two(models, self.clusters, t, pool)
         
         if not self.selected_clients: 
             return
 
         device0 = torch.device(f"cuda:{self.server_gpu_id}")
-        models = [models[cid] for cid in models if cid not in head_list] + head_models
+        models = [models[cid] for cid in range(len(models)) if cid not in head_list] + head_models
         models = [model.to(device0) for model in models]
         
         impact_factors = [1.0 * self.client_vols[cid]/self.data_vol for cid in self.selected_clients]
@@ -103,8 +105,8 @@ class Server(MPSBasicServer):
             classifiers = []
             for cid in cluster:
                 if cid != head:
-                    classifiers.append(copy.deepcopy(models[cid].classifier))
-            zip_list.append({"head" : head, "head_model": copy.deepcopy(models[head]), "classifiers": classifiers})
+                    classifiers.append(models[cid].classifier)
+            zip_list.append({"head" : head, "head_model": models[head], "classifiers": classifiers})
             head_list.append(head)
         
         packages_received_from_clients = []
@@ -152,7 +154,7 @@ class Client(MPSBasicClient):
         model = model.to(device)
         model.train()
         
-        src_model = copy.deepcopy(model)
+        src_model = copy.deepcopy(model).to(device)
         src_model.freeze_grad()
 
         data_loader = self.calculator.get_data_loader(self.train_data, batch_size=self.batch_size, droplast=False)
@@ -184,7 +186,7 @@ class Client(MPSBasicClient):
     
     def pack_phase_two(self, model):
         return {
-            "model": model
+            "model": model,
         }
         
     def unpack_phase_two(self, received_pkg):
@@ -200,7 +202,9 @@ class Client(MPSBasicClient):
         model = model.to(device)
         model.train()
         
-        classifiers = [classifier.to(device).freeze_grad() for classifier in classifiers]
+        classifiers = [classifier.to(device) for classifier in classifiers]
+        for classifier in classifiers:
+            classifier.freeze_grad()
 
         data_loader = self.calculator.get_data_loader(self.train_data, batch_size=self.batch_size, droplast=False)
         optimizer = self.calculator.get_optimizer(self.optimizer_name, model, 
@@ -214,7 +218,7 @@ class Client(MPSBasicClient):
                 # Regularization with knowledge distillation
                 kd_loss = self.compute_kd_loss(model, classifiers, batch_data, device)
                 # Total loss
-                total_loss = loss + kd_loss
+                total_loss = loss + 0.1 * kd_loss
                 total_loss.backward()
                 optimizer.step()
         return

@@ -82,5 +82,4 @@ class MyModel():
         return
     
     def parameters(self):
-        return chain(self.feature_generator.parameters(), self.classifier.parameters())
-    
+        return chain(self.feature_generator.parameters(), self.classifier.parameters())        
