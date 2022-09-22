@@ -47,7 +47,8 @@ def read_data_into_dicts(task, records):
 
 def draw_curve(dicts, curve='train_losses', legends = [], final_round = -1):
     # plt.figure(figsize=(5,5), dpi=5)
-    if not legends: legends = [d['meta']['algorithm'] for d in dicts]
+    if not legends: 
+        legends = [d['meta']['algorithm'] for d in dicts]
     for i,dict in enumerate(dicts):
         num_rounds = dict['meta']['num_rounds']
         eval_interval = dict['meta']['eval_interval']
@@ -140,8 +141,9 @@ def scan_records(task, header = '', filter = {}):
 #     print(tb)
 
 def get_key_from_filename(record, key = ''):
-    if key=='': return ''
-    value_start = record.find('_'+key)+len(key)+1
+    if key=='': 
+        return ''
+    value_start = record.find('_' + key) + len(key) + 1
     value_end = record.find('_',value_start)
     return record[value_start:value_end]
 
@@ -151,7 +153,7 @@ def create_legend(records=[], keys=[]):
     res = []
     for rec in records:
         s = [rec[:rec.find('_M')]]
-        values = [k+get_key_from_filename(rec, k) for k in keys]
+        values = [k + get_key_from_filename(rec, k) for k in keys]
         s.extend(values)
         res.append(" ".join(s))
     return res
@@ -176,7 +178,7 @@ def main_func(task, headers, flt):
         'test_accs',
     ]
     # create legends
-    legends = create_legend(records, ['P','LR'])
+    legends = create_legend(records, ['P','B'])
     for curve in curve_names:
         plt.figure(figsize=(8,6))
         draw_curve(dicts, curve, legends)
@@ -196,22 +198,26 @@ def main_func(task, headers, flt):
 if __name__ == '__main__':
     # task+record
     headers = [
-        # 'scaffold',
+        'scaffold',
         'mp_fedavg', 
+        'mp_fedprox', 
+        'mp_proposal_1', 
+        # 'mp_alg', 
+        # 'mp_alg_mse', 
         # 'feddyn',
         # 'mp_fedkdr',
         # 'mp_fedfsl-mi-adv'
     ]
     flt = {
         # 'E': '8',
-        # 'B': '8',
+        # 'B': '4',
         # 'LR': '0.01',
-        # 'R': '500',
+        'R': '500',
         # 'P': '1',
         # 'S': '0',
     }
     for s in [1]:
-        task = f'mnist_cluster_full_N5_K5/mnist/cluster_full/5client/mnist_full'
+        task = f'mnist_cluster_sparse_N10_K10/mnist/cluster_sparse/10client/mnist_sparse'
         try:
             main_func(task, headers, flt)
         except ValueError:

@@ -2,16 +2,12 @@ import numpy as np
 import torch
 import copy
 
+@torch.no_grad()
 def rewrite_classifier(base_model, model):
-    mlb = get_module_from_model(base_model)
-    ml  = get_module_from_model(model)
+    base_classifier = get_module_from_model(base_model)[-1]._parameters['weight']
+    model_classifier = get_module_from_model(model)[-1]._parameters['weight']
     
-    mpb = mlb._parameters
-    mp  = ml._parameters
-    keys = list(mpb.keys())
-    
-    mpb[keys[-1]] = mp[keys[-1]]
-    mpb[keys[-2]] = mp[keys[-2]]
+    base_classifier.copy_(model_classifier)
     return
 
 
