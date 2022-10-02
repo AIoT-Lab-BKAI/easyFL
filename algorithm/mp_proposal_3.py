@@ -1,10 +1,10 @@
+import math
 from .mp_fedbase import MPBasicServer, MPBasicClient
 from .utils.alg_utils.alg_utils import get_ultimate_layer, KDR_loss, rewrite_classifier
 import torch
-import json
 import copy
-import torch.nn as nn
 import torch.multiprocessing as mp
+import numpy as np
 
 class Server(MPBasicServer):
     def __init__(self, option, model, clients, test_data = None):
@@ -22,9 +22,7 @@ class Server(MPBasicServer):
             return
 
         device0 = torch.device(f"cuda:{self.server_gpu_id}")
-        models = [models[cid] for cid in range(len(models)) if cid not in head_list]
-        models = models + head_models
-        models = [model.to(device0) for model in models]
+        models = [model.to(device0) for model in head_models]
         
         impact_factors = [1.0 * self.client_vols[cid]/self.data_vol for cid in self.selected_clients]
         self.model = self.aggregate(models, p=impact_factors)
@@ -44,7 +42,8 @@ class Server(MPBasicServer):
         Args:
             cluster = [0,1,2,3,4] is a list of int (id of clients in this cluster)
         """
-        return cluster[time_step % len(cluster)]
+        # return cluster[time_step % len(cluster)]
+        return np.random.randint(0, len(cluster) + 1)
     
     def communicate_heads(self, models, clusters, time_step, pool):
         """
@@ -63,8 +62,10 @@ class Server(MPBasicServer):
             member_models = []
             for cid in cluster:
                 if cid != head:
-                    member_models.append(copy.deepcopy(models[cid]))
-            zip_list.append({"head" : head, "head_model": models[head], "member_models": member_models})
+                    member_models.append(models[cid])
+                    
+            critic_model = self.aggregate(member_models, p=[1.0 * self.client_vols[cid]/self.data_vol for cid in cluster])
+            zip_list.append({"head" : head, "head_model": models[head], "critic_model": critic_model})
             head_list.append(head)
         
         packages_received_from_clients = []
@@ -83,21 +84,22 @@ class Server(MPBasicServer):
 
         head_id = cluster_dict['head']
         head_model = cluster_dict['head_model']
-        member_models = cluster_dict['member_models']
+        critic_model = cluster_dict['critic_model']
         
         # listen for the client's response and return None if the client drops out
         if self.clients[head_id].is_drop(): 
             return None
         
-        return self.clients[head_id].distill(head_model, member_models, device)
+        return self.clients[head_id].distill(head_model, critic_model, device)
     
 class Client(MPBasicClient):
     def __init__(self, option, name='', train_data=None, valid_data=None):
         super(Client, self).__init__(option, name, train_data, valid_data)
         self.lossfunc = torch.nn.CrossEntropyLoss()
         # self.distill_method = option['method']
-        self.distill_method = 'mse'
-        self.distill_epochs = 4
+        self.distill_method = 'cre'
+        self.distill_epochs = math.ceil(len(self.train_data))
+        self.distill_temperature = 2
         self.kd_factor = 1
         
     def pack(self, model, loss):
@@ -133,15 +135,14 @@ class Client(MPBasicClient):
         loss = self.lossfunc(output_s, tdata[1])
         return loss + kl_loss * self.kd_factor
     
-    def distill(self, model, member_models, device):
+    def distill(self, model, critic_model, device):
         model = model.to(device)
         model.train()
         
-        for member_model in member_models:
-            member_model = member_model.to(device)
-            member_model.freeze_grad()
+        critic_model = critic_model.to(device)
+        critic_model.freeze_grad()
         
-        data_loader = self.calculator.get_data_loader(self.train_data, batch_size=self.batch_size, droplast=False)
+        data_loader = self.calculator.get_data_loader(self.train_data, batch_size=1, droplast=False)
         optimizer = self.calculator.get_optimizer(self.optimizer_name, model, 
                                                   lr = self.learning_rate, weight_decay=self.weight_decay, momentum=self.momentum)
         
@@ -154,24 +155,23 @@ class Client(MPBasicClient):
                 loss = self.lossfunc(outputs, tdata[1])
                 
                 # Knowledge distillation loss
-                sub_outputs = []
-                for member_model in member_models:
-                    sub_outputs.append(member_model(tdata[0]))
-                sub_outputs = torch.stack(sub_outputs, dim=0).to(device)
-                
-                assert (outputs.shape[0] == sub_outputs.shape[1]) and (outputs.shape[1] == sub_outputs.shape[2]),\
-                    f"Outputs shape {outputs.shape} is inconsistant with sub_outputs shape {sub_outputs.shape}"
+                sub_outputs = critic_model(tdata[0])
                 
                 if self.distill_method == 'mse':
                     sub_loss = torch.sum(torch.pow(sub_outputs - outputs, 2))
-                    
-                elif self.distill_method == 'kldiv':
-                    outputs = torch.softmax(outputs.unsqueeze(0), dim=2)
-                    sub_outputs = torch.softmax(sub_outputs, dim=2)
-                    sub_loss = torch.sum(sub_outputs * torch.log(sub_outputs/outputs))
                 
+                else:
+                    outputs = torch.softmax(outputs/self.distill_temperature, dim=1)
+                    sub_outputs = torch.softmax(sub_outputs/self.distill_temperature, dim=1)
+                        
+                    if self.distill_method == 'kldiv':
+                        sub_loss = torch.sum(sub_outputs * torch.log(sub_outputs/outputs))
+                    
+                    elif self.distill_method == 'cre':
+                        sub_loss = self.lossfunc(outputs, sub_outputs)
+                    
                 # Total loss
-                total_loss = loss + sub_loss/outputs.shape[0]
+                total_loss = 0.4 * loss + 0.6 * sub_loss/outputs.shape[0]
                 total_loss.backward()
                 optimizer.step()
         

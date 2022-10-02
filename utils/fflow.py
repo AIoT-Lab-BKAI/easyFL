@@ -77,6 +77,10 @@ def read_option():
     parser.add_argument('--kd_fct', help="Knowledge distillation factor (Fedsdiv)", type=float, default="1.0")
     parser.add_argument('--sthr', help="Similarity threshold for clustering (Fedsdiv)", type=float, default="0.975")
     
+    # Proposal 4
+    parser.add_argument('--cpg', help="Number of clients per group", type=int, default=2)
+    parser.add_argument('--se', help="Number of epochs used in second step training", type=int, default=4)
+    
     try: option = vars(parser.parse_args())
     except IOError as msg: parser.error(str(msg))
     return option
