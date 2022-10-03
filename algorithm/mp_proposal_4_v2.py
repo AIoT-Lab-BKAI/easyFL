@@ -35,7 +35,7 @@ class Server(MPBasicServer):
         if not self.phase_one_models:
             send_model = copy.deepcopy(self.model)
         else:
-            send_model = self.phase_one_models[client_id]
+            send_model = self.phase_one_models[self.selected_clients.index(client_id)]
             
         return {
             "model" : send_model,
