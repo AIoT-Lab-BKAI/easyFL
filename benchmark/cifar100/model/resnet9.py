@@ -49,3 +49,24 @@ class Model(FModule):
     e = self.dropout(out.view(x.shape[0], -1))
     o = self.classifier(e)
     return o, e
+  
+  def pred_and_imm(self, x):
+    out = self.conv1(x)
+    out = self.conv2(out)
+    imm = self.res1(out) + out
+    out = self.conv3(imm)
+    out = self.conv4(out)
+    out = self.res2(out) + out
+    out = self.pool(out)
+    out = self.dropout(out.view(x.shape[0], -1))
+    out = self.classifier(out)
+    return out, imm
+      
+  def forward_imm(self, imm, batch_size):
+    out = self.conv3(imm)
+    out = self.conv4(out)
+    out = self.res2(out) + out
+    out = self.pool(out)
+    out = self.dropout(out.view(batch_size, -1))
+    out = self.classifier(out)
+    return out

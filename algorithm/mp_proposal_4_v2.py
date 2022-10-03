@@ -9,35 +9,16 @@ import random
 class Server(MPBasicServer):
     def __init__(self, option, model, clients, test_data = None):
         super(Server, self).__init__(option, model, clients, test_data)
-        self.paras_name = ['cpg', 'se']
-        self.client_per_group = option['cpg']
-        self.step_2_epochs = option['se']
         self.clusters = [[0,1,2,3,4], [5,6,7,8,9]]
         self.phase_one_models = None
         self.pairings = None
-        
-    def pairing_clients(self, clients, clients_per_group=2):
-        """
-        clients = [0,1,2,3,4,5,6,....] the list of client's id
-        """
-        participants = clients.copy()
-        pairs = []
-        
-        while len(participants) > 1:
-            one_pair = list(np.random.choice(participants, clients_per_group, replace=False))
-            pairs.append(one_pair)
-            participants = list(set(participants) - set(one_pair))
-        
-        if len(participants):
-            pairs.append(participants)
-        
-        return pairs
         
     def iterate(self, t, pool):
         self.selected_clients = self.sample()
         # Stage 1
         self.phase_one_models, _ = self.communicate(self.selected_clients, pool)
         self.phase_one_shuffle(t)
+        self.phase_one_models = [i.to("cpu") for i in self.phase_one_models]
         # Stage 2
         phase_two_models, _ = self.communicate(self.selected_clients, pool)
         self.phase_one_models = None
@@ -47,7 +28,7 @@ class Server(MPBasicServer):
 
         device0 = torch.device(f"cuda:{self.server_gpu_id}")
         models = [i.to(device0) for i in phase_two_models]
-        self.model = self.aggregate(models, p = [1.0 * self.client_vols[cid]/self.data_vol for cid in self.selected_clients])
+        self.model = self.aggregate(models, p = [1.0 for cid in self.selected_clients])
         return
     
     def pack(self, client_id):
@@ -69,13 +50,15 @@ class Server(MPBasicServer):
         return self.unpack(sortlist)
     
     def phase_one_shuffle(self, time_step):
-        random.shuffle(self.phase_one_models, lambda : 0.1)
+        random.seed(time_step)
+        random.shuffle(self.phase_one_models, lambda : 0.5)
         return
     
     
 class Client(MPBasicClient):
     def __init__(self, option, name='', train_data=None, valid_data=None):
         super(Client, self).__init__(option, name, train_data, valid_data)
+        self.epochs = int(self.epochs/2)
         
     def pack(self, model, loss):
         return {

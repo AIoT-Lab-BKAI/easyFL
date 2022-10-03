@@ -16,20 +16,20 @@ class NpEncoder(json.JSONEncoder):
             return obj.tolist()
         return super(NpEncoder, self).default(obj)
 
-train_dataset = datasets.MNIST( "./benchmark/mnist/data", train=True, download=True, transform=None)
+train_dataset = datasets.CIFAR100( "./benchmark/cifar100/data", train=True, download=True, transform=None)
 print("total sample of dataset", len(train_dataset))
 
-num_clients = 50
+num_clients = 200
 
-maximum_sample = 200
-minimum_sample = 100
-maximum_num_label = 4
-minimum_num_label = 1
+maximum_sample = 12
+minimum_sample = 6
+maximum_num_label = 6
+minimum_num_label = 3
 
 def cluster(dataset, total_client):
     total_label = len(np.unique(dataset.targets))
     label_list = [i for i in range(total_label)]
-    num_cluster = 5
+    num_cluster = 10
 
     if num_cluster * (maximum_num_label + minimum_num_label)/2 < total_label:
         num_cluster = math.ceil(total_label/minimum_num_label)
@@ -78,7 +78,10 @@ def cluster(dataset, total_client):
         for label in client_labels:
             sample_per_label = np.random.randint(minimum_sample, maximum_sample)
             idxes = idxs_labels[idxs_labels[:,1] == label][:,0]
-            label_idxes = np.random.choice(idxes, sample_per_label, replace=False)
+            if sample_per_label < len(idxes):
+                label_idxes = np.random.choice(idxes, sample_per_label, replace=False)
+            else:
+                label_idxes = idxes
             if client_idx not in dict_client.keys():
                 dict_client[client_idx] = label_idxes.tolist()
             else:
@@ -90,10 +93,10 @@ def cluster(dataset, total_client):
 output, total_labels = cluster(train_dataset, num_clients)
 
 # Produce json file
-dir_path = f"./dataset_idx/mnist/cluster_rich/{num_clients}client/"
+dir_path = f"./dataset_idx/cifar100/cluster_sparse/{num_clients}client/"
 if not os.path.exists(dir_path):
     os.makedirs(dir_path)
-json.dump(output, open(dir_path + "mnist_rich.json", "w"), indent=4, cls=NpEncoder)
+json.dump(output, open(dir_path + "cifar100_sparse.json", "w"), indent=4, cls=NpEncoder)
 print("Output generated successfully")
 
 # Produce stat file
@@ -103,5 +106,5 @@ for client_id, sample_idexes in output.items():
         label = train_dataset.targets[int(sample_id)]
         stat[int(client_id), label] += 1
 
-np.savetxt(dir_path + "mnist_rich_stat.csv", stat, delimiter=",", fmt="%d")
+np.savetxt(dir_path + "cifar100_sparse_stat.csv", stat, delimiter=",", fmt="%d")
 print("Stats generated successfully")

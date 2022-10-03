@@ -29,7 +29,23 @@ class Model(FModule):
         e = F.relu(self.fc2(x))
         o = self.fc3(e)
         return o, e
+    
+    def pred_and_imm(self, x):
+        x = self.pool(F.relu(self.conv1(x)))
+        x = self.pool(F.relu(self.conv2(x)))
+        imm = x.view(-1, 1600)
+        x = F.relu(self.fc1(imm))
+        x = F.relu(self.fc2(x))
+        x = self.fc3(x)
+        return x, imm
 
+    def forward_imm(self, imm):
+        x = F.relu(self.fc1(imm))
+        x = F.relu(self.fc2(x))
+        x = self.fc3(x)
+        return x
+    
+    
 class Loss(nn.Module):
     def __init__(self):
         super(Loss, self).__init__()
