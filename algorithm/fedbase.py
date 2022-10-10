@@ -319,7 +319,7 @@ class BasicClient():
                 optimizer.step()
         return
 
-    def test(self, model, dataflag='valid', device='cpu'):
+    def test(self, model, dataflag='valid', device='cpu', round=None):
         """
         Evaluate the model with local data (e.g. training data or validating data).
         :param

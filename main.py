@@ -10,7 +10,7 @@ class MyLogger(flw.Logger):
         super().__init__()
         self.max_acc = 0
         
-    def log(self, server=None):
+    def log(self, server=None, round=None):
         if server==None: return
         if self.output == {}:
             self.output = {
@@ -25,11 +25,11 @@ class MyLogger(flw.Logger):
                 "mean_valid_accs":[]
             }
         if "mp" in server.name[:3]:
-            test_metric, test_loss = server.test(device=torch.device('cuda'))
+            test_metric, test_loss = server.test(device=torch.device('cuda'), round=round)
         else:
             test_metric, test_loss = server.test(device="cuda")
         
-        valid_metrics, valid_losses = server.test_on_clients(self.current_round, 'valid', 'cuda')
+        valid_metrics, valid_losses = server.test_on_clients('valid', 'cuda', round=round)
         # train_metrics, train_losses = server.test_on_clients(self.current_round, 'train', 'cuda')
         train_metrics, train_losses = (valid_metrics, valid_losses)
         
