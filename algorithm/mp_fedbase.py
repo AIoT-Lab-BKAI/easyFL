@@ -75,7 +75,7 @@ class MPBasicServer(BasicServer):
         packages_received_from_clients = []
         selected_clients = [(client_id, round) for client_id in selected_clients]
         packages_received_from_clients = pool.map(self.communicate_with, selected_clients)
-        self.selected_clients = [selected_clients[i] for i in range(len(selected_clients)) if packages_received_from_clients[i]]
+        self.selected_clients = [selected_clients[i][0] for i in range(len(selected_clients)) if packages_received_from_clients[i]]
         packages_received_from_clients = [pi for pi in packages_received_from_clients if pi]
         packages_received_from_clients = sorted(packages_received_from_clients, key=lambda d: d['id'])
         return self.unpack(packages_received_from_clients)
@@ -88,7 +88,6 @@ class MPBasicServer(BasicServer):
         :return
             client_package: the reply from the client and will be 'None' if losing connection
         """
-        
         gpu_id = int(mp.current_process().name[-1]) - 1
         gpu_id = gpu_id % self.gpus
         torch.manual_seed(0)
@@ -99,7 +98,8 @@ class MPBasicServer(BasicServer):
         # package the necessary information
         svr_pkg = self.pack(client_id)
         # listen for the client's response and return None if the client drops out
-        if self.clients[client_id].is_drop(): return None
+        if self.clients[client_id].is_drop(): 
+            return None
         return self.clients[client_id].reply(svr_pkg, device, round=round)
 
 

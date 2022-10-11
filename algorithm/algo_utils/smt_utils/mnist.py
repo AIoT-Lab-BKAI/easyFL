@@ -5,7 +5,6 @@ from torch import nn
 import torch
 from utils.fmodule import FModule
 
-@torch.no_grad()
 def batch_similarity(a, b):
     """
     Args:
@@ -58,7 +57,12 @@ class MnistCnn(FModule):
             mask = (self.lowrank_mtx @ self.lowrank_mtx).unsqueeze(0)
         else:
             b = r_x.shape[0]
-            psi_x = batch_similarity(r_x, self.Psi) 
+            psi_x = batch_similarity(r_x.detach(), self.Psi)
+            min = torch.min(psi_x, dim=1, keepdim=True).values
+            max = torch.max(psi_x, dim=1, keepdim=True).values
+            psi_x = (psi_x - min)/(max - min)
+            psi_x = psi_x/torch.sum(psi_x, dim=1, keepdim=True)
+            
             mask = (self.Phi.view(self.Phi.shape[0], -1).T @ psi_x.unsqueeze(2)).view(b, 10, 10)
         return (mask.to("cuda" if logits.is_cuda else "cpu").to(torch.float32) @ logits).squeeze(2)
 

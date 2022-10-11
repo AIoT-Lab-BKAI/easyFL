@@ -1,16 +1,11 @@
 import os
 from pathlib import Path
 from .mp_fedbase import MPBasicServer, MPBasicClient
-from algorithm.utils.smt_utils.mnist import MnistCnn
-from algorithm.utils.alg_utils.alg_utils import KDR_loss
+from algorithm.algo_utils.smt_utils.mnist import MnistCnn, batch_similarity
 from utils import fmodule
 from utils.fmodule import get_module_from_model
 from torch.utils.data import DataLoader
 from torchmetrics import ConfusionMatrix
-from main import logger
-import torch.multiprocessing as mp
-import utils.fflow as flw
-
 import copy
 import torch
 import numpy as np
@@ -137,17 +132,20 @@ class Server(MPBasicServer):
         else: 
             return -1, -1
 
-
+    
 class Client(MPBasicClient):
     _encode_key = torch.rand([num_classes, num_classes])
     
     def __init__(self, option, name='', train_data=None, valid_data=None):
         super(Client, self).__init__(option, name, train_data, valid_data)
         self.lossfunc = torch.nn.CrossEntropyLoss()
-        self.replossfunc = torch.nn.MSELoss()
-        self.compress_repre = torch.randn([1, feature_dim], requires_grad=True)
+        self.regu_lossfunc = torch.nn.MSELoss()
         self.mask = self.create_mask(num_classes=num_classes)                           # Mask = R @ G^(-1)
-        self.cr_lr = 0.2
+        self.cr_lr = 5
+        self.representation_learning_epochs = 64
+        self.regu_lossfactor = 0.01
+        self.condense_representation = torch.randn([feature_dim]).unsqueeze(0)
+        return
         
     def create_mask(self, num_classes):
         data_loader = self.calculator.get_data_loader(self.train_data, batch_size=1)
@@ -161,11 +159,9 @@ class Client(MPBasicClient):
     def reply(self, svr_pkg, device, round):
         model= self.unpack(svr_pkg)
         model.update_mask(self.mask)        # Use masked low-rank linear classifier
-        
         loss = 0
         if round > 0:
             loss = self.train_loss(model, device, round)
-            
         Psi_i = self.train(model, device, round)
         cpkg = self.pack(model, loss, Psi_i)
         return cpkg
@@ -181,8 +177,7 @@ class Client(MPBasicClient):
         }
         
     def train(self, model, device, round):
-        self.compress_repre = self.compress_repre.to(device)
-        
+       
         model = model.to(device)
         model.train()
         
@@ -194,31 +189,23 @@ class Client(MPBasicClient):
         
         for iter in range(self.epochs):
             for batch_id, batch_data in enumerate(data_loader):
-
                 # mimimizing the classifier loss
                 model.zero_grad()
-                loss, representations = self.get_loss(model, src_model, batch_data, device)
+                loss = self.get_loss(model, src_model, batch_data, device)
                 loss.backward()
                 optimizer.step()
-                
-                # maximizing the similarity of compress_repre and the representations
-                self.compress_repre.retain_grad()
-                similarity = (self.compress_repre @ representations.T)/ \
-                                (torch.norm(self.compress_repre, dim=1, keepdim=True) @ torch.norm(representations, dim=1, keepdim=True).T)
-                rep_reward = torch.sum(similarity)
-                rep_reward.backward()
-                self.compress_repre = self.compress_repre + self.cr_lr * self.compress_repre.grad
         
-        return self.compress_repre.detach().cpu()
+        for t in range(self.representation_learning_epochs):
+            self.condense_representation = self.gen_representation(data_loader, model, self.condense_representation, device)
+        return self.condense_representation.cpu()
     
     def get_loss(self, model, src_model, data, device):
         tdata = self.calculator.data_to_device(data, device)    
         output_s, representation_s = model.pred_and_rep(tdata[0])                  # Student
         _ , representation_t = src_model.pred_and_rep(tdata[0])                    # Teacher
-        # kl_loss = KDR_loss(representation_t, representation_s, device)        # KL divergence
-        repre_loss = self.replossfunc(representation_t, representation_s)
+        regularization_loss = self.regu_lossfunc(representation_t, representation_s)
         loss = self.lossfunc(output_s, tdata[1])
-        return loss + 0.01 * repre_loss, representation_s.detach()
+        return loss + self.regu_lossfactor * regularization_loss
 
     def test(self, model, dataflag='valid', device='cpu', round=None):
         model.cuda()
@@ -255,3 +242,18 @@ class Client(MPBasicClient):
             
         return correct, test_loss
     
+    def gen_representation(self, dataloader, model, condense_representation, device):
+        model = model.cuda()
+        condense_representation.requires_grad = True
+        
+        for batch, (X, y) in enumerate(dataloader):
+            X, y = X.to(device), y.to(device)
+            pred, rep = model.pred_and_rep(X)
+            
+            condense_representation.retain_grad()
+            sim = batch_similarity(rep.detach(), condense_representation)
+            condense_represent_loss = torch.sum(1 - sim)
+            condense_represent_loss.backward()
+            condense_representation = condense_representation - self.cr_lr * condense_representation.grad
+
+        return condense_representation.detach()
