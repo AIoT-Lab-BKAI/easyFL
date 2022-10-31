@@ -431,7 +431,7 @@ class ClassifyCalculator(BasicTaskCalculator):
         evidence = F.relu(output)
         alpha = evidence + 1
         uncertainty = self.num_classes/ torch.sum(alpha, dim=1)
-        return uncertainty
+        return uncertainty, torch.sum(output, dim = 1)
 
     @torch.no_grad()
     def get_evaluation(self, model, data):
@@ -523,13 +523,14 @@ class CusTomTaskReader(BasicTaskReader):
 
 
 class DirtyTaskReader(BasicTaskReader):        
-    def __init__(self, taskpath, train_dataset, test_dataset, noise_magnitude=1, dirty_rate=None):
+    def __init__(self, taskpath, train_dataset, test_dataset, noise_magnitude=1, dirty_rate=None, noise_type=''):
         super().__init__(taskpath)
         self.noise_magnitude = noise_magnitude
         self.dirty_rate = dirty_rate
         self.test_dataset = test_dataset
         self.train_dataset = train_dataset
         self.taskpath = taskpath
+        self.noise_type = noise_type
     
     def load_dataset_idx(self,path="data"):
         import json
@@ -543,7 +544,7 @@ class DirtyTaskReader(BasicTaskReader):
                                     data_idx[idx], 
                                     seed=idx, 
                                     magnitude=self.noise_magnitude,
-                                    dirty_rate=self.dirty_rate[idx]) for idx in range(n_clients)]
+                                    dirty_rate=self.dirty_rate[idx], noise_type=self.noise_type) for idx in range(n_clients)]
         test_data = self.test_dataset
         print("Here return dirty training datasets for clients, clean test dataset for server")
         return train_datas, test_data, n_clients
@@ -618,29 +619,35 @@ def imshow(img, dir = "pics", name="img.png"):
 
 class DirtyDataset(Dataset):
     count = 0
-    def __init__(self, dataset, idxs, seed, dirty_rate=0.2, magnitude=1):
+    def __init__(self, dataset, idxs, seed, dirty_rate=0.2, magnitude=1, noise_type=''):
         self.dataset = dataset
         self.idxs = list(idxs)
         self.origin_idxs = list(idxs)
         self.seed = seed
         dirty_quantity = int(dirty_rate * len(self.idxs))
+        self.magnitude = magnitude
+        self.noise_type = noise_type
         
         np.random.seed(self.seed)
         self.dirty_dataidx = np.random.choice(self.idxs, dirty_quantity, replace=False).tolist()
         # if seed in [0, 1]:
         #     print(f'client {seed}, dirty {self.dirty_dataidx}')
-        with open(f'./results/dirty_dataidx_50/{seed}.json', 'w') as f:
+        path_dirty_dataidx = f'./results/dirty_dataidx/10000data_dirty_rate_{dirty_rate}'
+        if not os.path.exists(path_dirty_dataidx):
+            os.makedirs(path_dirty_dataidx)
+        with open(path_dirty_dataidx + '/' + f'{seed}.json', 'w') as f:
             json.dump(self.dirty_dataidx, f)
         
         # with open(f'predict_unclean_idx/{seed}.json', 'r') as f:
         #     predict_unclean_idx = json.load(f)
         # np.random.seed(self.seed)
-        # self.idxs = list(set(self.idxs) - set(np.random.choice(self.dirty_dataidx, int(0.2*len(self.dirty_dataidx)), replace=False).tolist()))
+        # self.idxs = list(set(self.idxs) - set(np.random.choice(self.dirty_dataidx, int(0*len(self.dirty_dataidx)), replace=False).tolist()))
         self.rotater = T.RandomRotation(degrees=(90, 270))
         # self.resize_cropper = T.RandomResizedCrop(size=sample.shape)
-        self.blurrer = T.GaussianBlur(kernel_size=(5, 9), sigma=(0.1, 2))
-        self.addgaussiannoise = AddGaussianNoise(magnitude, 2)
-        
+        self.blurrer = T.GaussianBlur(kernel_size=(5, 9), sigma=(9, 11))
+        self.addgaussiannoise = AddGaussianNoise(magnitude, 0.5, self.seed)
+        from torchvision.transforms import Grayscale
+        self.gray_transform = Grayscale(num_output_channels=3)
         # self.beta = 1
         # self.beta_idxs = self.idxs
         # if self.seed == 5:
@@ -653,6 +660,9 @@ class DirtyDataset(Dataset):
 
     def remove_noise(self, percent):
         self.idxs = list(set(self.idxs) - set(np.random.choice(self.dirty_dataidx, int(percent*len(self.dirty_dataidx)), replace=False).tolist()))
+    
+    def remove_noise_specific(self, list_noise):
+        self.idxs = list(set(self.idxs) - set(list_noise))
 
     def reverse_idx(self):
         self.idxs = self.origin_idxs
@@ -661,29 +671,69 @@ class DirtyDataset(Dataset):
         return len(self.idxs)
 
     def __getitem__(self, item):
-        random.seed(self.seed) # apply this seed to img transforms
+        # random.seed(self.seed) # apply this seed to img transforms
         image, label = self.dataset[self.idxs[item]]
         if self.idxs[item] in self.dirty_dataidx:
             if DirtyDataset.count < 2:
-                imshow(image, "pics_noise_50", f"{self.idxs[item]}_before.png")
-            # image = image + self.noise
-            image = self.blurrer(self.addgaussiannoise(self.rotater(image)))
-            image = (image - torch.min(image))/(torch.max(image) - torch.min(image))
+                imshow(image, f"pics_noise_{self.noise_type}", f"{self.idxs[item]}_before.png")
+            # # image = image + self.noise
             
+            #gaussian noise
+            if self.noise_type == 'gaussian':
+                torch.manual_seed(item)
+                noise_image = torch.randn(image.size())
+                noise_image = self.blurrer(self.addgaussiannoise(self.rotater(noise_image)))
+                noise_image = (noise_image - torch.min(noise_image))/(torch.max(noise_image) - torch.min(noise_image))
+                # noise_image = torch.clamp(noise_image, min=0, max=1)
+
+            #salt&peppernoise
+            elif self.noise_type == 'salt_pepper':
+                torch.manual_seed(item)
+                noisy_mask = torch.randint(low=0, high=int(1/self.magnitude)+1, size=image.size())
+                
+                zeros_pixel = np.where(noisy_mask == 0)
+                one_pixel = np.where(noisy_mask == int(1/self.magnitude))
+                noise_image = self.gray_transform(image)
+                # print(torch.max(image))
+                # print(torch.min(image))
+                noise_image[zeros_pixel] = 0
+                noise_image[one_pixel] = 1
+            
+            #speckle noise
+            elif self.noise_type == 'speckle':
+                torch.manual_seed(item)
+                noisy_mask = torch.randn(image.size()) + self.magnitude
+                
+                noise_image = image * noisy_mask
+                noise_image = (noise_image - torch.min(noise_image))/(torch.max(noise_image) - torch.min(noise_image))
+            
+            # poisson noise
+            elif self.noise_type == 'poisson':
+                torch.manual_seed(item)
+                noise_mask = torch.poisson(torch.rand(image.size())*self.magnitude)
+                noise_image = image + noise_mask
+                noise_image = (noise_image - torch.min(noise_image))/(torch.max(noise_image) - torch.min(noise_image))
+            
+            # mix
+            else:
+                pass
             # self.dirty_dataidx.remove(self.idxs[item])
             if DirtyDataset.count < 2:
-                imshow(image, "pics_noise_50", f"{self.idxs[item]}_after.png")
+                imshow(noise_image, f"pics_noise_{self.noise_type}", f"{self.idxs[item]}_after.png")
                 DirtyDataset.count += 1
+            
+            return noise_image, label
         
         return image, label
 
 class AddGaussianNoise(object):
-    def __init__(self, mean=0., std=1.):
+    def __init__(self, mean=0., std=1., seed=1000):
         self.std = std
         self.mean = mean
+        self.seed = seed
         
     def __call__(self, tensor):
-        torch.manual_seed(1000)
+        torch.manual_seed(self.seed)
         return tensor + torch.randn(tensor.size()) * self.std + self.mean
     
     def __repr__(self):

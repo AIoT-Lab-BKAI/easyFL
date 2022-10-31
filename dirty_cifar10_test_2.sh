@@ -1,9 +1,64 @@
-# mkdir fedtask
+for malicious_client_ in 0 10 20 30 40 50
+do
+    # echo "$malicious_client_"
+    for noise_type_ in salt_pepper
+    do
+        for aggregate_ in  bulyan
+        do
+            count=0
+            # echo "$count"
 
-# # mnist_clustered_N10_K10 - quantitative
-CUDA_VISIBLE_DEVICES=1,0 python main.py  --task dirtycifar10_iid_N10_K10_00_100 --dirty_rate 0.5 0.5 0.5 0.5 0.5 0.5 0.5 0.5 0.5 0.5 --noise_magnitude 2 --algorithm mp_fedavg --model resnet18 --data_folder "./benchmark/cifar10/data" --log_folder fedtask --dataidx_filename "cifar10/iid/cifar10_iid_10client.json" --num_rounds 100 --num_epochs 5 --proportion 1 --num_epochs_round_0 5 --batch_size 64 --num_threads_per_gpu 5  --num_gpus 2 --server_gpu_id 0 --wandb 1 --result_file_name check_uncertainty_converge_2.json --uncertainty 1 --file_log_per_epoch check_uncertainty_converge_2.csv --file_save_model check_uncertainty_converge_2 --percent_noise_remove 0
-CUDA_VISIBLE_DEVICES=1,0 python main.py  --task dirtycifar10_iid_N10_K10_00_100 --dirty_rate 0.5 0.5 0.5 0.5 0.5 0.5 0.5 0.5 0.5 0.5 --noise_magnitude 2 --algorithm mp_fedavg --model resnet18 --data_folder "./benchmark/cifar10/data" --log_folder fedtask --dataidx_filename "cifar10/iid/cifar10_iid_10client.json" --num_rounds 20 --num_epochs 5 --proportion 1 --num_epochs_round_0 5 --batch_size 64 --num_threads_per_gpu 5  --num_gpus 2 --server_gpu_id 0 --wandb 1 --result_file_name after_uncertainty_converge_remove_10%_2.json --uncertainty 1 --file_log_per_epoch after_uncertainty_converge_remove_10%_2.csv --file_save_model after_uncertainty_converge_remove_10%_2 --percent_noise_remove 0.1
-CUDA_VISIBLE_DEVICES=1,0 python main.py  --task dirtycifar10_iid_N10_K10_00_100 --dirty_rate 0.5 0.5 0.5 0.5 0.5 0.5 0.5 0.5 0.5 0.5 --noise_magnitude 2 --algorithm mp_fedavg --model resnet18 --data_folder "./benchmark/cifar10/data" --log_folder fedtask --dataidx_filename "cifar10/iid/cifar10_iid_10client.json" --num_rounds 20 --num_epochs 5 --proportion 1 --num_epochs_round_0 5 --batch_size 64 --num_threads_per_gpu 5  --num_gpus 2 --server_gpu_id 0 --wandb 1 --result_file_name after_uncertainty_converge_remove_25%_2.json --uncertainty 1 --file_log_per_epoch after_uncertainty_converge_remove_25%_2.csv --file_save_model after_uncertainty_converge_remove_25%_2 --percent_noise_remove 0.25
-CUDA_VISIBLE_DEVICES=1,0 python main.py  --task dirtycifar10_iid_N10_K10_00_100 --dirty_rate 0.5 0.5 0.5 0.5 0.5 0.5 0.5 0.5 0.5 0.5 --noise_magnitude 2 --algorithm mp_fedavg --model resnet18 --data_folder "./benchmark/cifar10/data" --log_folder fedtask --dataidx_filename "cifar10/iid/cifar10_iid_10client.json" --num_rounds 20 --num_epochs 5 --proportion 1 --num_epochs_round_0 5 --batch_size 64 --num_threads_per_gpu 5  --num_gpus 2 --server_gpu_id 0 --wandb 1 --result_file_name after_uncertainty_converge_remove_50%_2.json --uncertainty 1 --file_log_per_epoch after_uncertainty_converge_remove_50%_2.csv --file_save_model after_uncertainty_converge_remove_50%_2 --percent_noise_remove 0.5
-CUDA_VISIBLE_DEVICES=1,0 python main.py  --task dirtycifar10_iid_N10_K10_00_100 --dirty_rate 0.5 0.5 0.5 0.5 0.5 0.5 0.5 0.5 0.5 0.5 --noise_magnitude 2 --algorithm mp_fedavg --model resnet18 --data_folder "./benchmark/cifar10/data" --log_folder fedtask --dataidx_filename "cifar10/iid/cifar10_iid_10client.json" --num_rounds 20 --num_epochs 5 --proportion 1 --num_epochs_round_0 5 --batch_size 64 --num_threads_per_gpu 5  --num_gpus 2 --server_gpu_id 0 --wandb 1 --result_file_name after_uncertainty_converge_remove_75%_2.json --uncertainty 1 --file_log_per_epoch after_uncertainty_converge_remove_75%_2.csv --file_save_model after_uncertainty_converge_remove_75%_2 --percent_noise_remove 0.75
-CUDA_VISIBLE_DEVICES=1,0 python main.py  --task dirtycifar10_iid_N10_K10_00_100 --dirty_rate 0.5 0.5 0.5 0.5 0.5 0.5 0.5 0.5 0.5 0.5 --noise_magnitude 2 --algorithm mp_fedavg --model resnet18 --data_folder "./benchmark/cifar10/data" --log_folder fedtask --dataidx_filename "cifar10/iid/cifar10_iid_10client.json" --num_rounds 20 --num_epochs 5 --proportion 1 --num_epochs_round_0 5 --batch_size 64 --num_threads_per_gpu 5  --num_gpus 2 --server_gpu_id 0 --wandb 1 --result_file_name after_uncertainty_converge_remove_100%_2.json --uncertainty 1 --file_log_per_epoch after_uncertainty_converge_remove_100%_2.csv --file_save_model after_uncertainty_converge_remove_100%_2 --percent_noise_remove 1.0
+            dirty_rate_=()
+            while [ $count -lt 50 ]
+            do
+                if [ $count -lt $malicious_client_ ]
+                    then
+                        dirty_rate_+=(0.5)
+                        count=$(( $count + 1 ))
+                elif [ $count -lt 50 ]
+                    then 
+                        dirty_rate_+=(0)
+                        count=$(( $count + 1 ))
+                fi
+                # echo "$count"
+            done
+            echo "The number of malicous clients is $malicious_client_"
+            echo "${dirty_rate_[@]}"
+
+            CUDA_VISIBLE_DEVICES=1,3 python main.py  --task dirtycifar10_iid_50client_1000data --dirty_rate ${dirty_rate_[@]} --noise_magnitude 0.1 --algorithm mp_fedavg --model cnn --data_folder "./benchmark/cifar10/data" --log_folder fedtask --dataidx_filename "cifar10/iid/cifar10_iid_50client_1000data.json" --num_rounds 100 --num_epochs 3 --proportion 0.2 --batch_size 64 --num_threads_per_gpu 1  --num_gpus 2 --server_gpu_id 0 --wandb 1  --uncertainty 0  --aggregate $aggregate_ --noise_type $noise_type_ --num_malicious $malicious_client_
+        done
+    done
+done
+
+
+for malicious_client_ in 0 10 20 30 40 50
+do
+    # echo "$malicious_client_"
+    for noise_type_ in gaussian poisson speckle
+    do
+        for aggregate_ in  bulyan
+        do
+            count=0
+            # echo "$count"
+
+            dirty_rate_=()
+            while [ $count -lt 50 ]
+            do
+                if [ $count -lt $malicious_client_ ]
+                    then
+                        dirty_rate_+=(0.5)
+                        count=$(( $count + 1 ))
+                elif [ $count -lt 50 ]
+                    then 
+                        dirty_rate_+=(0)
+                        count=$(( $count + 1 ))
+                fi
+                # echo "$count"
+            done
+            echo "The number of malicous clients is $malicious_client_"
+            echo "${dirty_rate_[@]}"
+
+            CUDA_VISIBLE_DEVICES=1,3 python main.py  --task dirtycifar10_iid_50client_1000data --dirty_rate ${dirty_rate_[@]} --noise_magnitude 1 --algorithm mp_fedavg --model cnn --data_folder "./benchmark/cifar10/data" --log_folder fedtask --dataidx_filename "cifar10/iid/cifar10_iid_50client_1000data.json" --num_rounds 100 --num_epochs 3 --proportion 0.2 --batch_size 64 --num_threads_per_gpu 1  --num_gpus 2 --server_gpu_id 0 --wandb 1  --uncertainty 0  --aggregate $aggregate_ --noise_type $noise_type_ --num_malicious $malicious_client_
+        done
+    done
+done

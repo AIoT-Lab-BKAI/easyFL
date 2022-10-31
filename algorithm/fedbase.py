@@ -55,8 +55,8 @@ class BasicServer():
         self.result = []
         # for idx in range(self.num_clients):
         #     self.result[idx] = {}
-        if self.option['percent_noise_remove'] !=0:
-            self.model.load_state_dict(torch.load('results/checkpoints/resnet18_check_uncertainty_converge_2.pt'))
+        # if self.option['percent_noise_remove'] ==0:
+        #     self.model.load_state_dict(torch.load('results/checkpoints/cnn_5client_10000data_50dirty_0505gaussian_outside_1uncertainty_cnn.pt'))
 
 
     def run(self):
@@ -81,7 +81,7 @@ class BasicServer():
                 
             #         json.dump(self.result, f)
             
-            path_save_model = './results/checkpoints/{}_v2.pt'.format(self.option['model'])
+            path_save_model = './results/checkpoints/{}.pt'.format(self.option['model'])
             torch.save(self.model.state_dict(), path_save_model)
         print("=================End==================")
         logger.time_end('Total Time Cost')
@@ -365,7 +365,6 @@ class BasicClient():
         # hyper-parameters for training
         self.optimizer_name = option['optimizer']
         self.epochs = option['num_epochs']
-        self.epochs_round_0 = option['num_epochs_round_0']
         self.learning_rate = option['learning_rate']
         self.batch_size = len(self.train_data) if option['batch_size']==-1 else option['batch_size']
         self.momentum = option['momentum']
@@ -395,10 +394,7 @@ class BasicClient():
             print(len(self.train_data))
             data_loader = self.calculator.get_data_loader(self.train_data, batch_size=self.batch_size)
             optimizer = self.calculator.get_optimizer(self.optimizer_name, model, lr = self.learning_rate, weight_decay=self.weight_decay, momentum=self.momentum)
-            if current_round == 0:
-                num_epochs = self.epochs_round_0
-            else:
-                num_epochs = self.epochs
+            
             for iter in range(self.epochs):
                 for batch_id, batch_data in enumerate(data_loader):
                     model.zero_grad()
@@ -421,12 +417,8 @@ class BasicClient():
             data_loader = self.calculator.get_data_loader(self.train_data, batch_size=self.batch_size)
             
             optimizer = self.calculator.get_optimizer(self.optimizer_name, model, lr = self.learning_rate, weight_decay=self.weight_decay, momentum=self.momentum)
-            if current_round == 0:
-                num_epochs = self.epochs_round_0
-            else:
-                num_epochs = self.epochs
-                
-            for iter in range(num_epochs):
+        
+            for iter in range(self.epochs):
                 uncertainty = 0.0
                 total_loss = 0.0
                 for batch_id, batch_data in enumerate(data_loader):
@@ -533,7 +525,7 @@ class BasicClient():
             package: a dict that contains the necessary information for the server
         """
         return {
-            "model" : model,
+            "model" : copy.deepcopy(model),
             # "data_idxs": data_idxs,
             # "Acc_global": Acc_global,
             # "acc_local": acc_local,

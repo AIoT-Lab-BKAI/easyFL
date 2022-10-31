@@ -27,10 +27,10 @@ class TaskGen(DefaultTaskGen):
 
 
 class TaskReader(DirtyTaskReader):
-    def __init__(self, taskpath, train_dataset=None, test_dataset=None, noise_magnitude=1, dirty_rate=None, data_folder="./benchmark/cifar10/data"):
+    def __init__(self, taskpath, train_dataset=None, test_dataset=None, noise_magnitude=1, dirty_rate=None, data_folder="./benchmark/cifar10/data", noise_type=''):
         train_dataset = datasets.CIFAR10(data_folder, train=True, download=True, transform=transforms.Compose([transforms.ToTensor()]))
         test_dataset = datasets.CIFAR10(data_folder, train=False, download=True, transform=transforms.Compose([transforms.ToTensor()]))
-        super().__init__(taskpath, train_dataset, test_dataset, noise_magnitude, dirty_rate)
+        super().__init__(taskpath, train_dataset, test_dataset, noise_magnitude, dirty_rate, noise_type)
 
 class TaskCalculator(ClassifyCalculator):
     def __init__(self, device):

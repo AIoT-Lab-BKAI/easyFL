@@ -1,17 +1,24 @@
+import copy
+import csv
+import json
+import os
+import time
+from heapq import nsmallest
 from optparse import Option
 from pathlib import Path
-import time
 from turtle import mode
-from algorithm.fedbase import BasicServer, BasicClient
-from main import logger
-import os
-import utils.fflow as flw
-import torch.multiprocessing as mp
-import torch
-import wandb
-import json
+
 import numpy as np
-import csv
+import torch
+import torch.multiprocessing as mp
+
+import utils.fflow as flw
+import wandb
+from algorithm.fedbase import BasicClient, BasicServer
+from main import logger
+from utils.aggregate_funct import *
+
+
 class MPBasicServer(BasicServer):
     def __init__(self, option, model, clients, test_data=None):
         super().__init__(option, model, clients, test_data)
@@ -24,7 +31,7 @@ class MPBasicServer(BasicServer):
         number_predict_noise = 0
         previous_number_predict_noise = 0
         PATH = 'results/uncertainty_all_samples/{}/{}/{}'.format(self.option['model'],self.option['file_save_model'], round)
-        for i in range(0, 10):
+        for i in range(0, 5):
             with open(PATH + f'/{i}.json', 'r') as f:
                 list_uncertainty = json.load(f)
             for key in list_uncertainty.keys():
@@ -32,27 +39,80 @@ class MPBasicServer(BasicServer):
                     number_predict_noise += 1
         
         Pre_PATH = 'results/uncertainty_all_samples/{}/{}/{}'.format(self.option['model'],self.option['file_save_model'], round-1)
-        for i in range(0, 10):
+        for i in range(0, 5):
             with open(Pre_PATH + f'/{i}.json', 'r') as f:
                 list_uncertainty = json.load(f)
             for key in list_uncertainty.keys():
                 if list_uncertainty[key] == 1:
                     previous_number_predict_noise += 1
         
-        if number_predict_noise < 26000 and number_predict_noise > 25000 and abs(number_predict_noise - previous_number_predict_noise) < 200:
+        if number_predict_noise < 25000 and number_predict_noise > 22000 and abs(number_predict_noise - previous_number_predict_noise) < 250:
             print(number_predict_noise)
             print(previous_number_predict_noise)
             return True
         else:
             return False
     
+    def agg_fuction(self, client_models):
+        server_model = copy.deepcopy(self.model)
+        server_param = []
+        for name, param in server_model.state_dict().items():
+            server_param=param.view(-1) if not len(server_param) else torch.cat((server_param,param.view(-1)))
+        
+        client_params = []
+        for client_model in client_models:
+            client_param=[]
+            for name, param in client_model.state_dict().items():
+                client_param=param.view(-1) if not len(client_param) else torch.cat((client_param,param.view(-1)))
+            client_params=client_param[None, :] if len(client_params)==0 else torch.cat((client_params,client_param[None,:]), 0)
+        
+        for idx, client in enumerate(client_params):
+            client_params[idx] = torch.sub(client, server_param)
+
+        if self.agg_option=='median':
+            agg_grads=torch.median(client_params,dim=0)[0]
+
+        elif self.agg_option=='mean':
+            agg_grads=torch.mean(client_params,dim=0)
+
+        elif self.agg_option=='trmean':
+            ntrmean = 2
+            agg_grads=tr_mean(client_params, ntrmean)
+
+        elif self.agg_option=='krum' or self.agg_option=='mkrum2' or self.agg_option=='mkrum4':
+            multi_k = False if self.agg_option == 'krum' else True
+            print('multi krum is ', multi_k)
+            if self.agg_option=='mkrum4': 
+                nkrum = 3
+            else: 
+                nkrum = 2
+            agg_grads, krum_candidate = multi_krum(client_params, nkrum, multi_k=multi_k)
+            
+        elif self.agg_option=='bulyan' or self.agg_option=='bulyan5':
+            if self.agg_option=='bulyan': 
+                nbulyan = 1
+            elif self.agg_option=='bulyan5': 
+                nbulyan = 5
+            agg_grads, krum_candidate=bulyan(client_params, nbulyan)
+
+        start_idx=0
+        model_grads=[]
+        new_global_model = copy.deepcopy(self.model)
+        for name, param in new_global_model.state_dict().items():
+            param_=agg_grads[start_idx:start_idx+len(param.data.view(-1))].reshape(param.data.shape)
+            start_idx=start_idx+len(param.data.view(-1))
+            param_=param_.cuda()
+            new_global_model.state_dict()[name].copy_(param + param_)
+            # model_grads.append(param_)
+            
+        return new_global_model
     def run(self):
         """
         Start the federated learning symtem where the global model is trained iteratively.
         """
         pool = mp.Pool(self.num_threads)
         logger.time_start('Total Time Cost')
-        for round in range(1, self.num_rounds+1):
+        for round in range(1, self.num_rounds + 1):
             self.current_round = round
             print("--------------Round {}--------------".format(round))
             logger.time_start('Time Cost')
@@ -65,24 +125,26 @@ class MPBasicServer(BasicServer):
             logger.time_end('Time Cost')
             if logger.check_if_log(round, self.eval_interval): logger.log(self)
             # with open(f'results/result/{self.result_file_name}', 'w') as f:
-                
+            
             #         json.dump(self.result, f)
-            path_save_model = './results/checkpoints/{}_{}.pt'.format(self.option['model'], self.option['file_save_model'])
+            path_save_model = './results/checkpoints/{}_{}_{}.pt'.format(self.option['model'], self.option['noise_type'], self.option['aggregate'])
             torch.save(self.model.state_dict(), path_save_model)
-            if self.option['percent_noise_remove'] == 0:
-                if round >= 25:
-                    if (self.check_converge(round) == True):
-                        break
+            # if self.option['percent_noise_remove'] == 0:
+            #     if round >= 5:
+            #         if (self.check_converge(round) == True):
+            #             print("Uncertainty converged")
+            #             break
         print("=================End==================")
         logger.time_end('Total Time Cost')
-        # save results as .json file
-        filepath = os.path.join(self.log_folder, self.option['task'], self.option['dataidx_filename']).split('.')[0]
-        if not Path(filepath).exists():
-            os.system(f"mkdir -p {filepath}")
-        logger.save(os.path.join(filepath, flw.output_filename(self.option, self)))
-
-        # path_save_model = f'./results/checkpoints'
-        # torch.save(self.model.state_dict(), path_save_model)
+        # # save results as .json file
+        # filepath = os.path.join(self.log_folder, self.option['task'], self.option['dataidx_filename']).split('.')[0]
+        # if not Path(filepath).exists():
+        #     os.system(f"mkdir -p {filepath}")
+        # logger.save(os.path.join(filepath, flw.output_filename(self.option, self)))
+        with open('./results/defences/{}_{}.csv'.format(self.option['noise_type'], self.option['num_malicious']), 'a') as f:
+            row = [self.option['aggregate'], logger.output['test_accs'][-1]]
+            writer = csv.writer(f)
+            writer.writerow(row)
 
     def iterate(self, t, pool):
         """
@@ -133,9 +195,11 @@ class MPBasicServer(BasicServer):
         models = [i.to(device0) for i in models]
         # self.model = self.aggregate(models, p = [1.0 * self.client_vols[cid]/self.data_vol for cid in self.selected_clients])
         if self.current_round != -1:
-            self.client_vols = [c.datavol for c in self.clients]
-            self.data_vol = sum(self.client_vols)
-            self.model = self.aggregate(models, p = [1.0 * self.client_vols[cid]/self.data_vol for cid in self.selected_clients])
+            # self.client_vols = [c.datavol for c in self.clients]
+            # self.data_vol = sum(self.client_vols)
+            # self.model = self.aggregate(models, p = [1.0 * self.client_vols[cid]/self.data_vol for cid in self.selected_clients])
+            self.model = self.agg_fuction(models)
+            
             print(f'Done aggregate at round {self.current_round}')
         return
 
@@ -249,15 +313,35 @@ class MPBasicClient(BasicClient):
         # return
         if self.uncertainty == 0:
             model.train()
+            # if self.option['percent_noise_remove'] != 0:
+            #     rank_dict = {}
+            #     # PATH = 'results/uncertainty_all_samples/{}/{}/{}'.format(self.option['model'],self.option['file_save_model'], current_round)
+            #     PATH = 'results/uncertainty_all_samples/resnet18/check_uncertainty_converge_2/1'
+        
+            #     # with open(PATH + f'/{self.name}.json', 'w') as f:
+            #     #     uncertainty_dict = json.load(f)
+            #     with open('results/dirty_dataidx_50' + f'/{self.name}.json', 'r') as f:
+            #         dirty_list = json.load(f)
+                
+            #     with open(PATH + f'/{self.name}_output.json', 'r') as f:
+            #         output_dict = json.load(f)
+
+            #     # for key in uncertainty_dict.keys():
+            #     #     if uncertainty_dict[key] == 1:
+            #     #         rank_dict[key] = output_dict[key]
+            #     for key in dirty_list:
+            #         rank_dict[key] = output_dict[str(key)]
+
+            #     # number = self.option['percent_noise_remove'] * len(uncertainty_list)
+            #     number = int(self.option['percent_noise_remove'] * len(dirty_list))
+            #     list_noise = nsmallest(number, rank_dict, key = rank_dict.get)
+            #     self.train_data.remove_noise_specific(list_noise)
             # device = 'cuda' if torch.cuda.is_available() else 'cpu'
             # model = model.to(device)
             print(len(self.train_data.idxs))
             data_loader = self.calculator.get_data_loader(self.train_data, batch_size=self.batch_size)
             optimizer = self.calculator.get_optimizer(self.optimizer_name, model, lr = self.learning_rate, weight_decay=self.weight_decay, momentum=self.momentum)
-            if current_round == 0:
-                num_epochs = self.epochs_round_0
-            else:
-                num_epochs = self.epochs
+           
             for iter in range(self.epochs):
                 for batch_id, batch_data in enumerate(data_loader):
                     model.zero_grad()
@@ -266,10 +350,34 @@ class MPBasicClient(BasicClient):
                     optimizer.step()
             # return np.array(0), self.train_data.idxs
             # train function at clients
+            # if self.option['percent_noise_remove'] != 0:
+            #     self.train_data.reverse_idx()
         else:
             model.train()
-            if self.option['percent_noise_remove'] != 0:
-                self.train_data.remove_noise(percent=self.option['percent_noise_remove'])
+            
+            # if self.option['percent_noise_remove'] != 0:
+            #     rank_dict = {}
+            #     # PATH = 'results/uncertainty_all_samples/{}/{}/{}'.format(self.option['model'],self.option['file_save_model'], current_round)
+            #     PATH = 'results/uncertainty_all_samples/resnet18/check_uncertainty_converge_2/1'
+        
+            #     # with open(PATH + f'/{self.name}.json', 'w') as f:
+            #     #     uncertainty_dict = json.load(f)
+            #     with open('results/dirty_dataidx_50' + f'/{self.name}.json', 'r') as f:
+            #         dirty_list = json.load(f)
+                
+            #     with open(PATH + f'/{self.name}_output.json', 'r') as f:
+            #         output_dict = json.load(f)
+
+            #     # for key in uncertainty_dict.keys():
+            #     #     if uncertainty_dict[key] == 1:
+            #     #         rank_dict[key] = output_dict[key]
+            #     for key in dirty_list:
+            #         rank_dict[key] = output_dict[str(key)]
+
+            #     # number = self.option['percent_noise_remove'] * len(uncertainty_list)
+            #     number = int(self.option['percent_noise_remove'] * len(dirty_list))
+            #     list_noise = nsmallest(number, rank_dict, key = rank_dict.get)
+            #     self.train_data.remove_noise_specific(list_noise)
             # device = 'cuda' if torch.cuda.is_available() else 'cpu'
             # model = model.to(device)
             # if current_round >= 20:
@@ -283,12 +391,8 @@ class MPBasicClient(BasicClient):
             data_loader = self.calculator.get_data_loader(self.train_data, batch_size=self.batch_size)
             
             optimizer = self.calculator.get_optimizer(self.optimizer_name, model, lr = self.learning_rate, weight_decay=self.weight_decay, momentum=self.momentum)
-            if current_round == 0:
-                num_epochs = self.epochs_round_0
-            else:
-                num_epochs = self.epochs
                 
-            for iter in range(num_epochs):
+            for iter in range(self.epochs):
                 uncertainty = 0.0
                 total_loss = 0.0
                 for batch_id, batch_data in enumerate(data_loader):
@@ -306,8 +410,8 @@ class MPBasicClient(BasicClient):
                 #     writer.writerow(line)
                     
             # return uncertainty, self.train_data.idxs
-            if self.option['percent_noise_remove'] != 0:
-                self.train_data.reverse_idx()
+            # if self.option['percent_noise_remove'] != 0:
+            #     self.train_data.reverse_idx()
 
 
     def test(self, model, dataflag='valid', device='cpu'):
@@ -353,10 +457,9 @@ class MPBasicClient(BasicClient):
         # loss = self.train_loss(model)
         # if round in [25, 50, 75, 100]:
         #     self.calculate_unc_all_samples(model, round)
-        if self.option['percent_noise_remove'] == 0:
-            if round >= 24:
-                self.calculate_unc_all_samples(model, round)    
-
+        # if self.option['percent_noise_remove'] == 0:
+        #     if round >= 4:
+        #         self.calculate_unc_all_samples(model, round)    
         # Acc_global, loss_global = self.test(model)
         # uncertainty, data_idxs = self.train(model, device, round)
         # acc_local, loss_local = self.test(model)
@@ -368,17 +471,22 @@ class MPBasicClient(BasicClient):
         return cpkg
 
     def calculate_unc_all_samples(self, global_model, current_round):
+        global_model.eval()
         uncertainty_dict = {}
+        output_dict = {}
         for i in range(len(self.train_data)):
             data, label = self.train_data[i]
-            uncertainty = self.calculator.get_uncertainty(global_model, data)
+            uncertainty, output = self.calculator.get_uncertainty(global_model, data)
             uncertainty_dict[self.train_data.idxs[i]] = uncertainty.item()
+            output_dict[self.train_data.idxs[i]] = output.item()
 
         PATH = 'results/uncertainty_all_samples/{}/{}/{}'.format(self.option['model'],self.option['file_save_model'], current_round)
         if not os.path.exists(PATH):
             os.makedirs(PATH)
         with open(PATH + f'/{self.name}.json', 'w') as f:
             json.dump(uncertainty_dict, f)
+        with open(PATH + f'/{self.name}_output.json', 'w') as f:
+            json.dump(output_dict, f)
 
     def train_loss(self, model, device):
         """

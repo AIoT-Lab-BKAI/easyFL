@@ -11,7 +11,7 @@ import ujson
 import time
 
 sample_list=['uniform', 'md', 'active']
-agg_list=['uniform', 'weighted_scale', 'weighted_com', 'none']
+agg_list=['uniform', 'weighted_scale', 'weighted_com', 'none', 'median', 'mean', 'trmean', 'krum', 'krum5', 'mkrum20', 'bulyan', 'bulyan5']
 optimizer_list=['SGD', 'Adam']
 
 def read_option():
@@ -23,7 +23,7 @@ def read_option():
     parser.add_argument('--output_file_name', type=str, default='output.json')
     # methods of server side for sampling and aggregating
     parser.add_argument('--sample', help='methods for sampling clients', type=str, choices=sample_list, default='uniform')
-    parser.add_argument('--aggregate', help='methods for aggregating models', type=str, choices=agg_list, default='none')
+    parser.add_argument('--aggregate', help='methods for aggregating models', type=str, default='mean')
     parser.add_argument('--learning_rate_decay', help='learning rate decay for the training process;', type=float, default=0.998)
     parser.add_argument('--weight_decay', help='weight decay for the training process', type=float, default=0)
     parser.add_argument('--lr_scheduler', help='type of the global learning rate scheduler', type=int, default=-1)
@@ -32,7 +32,6 @@ def read_option():
     parser.add_argument('--proportion', help='proportion of clients sampled per round', type=float, default=0.2)
     # hyper-parameters of local training
     parser.add_argument('--num_epochs', help='number of epochs when clients train on data;', type=int, default=5)
-    parser.add_argument('--num_epochs_round_0', help='number of epochs at round 0 when clients train on data;', type=int, default=20)
     parser.add_argument('--learning_rate', help='learning rate for inner solver;', type=float, default=0.0001)
     parser.add_argument('--batch_size', help='batch size when clients train on data;', type=int, default=64)
     parser.add_argument('--optimizer', help='select the optimizer for gd', type=str, choices=optimizer_list, default='Adam')
@@ -80,9 +79,12 @@ def read_option():
     parser.add_argument('--dirty_rate', help="(Dirty dataset only)", nargs='+', type=float)   
     parser.add_argument('--result_file_name', help="file name of result.txt", type=str, required=False)
     parser.add_argument('--uncertainty', help="whether to use uncertainty", type=int, default=1)
-    parser.add_argument('--file_log_per_epoch', help="file to log result per epoch", type=str, required=True)
-    parser.add_argument('--file_save_model', help="file to save model.pt", type=str, required=True)
+    parser.add_argument('--file_log_per_epoch', help="file to log result per epoch", type=str)
+    parser.add_argument('--file_save_model', help="file to save model.pt", type=str, required=False)
     parser.add_argument('--percent_noise_remove', help='percent_noise_remove', type=float)
+    parser.add_argument('--noise_type', help='noise_type', type=str)
+    parser.add_argument('--num_malicious', help='the number of malicious clients', type=int)
+
 
     
     
@@ -113,7 +115,7 @@ def initialize(option):
     elif bmk_name == "dirtymnist":
         task_reader = getattr(importlib.import_module(bmk_core_path), 'TaskReader')(taskpath=option['dataidx_filename'], noise_magnitude=option['noise_magnitude'], dirty_rate=option['dirty_rate'], data_folder=option['data_folder'])
     elif bmk_name == "dirtycifar10":
-        task_reader = getattr(importlib.import_module(bmk_core_path), 'TaskReader')(taskpath=option['dataidx_filename'], noise_magnitude=option['noise_magnitude'], dirty_rate=option['dirty_rate'], data_folder=option['data_folder'])
+        task_reader = getattr(importlib.import_module(bmk_core_path), 'TaskReader')(taskpath=option['dataidx_filename'], noise_magnitude=option['noise_magnitude'], dirty_rate=option['dirty_rate'], data_folder=option['data_folder'], noise_type=option['noise_type'])
     else:
         task_reader = getattr(importlib.import_module(bmk_core_path), 'TaskReader')(taskpath=option['dataidx_filename'], data_folder=option['data_folder'], )
     train_datas, test_data, num_clients = task_reader.read_data()

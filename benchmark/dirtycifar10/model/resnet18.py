@@ -6,7 +6,7 @@ from utils.fmodule import FModule
 class Model(FModule):
     def __init__(self):
         super().__init__()
-        self.model = torch.hub.load('pytorch/vision:v0.10.0', 'resnet18', pretrained=True)
+        self.model = torch.hub.load('pytorch/vision:v0.10.0', 'resnet18', pretrained=False)
         self.linear = nn.Linear(1000, 10)
 
 
