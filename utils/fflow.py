@@ -34,7 +34,7 @@ def read_option():
     parser.add_argument('--num_epochs', help='number of epochs when clients train on data;', type=int, default=5)
     parser.add_argument('--learning_rate', help='learning rate for inner solver;', type=float, default=0.0001)
     parser.add_argument('--batch_size', help='batch size when clients train on data;', type=int, default=64)
-    parser.add_argument('--optimizer', help='select the optimizer for gd', type=str, choices=optimizer_list, default='Adam')
+    parser.add_argument('--optimizer', help='select the optimizer for gd', type=str, choices=optimizer_list, default='SGD')
     parser.add_argument('--momentum', help='momentum of local update', type=float, default=0)
 
     # machine environment settings
@@ -84,6 +84,9 @@ def read_option():
     parser.add_argument('--percent_noise_remove', help='percent_noise_remove', type=float)
     parser.add_argument('--noise_type', help='noise_type', type=str)
     parser.add_argument('--num_malicious', help='the number of malicious clients', type=int)
+    parser.add_argument('--attacked_class', help="(Dirty dataset only)", nargs='+', type=int)   
+    
+    
 
 
     
@@ -115,7 +118,7 @@ def initialize(option):
     elif bmk_name == "dirtymnist":
         task_reader = getattr(importlib.import_module(bmk_core_path), 'TaskReader')(taskpath=option['dataidx_filename'], noise_magnitude=option['noise_magnitude'], dirty_rate=option['dirty_rate'], data_folder=option['data_folder'])
     elif bmk_name == "dirtycifar10":
-        task_reader = getattr(importlib.import_module(bmk_core_path), 'TaskReader')(taskpath=option['dataidx_filename'], noise_magnitude=option['noise_magnitude'], dirty_rate=option['dirty_rate'], data_folder=option['data_folder'], noise_type=option['noise_type'])
+        task_reader = getattr(importlib.import_module(bmk_core_path), 'TaskReader')(taskpath=option['dataidx_filename'], noise_magnitude=option['noise_magnitude'], dirty_rate=option['dirty_rate'], data_folder=option['data_folder'], noise_type=option['noise_type'],option=option)
     else:
         task_reader = getattr(importlib.import_module(bmk_core_path), 'TaskReader')(taskpath=option['dataidx_filename'], data_folder=option['data_folder'], )
     train_datas, test_data, num_clients = task_reader.read_data()

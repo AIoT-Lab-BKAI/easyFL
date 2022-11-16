@@ -25,3 +25,9 @@ benchmark/pilldataset/data/pill3*
 invest/
 pics*
 results/checkpoints
+grad
+grad0
+grad5
+grad5_05
+grad10
+kmeans_pred_fig

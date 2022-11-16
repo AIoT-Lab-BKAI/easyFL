@@ -17,6 +17,8 @@ import wandb
 from algorithm.fedbase import BasicClient, BasicServer
 from main import logger
 from utils.aggregate_funct import *
+from utils.plot_pca import *
+from sklearn.metrics import *
 
 
 class MPBasicServer(BasicServer):
@@ -146,7 +148,7 @@ class MPBasicServer(BasicServer):
             writer = csv.writer(f)
             writer.writerow(row)
 
-    def iterate(self, t, pool):
+    def iterate(self, round, pool):
         """
         The standard iteration of each federated round that contains three
         necessary procedure in FL: client selection, communication and model aggregation.
@@ -158,7 +160,9 @@ class MPBasicServer(BasicServer):
         # training
         # models, train_losses = self.communicate(self.selected_clients, pool)
         # models, packages_received_from_clients = self.communicate(self.selected_clients, pool)
-        models = self.communicate(self.selected_clients, pool)
+        models, peer_grads = self.communicate(self.selected_clients, pool)
+        peers_types = [self.clients[id].train_data.client_type for id in self.selected_clients]
+        plot_updates_components(copy.deepcopy(self.model), peer_grads, peers_types, epoch=round, proportion = self.option['proportion'], attacked_class = self.option['attacked_class'],dirty_rate=self.option['dirty_rate'][0],num_malicious=self.option['num_malicious'])
         
         # list_uncertainty = []
         # for i in range(len(self.selected_clients)):
@@ -201,6 +205,36 @@ class MPBasicServer(BasicServer):
             self.model = self.agg_fuction(models)
             
             print(f'Done aggregate at round {self.current_round}')
+        
+        attacked_class_accuracies = []
+        actuals, predictions = self.test_label_predictions(copy.deepcopy(self.model), device0)
+        classes = list(i for i in range(10))
+        print('{0:10s} - {1}'.format('Class','Accuracy'))
+        # for i, r in enumerate(confusion_matrix(actuals, predictions)):
+        #     print('{} - {:.2f}'.format(classes[i], r[i]/np.sum(r)*100))
+        #     if i in self.option['attacked_class']:
+        #         attacked_class_accuracies.append(np.round(r[i]/np.sum(r)*100, 2))
+
+        
+        path_csv = 'grad/attacked_class_{}/dirty_rate_{}/proportion_{}/num_malicious_{}/csv'.format(len(self.option['attacked_class']),self.option['dirty_rate'][0],self.option['proportion']*50,self.option['num_malicious'])
+        
+        with open(path_csv + '/' + 'confusion_matrix.csv', 'a', encoding='UTF8') as f:
+            writer = csv.writer(f)
+            for i, r in enumerate(confusion_matrix(actuals, predictions)):
+                data = []
+                print('{} - {:.2f}'.format(classes[i], r[i]/np.sum(r)*100))
+                data.append(classes[i])
+                data.append(r[i]/np.sum(r)*100)
+                if i in self.option['attacked_class']:
+                    attacked_class_accuracies.append(np.round(r[i]/np.sum(r)*100, 2))
+                    data.append('attacked')
+                else:
+                    data.append('clean')
+                writer.writerow(data)
+            writer.writerow(['','',''])
+            writer.writerow(['','',''])
+            
+        
         return
 
     def communicate(self, selected_clients, pool):
@@ -268,7 +302,21 @@ class MPBasicServer(BasicServer):
             return eval_metric, loss, inference_metric
         else: 
             return -1, -1, -1
-
+    def test_label_predictions(self, model, device):
+        model.eval()
+        actuals = []
+        predictions = []
+        test_loader = self.calculator.get_data_loader(self.test_data, batch_size=64)
+        with torch.no_grad():
+            for data, target in test_loader:
+                data, target = data.to(device), target.to(device)
+                output = model(data)
+                prediction = output.argmax(dim=1, keepdim=True)
+                
+                actuals.extend(target.view_as(prediction))
+                predictions.extend(prediction)
+        return [i.item() for i in actuals], [i.item() for i in predictions]
+    
     def test_on_clients(self, round, dataflag='valid', device='cuda'):
         """
         Validate accuracies and losses on clients' local datasets
@@ -341,17 +389,27 @@ class MPBasicClient(BasicClient):
             print(len(self.train_data.idxs))
             data_loader = self.calculator.get_data_loader(self.train_data, batch_size=self.batch_size)
             optimizer = self.calculator.get_optimizer(self.optimizer_name, model, lr = self.learning_rate, weight_decay=self.weight_decay, momentum=self.momentum)
+            peer_grad = []
            
             for iter in range(self.epochs):
                 for batch_id, batch_data in enumerate(data_loader):
                     model.zero_grad()
+                    optimizer.step()
                     loss = self.calculator.get_loss_not_uncertainty(model, batch_data, device)
                     loss.backward()
+                    # Get gradient
+                    for i, (name, params) in enumerate(model.named_parameters()):
+                        if params.requires_grad:
+                            if iter == 0 and batch_id == 0:
+                                peer_grad.append(params.grad.clone())
+                            else:
+                                peer_grad[i]+= params.grad.clone()
                     optimizer.step()
             # return np.array(0), self.train_data.idxs
             # train function at clients
             # if self.option['percent_noise_remove'] != 0:
             #     self.train_data.reverse_idx()
+            return peer_grad
         else:
             model.train()
             
@@ -465,8 +523,8 @@ class MPBasicClient(BasicClient):
         # acc_local, loss_local = self.test(model)
         # cpkg = self.pack(model, data_idxs, Acc_global, acc_local, uncertainty)
 
-        self.train(model, device, round)
-        cpkg = self.pack(model)
+        peer_grad = self.train(model, device, round)
+        cpkg = self.pack(model, peer_grad)
         
         return cpkg
 
