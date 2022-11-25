@@ -29,7 +29,7 @@ class MyLogger(flw.Logger):
         else:
             test_metric, test_loss = server.test(device="cuda")
         
-        valid_metrics, valid_losses = server.test_on_clients('valid', 'cuda', round=round)
+        valid_metrics, valid_losses = server.test_on_clients(dataflag='valid', device='cuda', round=round)
         # train_metrics, train_losses = server.test_on_clients(self.current_round, 'train', 'cuda')
         train_metrics, train_losses = (valid_metrics, valid_losses)
         
