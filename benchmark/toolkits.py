@@ -33,6 +33,14 @@ import json
 import os
 from PIL import Image
 import time
+from utils.fmodule import FModule
+
+def check_model_nan(model: FModule):
+    for p in model.parameters():
+        if torch.isnan(p.data).any():
+            print("Model contains nan values")
+            return True
+    return False
 
 def set_random_seed(seed=0):
     """Set random seed"""
@@ -410,10 +418,24 @@ class ClassifyCalculator(BasicTaskCalculator):
     @torch.no_grad()
     def test(self, model, data, device=None):
         """Metric = Accuracy"""
+        # if check_model_nan(model):
+        #     exit(0)
+            
         tdata = self.data_to_device(data, device)
         model = model.to(device)
         outputs = model(tdata[0])
+        
+        # if torch.isnan(outputs).any():
+        #     print("Outputs is nan", outputs)
+        #     exit(0)
+            
         loss = self.lossfunc(outputs, tdata[-1])
+        
+        # if torch.isnan(loss).any():
+        #     print("loss is nan", loss)
+        #     print("inputs are: preds", outputs, " ground", tdata[-1])
+        #     exit(0)
+            
         y_pred = outputs.data.max(1, keepdim=True)[1]
         correct = y_pred.eq(tdata[1].data.view_as(y_pred)).long().cpu().sum()
         return (1.0 * correct / len(tdata[1])).item(), loss.item()

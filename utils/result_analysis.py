@@ -168,9 +168,6 @@ def main_func(task, headers, flt):
     # read the selected files into dicts
     dicts = read_data_into_dicts(task, records)
 
-    # print table
-    # print_table(records, dicts)
-
     # draw curves
     curve_names = [
         'train_losses',
@@ -212,14 +209,14 @@ if __name__ == '__main__':
         # 'E': '8',
         # 'B': '4',
         # 'LR': '0.01',
-        'R': '250',
+        # 'R': '10',
         # 'P': '1',
         # 'S': '0',
     }
     
-    numclient = 10
+    # numclient = 10
     for s in [1]:
-        task = f'mnist_sparse_N10_K10/mnist/sparse/10client/mnist_sparse'
+        task = f'mnist_sparse_N100_K30/mnist/sparse/100client/mnist_sparse'
         try:
             main_func(task, headers, flt)
         except ValueError:
