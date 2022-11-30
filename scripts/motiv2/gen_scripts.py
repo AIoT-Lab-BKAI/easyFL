@@ -22,7 +22,7 @@ for E in [1, 5, 10, 20, 25, 40, 50]:
     for algo in algos:
         formated_command = f"CUDA_VISIBLE_DEVICES={cudas}\
             python main.py \
-            --task {task_name}_E{E} \
+            --task {task_name} \
             --model {model} \
             --algorithm {algo} \
             --wandb 1 \
