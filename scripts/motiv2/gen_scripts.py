@@ -37,6 +37,6 @@ for E in [1, 5, 10, 20, 25, 40, 50]:
             --num_gpus {len(visible_cudas)} \
             --server_gpu_id 0".replace("           ", "")
 
-        file = open(f"./{task_name}_{algo}.sh", "w")
+        file = open(f"./{task_name}_E{E}_{algo}.sh", "w")
         file.write(formated_command)
         file.close()
