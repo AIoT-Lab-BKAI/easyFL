@@ -17,15 +17,15 @@ data_folder = f"./benchmark/{dataset}/data"
 log_folder = f"motiv/{dataset}"
 
 for E in [1, 5, 10, 20, 25, 40, 50]:
-    task_name = f"{dataset}_{noniid}_N{N}_K{K}_E{E}"
+    task_name = f"{dataset}_{noniid}_N{N}_K{K}"
 
     for algo in algos:
         formated_command = f"CUDA_VISIBLE_DEVICES={cudas}\
             python main.py \
-            --task {task_name} \
+            --task {task_name}_E{E} \
             --model {model} \
             --algorithm {algo} \
-            --wandb 0 \
+            --wandb 1 \
             --data_folder \"{data_folder}\" \
             --log_folder \"{log_folder}\" \
             --dataidx_filename \"{dataset}/{N}client/{noniid}/{dataset.upper()}-noniid-{noniid}_1.json\" \
