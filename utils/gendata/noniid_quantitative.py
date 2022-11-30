@@ -73,9 +73,12 @@ def cifar100_noniid_quantitative(dataset, total_client, total_label=100):
         label_list = list(set(label_list) - set(this_set))
     
     num_added = (total_client - len(client_labels))
-    adds_client_label = [client_labels[-1]] * num_added
-    adds_client_Nsample = np.round(np.random.default_rng().normal(0.65/(num_added + 1), 0.1/(num_added + 1), num_added + 1) * (total_sample/total_label))
-    client_Nsample = np.round(np.random.default_rng().normal(0.5, 0.1, len(client_labels) - 1) * (total_sample/total_label))
+    x1 = int(num_added * 0.4)
+    x2 = int(num_added * 0.3)
+    x3 = num_added - x1 - x2
+    adds_client_label = [client_labels[-1]] * x1 + [client_labels[-2]] * x2 + [client_labels[-3]] * x3
+    adds_client_Nsample = np.round(np.random.default_rng().normal(0.6/(num_added + 1), 0.1/(num_added + 1), num_added + 1) * (total_sample/total_label))
+    client_Nsample = np.round(np.random.default_rng().normal(0.3, 0.1, len(client_labels) - 1) * 0.1 * (total_sample/total_label))
     
     client_labels = client_labels + adds_client_label
     client_Nsample = client_Nsample.tolist() + adds_client_Nsample.tolist()

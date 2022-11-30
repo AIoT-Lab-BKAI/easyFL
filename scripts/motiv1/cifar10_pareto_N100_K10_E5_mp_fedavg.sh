@@ -2,7 +2,7 @@
 #$ -cwd
 #$ -l rt_G.small=1
 #$ -l h_rt=36:00:00
-#$ -o /home/aaa10078nj/Federated_Learning/Hung_test/logs/motiv2/$JOB_NAME_$JOB_ID.log
+#$ -o /home/aaa10078nj/Federated_Learning/Hung_test/logs/motiv1/$JOB_NAME_$JOB_ID.log
 #$ -j y
 
 source /etc/profile.d/modules.sh
@@ -14,13 +14,13 @@ module load nccl/2.11/2.11.4-1
 module load python/3.10/3.10.4
 source ~/venv/pytorch1.11+horovod/bin/activate
 
-LOG_DIR="/home/aaa10078nj/Federated_Learning/Hung_test/logs/motiv2/mnist/$JOB_NAME_$JOB_ID"
+LOG_DIR="/home/aaa10078nj/Federated_Learning/Hung_test/logs/motiv1/cifar10/$JOB_NAME_$JOB_ID"
 rm -r ${LOG_DIR}
 mkdir ${LOG_DIR}
 
 #Dataset
 DATA_DIR="$SGE_LOCALDIR/$JOB_ID/"
-cp -r ./easyFL/benchmark/mnist/data ${DATA_DIR}
+cp -r ./easyFL/benchmark/cifar10/data ${DATA_DIR}
 
 GROUP="cifar10_pareto_N100_K10_E5"
 ALG="mp_fedavg"
@@ -34,7 +34,7 @@ NUM_THRESH_PER_GPU=1
 NUM_GPUS=1
 SERVER_GPU_ID=0
 TASK="cifar10_pareto_N100_K10_E5"
-DATA_IDX_FILE="cifar10/100client/CIFAR10_100client_pareto.json"
+DATA_IDX_FILE="cifar10/100client/CIFAR10_100client_pareto.csv"
 
 cd easyFL
 
