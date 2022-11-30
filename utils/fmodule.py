@@ -1,5 +1,6 @@
 import torch
 from torch import nn
+import copy
 
 device=None
 TaskCalculator=None
@@ -96,7 +97,7 @@ def log(m):
 
 def element_wise_func(m, func):
     if not m: return None
-    res = Model().to(m.get_device())
+    res = copy.deepcopy(m).to(m.get_device())
     if m.ingraph:
         res.op_with_graph()
         ml = get_module_from_model(m)
@@ -111,7 +112,7 @@ def element_wise_func(m, func):
 def _model_sum(ms):
     if not ms: return None
     op_with_graph = sum([mi.ingraph for mi in ms]) > 0
-    res = Model().to(ms[0].get_device())
+    res = copy.deepcopy(ms[0]).to(ms[0].get_device())
     if op_with_graph:
         mlks = [get_module_from_model(mi) for mi in ms]
         mlr = get_module_from_model(res)
@@ -130,7 +131,7 @@ def _model_average(ms = [], p = []):
     if not ms: return None
     if not p: p = [1.0 / len(ms) for _ in range(len(ms))]
     op_with_graph = sum([w.ingraph for w in ms]) > 0
-    res = Model().to(ms[0].get_device())
+    res = copy.deepcopy(ms[0]).to(ms[0].get_device())
     if op_with_graph:
         mlks = [get_module_from_model(mi) for mi in ms]
         mlr = get_module_from_model(res)
@@ -147,7 +148,7 @@ def _model_average(ms = [], p = []):
 
 def _model_add(m1, m2):
     op_with_graph = m1.ingraph or m2.ingraph
-    res = Model().to(m1.get_device())
+    res = copy.deepcopy(m1).to(m1.get_device())
     if op_with_graph:
         res.op_with_graph()
         ml1 = get_module_from_model(m1)
@@ -164,7 +165,7 @@ def _model_add(m1, m2):
 
 def _model_sub(m1, m2):
     op_with_graph = m1.ingraph or m2.ingraph
-    res = Model().to(m1.get_device())
+    res = copy.deepcopy(m1).to(m1.get_device())
     if op_with_graph:
         res.op_with_graph()
         ml1 = get_module_from_model(m1)
@@ -181,7 +182,7 @@ def _model_sub(m1, m2):
 
 def _model_scale(m, s):
     op_with_graph = m.ingraph
-    res = Model().to(m.get_device())
+    res = copy.deepcopy(m).to(m.get_device())
     if op_with_graph:
         ml = get_module_from_model(m)
         mlr = get_module_from_model(res)

@@ -26,7 +26,7 @@ class Server(MPBasicServer):
         self.selected_clients = self.sample()        
         self.data_vol_this_round = np.sum([self.client_vols[cid] for cid in self.selected_clients])
         
-        models, train_losses = self.communicate(self.selected_clients, pool, t)
+        models, train_losses = self.communicate(self.selected_clients, pool)
         if not self.selected_clients: 
             return
 
@@ -58,15 +58,14 @@ class Client(MPBasicClient):
     def unpack(self, received_pkg):
         return received_pkg['model'], received_pkg['last_impact'], received_pkg['next_impact']
     
-    def reply(self, svr_pkg, device, round):
+    def reply(self, svr_pkg, device):
         global_model, last_impact, next_impact = self.unpack(svr_pkg)
-        # loss = self.train_loss(global_model, device, round)
-        model, train_loss = self.train(global_model, last_impact, next_impact, device, round)
-        # print(f"\tClient {self.name:>3d} done training, Aver. loss: {train_loss:>.3f}")
+        # loss = self.train_loss(global_model, device)
+        model, train_loss = self.train(global_model, last_impact, next_impact, device)
         cpkg = self.pack(model, train_loss)
         return cpkg
     
-    def train(self, global_model: FModule, last_impact, next_impact, device, round):
+    def train(self, global_model: FModule, last_impact, next_impact, device):
         global_model = global_model.to(device)
         
         # Initialize model & Find complement model
