@@ -1,7 +1,6 @@
 # Discription: https://docs.google.com/spreadsheets/d/1km7c9OhhGL3uk9GvVaJw5bEC0Fg3kAPb4meb6Y96MjU
 
 mkdir -p motiv/mnist
-
 # Pareto N=100, K=10
 
 # Epochs = 1, R = 5000
