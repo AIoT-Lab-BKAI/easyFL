@@ -126,7 +126,7 @@ class Server(BasicServer):
             n_clients = len(user_group_img)
             self.train_dataset = PillDataset([idx for idx in range(n_clients)], f"{option['data_folder']}/client_dataset/pill_cropped", user_group_img, img_label_dict, label_hash)
         
-        self.optimizer = optim.Adam(self.model.parameters())
+        self.optimizer = optim.SGD(self.model.parameters())
         
     def iterate(self, t):
         self.train()

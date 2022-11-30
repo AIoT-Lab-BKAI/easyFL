@@ -3,7 +3,7 @@ from utils.fmodule import FModule
 
 def conv_block(in_channel, out_channel, pool=False):
     layers = [nn.Conv2d(in_channel,out_channel,kernel_size=3,padding=1,stride=1),
-        nn.BatchNorm2d(out_channel),
+        # nn.BatchNorm2d(out_channel),
         nn.ReLU(inplace=True)]
 
     if pool:
