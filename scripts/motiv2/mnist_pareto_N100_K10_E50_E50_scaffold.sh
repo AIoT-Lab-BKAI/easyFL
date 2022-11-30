@@ -22,18 +22,18 @@ mkdir ${LOG_DIR}
 DATA_DIR="$SGE_LOCALDIR/$JOB_ID/"
 cp -r ./easyFL/benchmark/mnist/data ${DATA_DIR}
 
-GROUP="mnist_pareto_N100_K10"
+GROUP="mnist_pareto_N100_K10_E50"
 ALG="scaffold"
 MODEL="cnn"
 WANDB=1
-ROUND=5000
-EPOCH_PER_ROUND=1
+ROUND=100
+EPOCH_PER_ROUND=50
 BATCH=16
 PROPOTION=0.10
 NUM_THRESH_PER_GPU=1
 NUM_GPUS=1
 SERVER_GPU_ID=0
-TASK="mnist_pareto_N100_K10"
+TASK="mnist_pareto_N100_K10_E50"
 DATA_IDX_FILE="mnist/100client/pareto/MNIST-noniid-pareto_1.json"
 
 cd easyFL

@@ -58,7 +58,7 @@ cd easyFL\n\n\
 "
 
 for E in [1, 5, 10, 20, 25, 40, 50]:
-    task_name = f"{dataset}_{noniid}_N{N}_K{K}"
+    task_name = f"{dataset}_{noniid}_N{N}_K{K}_E{E}"
 
     for algo in algos:
         command = formated_command.format(
