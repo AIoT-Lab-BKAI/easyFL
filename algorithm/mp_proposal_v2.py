@@ -33,7 +33,7 @@ class Server(MPBasicServer):
         device0 = torch.device(f"cuda:{self.server_gpu_id}")
         models = [i.to(device0) for i in models]
         
-        impact_factors = [1.0 * 1.0 / len(self.selected_clients) for cid in self.selected_clients]
+        impact_factors = [1.0 / len(self.selected_clients) for cid in self.selected_clients]
         new_model = self.aggregate(models, p = impact_factors)
         
         self.model = self.model + len(self.selected_clients)/len(self.clients) * (new_model - self.model)
