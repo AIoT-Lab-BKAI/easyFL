@@ -54,7 +54,7 @@ def noniid_pareto(dataset, total_client, total_label=100):
                     percent[j] += dis[i]
 
             maxx = max(percent)
-            total = np.around(2000/maxx)
+            total = np.around(1000/maxx)
             sample_client = [math.ceil(total * dis[i]) for i in range(total_client)]
             for i in  range(len(sample_client)):
                 if sample_client[i] == 0:

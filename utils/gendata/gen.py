@@ -44,7 +44,7 @@ if __name__ == '__main__':
     
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--method", choices=['featured', 'quantitative', 'pareto'])
+    parser.add_argument("--method", choices=['featured', 'quantitative', 'pareto'], default='quantitative')
     parser.add_argument("--total_client", type=int, default=100, required=False)
     args = parser.parse_args()
     
@@ -63,8 +63,8 @@ if __name__ == '__main__':
         
     print("Gen done!")
     save_dataset_idx(client_dict, f"../../dataset_idx/emnist/{args.total_client}client/", f"emnist_{args.total_client}client_{args.method}.json")
-    df = sta(client_dict, train_dataset, num_client=args.total_client, num_label=10)
+    df = sta(client_dict, train_dataset, num_client=args.total_client, num_label=26)
     print("Total sample in modified dataset", df.values.sum())
     df.to_csv(f"../../dataset_idx/emnist/{args.total_client}client/emnist_{args.total_client}client_{args.method}.csv", index=False, header=False)
-  
+
     
