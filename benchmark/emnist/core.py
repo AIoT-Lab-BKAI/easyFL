@@ -27,7 +27,7 @@ class TaskGen(DefaultTaskGen):
 
 
 class TaskReader(CusTomTaskReader):
-    def __init__(self, taskpath='', data_folder="./benchmark/cifar10/data"):
+    def __init__(self, taskpath='', data_folder="./benchmark/emnist/data"):
         train_dataset = datasets.EMNIST(data_folder, split='letters', train=True, download=True, transform=transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))]))
         test_dataset = datasets.EMNIST(data_folder, split='letters', train=False, download=True, transform=transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))]))
         super(TaskReader, self).__init__(taskpath,train_dataset,test_dataset)

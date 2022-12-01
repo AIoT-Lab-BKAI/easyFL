@@ -7,15 +7,21 @@ def noniid_quantitative(dataset, total_client, total_label=100):
     total_sample = len(dataset)
     
     labels = dataset.targets
+    print("Unique labels:", np.unique(labels))
     idxs = range(total_sample)
     idxs_labels = np.vstack((idxs, labels)).T
     
     dict_client = {}
     client_labels = []
     for _ in range(math.ceil(total_label/label_per_client)):
-        this_set = np.random.choice(label_list, 2, replace=False)
+        if len(label_list) > label_per_client:
+            this_set = np.random.choice(label_list, 2, replace=False)
+        else:
+            this_set = label_list.copy()
+            
         client_labels.append(list(this_set))
         label_list = list(set(label_list) - set(this_set))
+        
     
     num_added = (total_client - len(client_labels))
     x1 = int(num_added * 0.4)

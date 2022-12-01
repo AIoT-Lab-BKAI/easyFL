@@ -49,14 +49,18 @@ if __name__ == '__main__':
     args = parser.parse_args()
     
     if args.method == 'featured':
-        client_dict = noniid_featured(train_dataset, total_client=args.total_client, total_label=37)
+        client_dict = noniid_featured(train_dataset, total_client=args.total_client, total_label=26)
     elif args.method == 'quantitative':
-        client_dict = noniid_quantitative(train_dataset, total_client=args.total_client, total_label=37)
+        client_dict = noniid_quantitative(train_dataset, total_client=args.total_client, total_label=26)
     elif args.method == 'pareto':
-        client_dict = noniid_pareto(train_dataset, total_client=args.total_client, total_label=37)
+        client_dict = noniid_pareto(train_dataset, total_client=args.total_client, total_label=26)
     else:
         raise Exception("Not recognise data distributing method")
     
+    if client_dict is None: 
+        print("Pareto unsuccessful")
+        exit(0)
+        
     print("Gen done!")
     save_dataset_idx(client_dict, f"../../dataset_idx/emnist/{args.total_client}client/", f"emnist_{args.total_client}client_{args.method}.json")
     df = sta(client_dict, train_dataset, num_client=args.total_client, num_label=10)
