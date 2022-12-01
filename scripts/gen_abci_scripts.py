@@ -61,9 +61,14 @@ for E in [1, 5, 10, 20, 25, 40, 50]:
     task_name = f"{dataset}_{noniid}_N{N}_K{K}_E{E}"
 
     for algo in algos:
-        command = formated_command.format(
-            task_name, algo, model, int(total_epochs/E), E, batch_size, K/N, task_name
-        )
+        if E < 20:
+            command = formated_command.format(
+                task_name, algo, model, int(total_epochs/E), E, batch_size, K/N, task_name
+            )
+        else:
+            command = formated_command.format(
+                task_name, algo, model, 500, E, batch_size, K/N, task_name
+            )
             
         body_text = "python main.py  --task ${TASK}  --model ${MODEL}  --algorithm ${ALG}  --wandb ${WANDB} --data_folder ${DATA_DIR}  --log_folder ${LOG_DIR}   --dataidx_filename ${DATA_IDX_FILE}   --num_rounds ${ROUND} --num_epochs ${EPOCH_PER_ROUND} --proportion ${PROPOTION} --batch_size ${BATCH} --num_threads_per_gpu ${NUM_THRESH_PER_GPU}  --num_gpus ${NUM_GPUS} --server_gpu_id ${SERVER_GPU_ID} "
 
