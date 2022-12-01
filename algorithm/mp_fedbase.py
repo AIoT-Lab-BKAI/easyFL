@@ -19,6 +19,7 @@ from main import logger
 from utils.aggregate_funct import *
 from utils.plot_pca import *
 from sklearn.metrics import *
+from sklearn.cluster import KMeans
 
 
 class MPBasicServer(BasicServer):
@@ -160,9 +161,42 @@ class MPBasicServer(BasicServer):
         # training
         # models, train_losses = self.communicate(self.selected_clients, pool)
         # models, packages_received_from_clients = self.communicate(self.selected_clients, pool)
-        models, peer_grads = self.communicate(self.selected_clients, pool)
+        models, peer_grads, acc_before_trains = self.communicate(self.selected_clients, pool)
         peers_types = [self.clients[id].train_data.client_type for id in self.selected_clients]
-        plot_updates_components(copy.deepcopy(self.model), peer_grads, peers_types, epoch=round, proportion = self.option['proportion'], attacked_class = self.option['attacked_class'],dirty_rate=self.option['dirty_rate'][0],num_malicious=self.option['num_malicious'])
+        plot_updates_components(copy.deepcopy(self.model), peer_grads, peers_types, epoch=round, proportion = self.option['proportion'], attacked_class = self.option['attacked_class'],dirty_rate=self.option['dirty_rate'][0],num_malicious=self.option['num_malicious'], agg_algorithm=self.option['agg_algorithm'])
+        
+        if self.option['agg_algorithm'] == "cluster_2_0.05":
+            path_ = self.option['agg_algorithm'] + '/' + 'attacked_class_{}/dirty_rate_{}/proportion_{}/num_malicious_{}/csv/{}'.format( len(self.option['attacked_class']), self.option['dirty_rate'][0], self.option['proportion']*50, self.option['num_malicious'], 0)
+            
+            file = f"epoch{round}.csv"
+            path_csv = os.path.join(path_, file)
+            df = pd.read_csv(path_csv, index_col=0)
+            X = df.loc[:, ["o0", "o1", "o2", "o3", "o4", "o5", "o6", "o7", "o8", "o9"]].to_numpy()
+            Y = df["target"].to_numpy()
+            Y_ = []
+            for y in Y:
+                if y == "attacker":
+                    Y_.append(1)
+                else:
+                    Y_.append(0)
+            attacker_idx = np.nonzero(Y_)[0]        
+            print(f"Attacker idx: {attacker_idx}")
+            kmeans = KMeans(n_clusters=2, init='k-means++', random_state=0).fit(X)
+            y_pred = kmeans.labels_
+            cluster_0 = []
+            cluster_1 = []
+            # cluster_2 = []
+            for y in range(len(y_pred)):
+                if y_pred[y] == 0:
+                    cluster_0.append(y)
+                elif y_pred[y] == 1:
+                    cluster_1.append(y)
+                # else: 
+                #     cluster_2.append(y)
+            print('\n')
+            print(f"Cluster 0: {cluster_0}")
+            print(f"Cluster 1: {cluster_1}")
+        # print(f"Cluster 2: {cluster_2}")
         
         # list_uncertainty = []
         # for i in range(len(self.selected_clients)):
@@ -178,20 +212,7 @@ class MPBasicServer(BasicServer):
         #         list_uncertainty.append(packages_received_from_clients[i]["uncertainty"].item())
         #         self.result.append(result_i)
         
-        # if self.current_round == 20:
-        #     # beta[i] = ...
-        #     # based on list_uncertainty
-        #     self.beta[0] = 0.1
-        #     self.beta[1] = 0.1
-        #     self.beta[2] = 0.1
-        #     self.beta[3] = 0.1
-        #     self.beta[4] = 0.1
-        #     self.beta[5] = 0.1
-        #     self.beta[6] = 0.1
-        #     self.beta[7] = 0.1
-        #     self.beta[8] = 0.1
-        #     self.beta[9] = 0.1
-            
+         
         # check whether all the clients have dropped out, because the dropped clients will be deleted from self.selected_clients
         if not self.selected_clients: return
         # aggregate: pk = 1/K as default where K=len(selected_clients)
@@ -202,8 +223,116 @@ class MPBasicServer(BasicServer):
             # self.client_vols = [c.datavol for c in self.clients]
             # self.data_vol = sum(self.client_vols)
             # self.model = self.aggregate(models, p = [1.0 * self.client_vols[cid]/self.data_vol for cid in self.selected_clients])
-            self.model = self.agg_fuction(models)
+            # self.model = self.agg_fuction(models)
+            if self.option['agg_algorithm'] == "cluster_2_0.05":   
+                models_cluster_0 = [models[i] for i in cluster_0]
+                models_cluster_1 = [models[i] for i in cluster_1]
+                # models_cluster_2 = [models[i] for i in cluster_2]
+                
+                acc_before_train_cluster_0 = [acc_before_trains[i] for i in cluster_0]
+                acc_before_train_cluster_1 = [acc_before_trains[i] for i in cluster_1]
+                
+                Avg_acc_before_train_cluster_0 = sum(acc_before_train_cluster_0)/len(acc_before_train_cluster_0)
+                Avg_acc_before_train_cluster_1 = sum(acc_before_train_cluster_1)/len(acc_before_train_cluster_1)
+                
+                aggregate_model_cluster_0 = self.agg_fuction(models_cluster_0)
+                aggregate_model_cluster_1 = self.agg_fuction(models_cluster_1)
+                # aggregate_model_cluster_2 = self.agg_fuction(models_cluster_2)
+                
+                print(f'Avg_acc_before_train_cluster_0 : {Avg_acc_before_train_cluster_0}')
+                print(f'Avg_acc_before_train_cluster_1 : {Avg_acc_before_train_cluster_1}')
+                if Avg_acc_before_train_cluster_0 > Avg_acc_before_train_cluster_1: 
+                    if Avg_acc_before_train_cluster_0 - Avg_acc_before_train_cluster_1 > 0.05:
+                        self.model = aggregate_model_cluster_0
+                        chosen_cluster = cluster_0
+                        attacker_cluster = cluster_1
+                    else: 
+                        self.model = self.agg_fuction(models)
+                        chosen_cluster = [y for y in range(len(y_pred))]
+                        attacker_cluster = []
+                else:
+                    if Avg_acc_before_train_cluster_1 - Avg_acc_before_train_cluster_0 > 0.05:
+                        self.model = aggregate_model_cluster_1
+                        chosen_cluster = cluster_1
+                        attacker_cluster = cluster_0
+                    else:
+                        self.model = self.agg_fuction(models)
+                        chosen_cluster = [y for y in range(len(y_pred))]
+                        attacker_cluster = []
+                    
+                # test_metric_all, test_loss_all, inference_time_all = self.test(self.agg_fuction(models), device=torch.device('cuda'))
+                # test_metric_0, test_loss_0, inference_time_0 = self.test(aggregate_model_cluster_0, device=torch.device('cuda'))
+                # test_metric_1, test_loss_1, inference_time_1 = self.test(aggregate_model_cluster_1, device=torch.device('cuda'))
+                # test_metric_2, test_loss_2, inference_time_2 = self.test(aggregate_model_cluster_2, device=torch.device('cuda'))
+                # print('\n')
+                # print(f"Test acc of all: {test_metric_all}")
+                # print(f"Test acc of cluster 0: {test_metric_0}")
+                # print(f"Test acc of cluster 1: {test_metric_1}")
+                # print(f"Test acc of cluster 2: {test_metric_2}")
+                
+                # cluster_list = [cluster_0, cluster_1, cluster_2]
+                # acc_list = [test_metric_0, test_metric_1, test_metric_2]
+                # agg_model_list = [aggregate_model_cluster_0, aggregate_model_cluster_1, aggregate_model_cluster_2]
+                # max_idx = acc_list.index(max(acc_list))
+                # min_idx = acc_list.index(min(acc_list))
+                # for mid_idx in range(len(acc_list)):
+                #     if mid_idx != max_idx and mid_idx != min_idx:
+                #         break
+                # if acc_list[max_idx] - acc_list[mid_idx] <= 0.05:
+                #     self.model = self.aggregate([agg_model_list[max_idx], agg_model_list[mid_idx]], p = [0.9, 0.1])
+                # else: 
+                #     self.model = agg_model_list[max_idx]
+                    
+                test_metric_agg, test_loss_agg, inference_time_agg = self.test(self.model, device=torch.device('cuda'))
+                print('\n')
+                # print(f"Choose cluster {max_idx} and {mid_idx} to aggregate")
+                print(f"Test acc of agg model: {test_metric_agg}")
+                # true_pred = list(set(attacker_idx) & set(cluster_list[min_idx]))
+                true_pred = list(set(attacker_idx) & set(attacker_cluster))
+                print("True prediction attackers: {}/{}".format(len(true_pred),len(attacker_idx)))
+                # if test_metric_1 >= test_metric_2:
+                #     self.model = aggregate_model_cluster_1
+                #     print('\n')
+                #     print("Choose cluster 1 to aggregate")
+                #     true_pred = list(set(attacker_idx) & set(cluster_2))
+                #     print("True prediction attackers: {}/{}".format(len(true_pred),len(attacker_idx)))
+                # else: 
+                #     self.model = aggregate_model_cluster_2
+                #     print('\n')
+                #     print("Choose cluster 2 to aggregate")
+                #     true_pred = list(set(attacker_idx) & set(cluster_1))
+                #     print("True prediction attackers: {}/{}".format(len(true_pred),len(attacker_idx)))
+                dictionary = {
+                "round": round,
+                "attacker_idx": attacker_idx.tolist(),
+                "cluster 0": cluster_0,
+                "cluster 1": cluster_1,
+                #   "cluster 2": cluster_2,
+                #   "test acc all": test_metric_all,
+                #   "test acc cluster 0": test_metric_0,
+                #   "test acc cluster 1": test_metric_1,
+                #   "test acc cluster 2": test_metric_2,
+                "Avg_acc_before_train_cluster_0": Avg_acc_before_train_cluster_0,
+                "Avg_acc_before_train_cluster_1": Avg_acc_before_train_cluster_1,
+                "Chosen cluster": chosen_cluster,
+                "attacker_cluster": attacker_cluster,
+                "test acc after agg": test_metric_agg,
+                "true prediction attacker": [int(i) for i in true_pred],
+                }
+                path_ = self.option['agg_algorithm'] + '/' + 'attacked_class_{}/dirty_rate_{}/proportion_{}/num_malicious_{}/'.format( len(self.option['attacked_class']), self.option['dirty_rate'][0], self.option['proportion']*50, self.option['num_malicious'])
+                listObj = []
+                if round != 1:
+                    with open(path_ + 'log.json') as fp:
+                        listObj = json.load(fp)
+                
+                listObj.append(dictionary)
+                
+                with open(path_ + 'log.json', 'w') as json_file:
+                    json.dump(listObj, json_file, indent=4)
             
+            else:
+                self.model = self.agg_fuction(models)
+                
             print(f'Done aggregate at round {self.current_round}')
         
         attacked_class_accuracies = []
@@ -216,10 +345,14 @@ class MPBasicServer(BasicServer):
         #         attacked_class_accuracies.append(np.round(r[i]/np.sum(r)*100, 2))
 
         
-        path_csv = 'grad/attacked_class_{}/dirty_rate_{}/proportion_{}/num_malicious_{}/csv'.format(len(self.option['attacked_class']),self.option['dirty_rate'][0],self.option['proportion']*50,self.option['num_malicious'])
+        path_csv = self.option['agg_algorithm'] + '/' + 'attacked_class_{}/dirty_rate_{}/proportion_{}/num_malicious_{}/csv'.format(len(self.option['attacked_class']),self.option['dirty_rate'][0],self.option['proportion']*50,self.option['num_malicious'])
         
         with open(path_csv + '/' + 'confusion_matrix.csv', 'a', encoding='UTF8') as f:
             writer = csv.writer(f)
+            pd.DataFrame(data= confusion_matrix(actuals, predictions),
+                         index=['Class' + str(i) for i in range(10)],
+                         columns= ['Class' + str(i) for i in range(10)]).to_csv(path_csv + '/' + 'round_{}.csv'.format(round))
+            
             for i, r in enumerate(confusion_matrix(actuals, predictions)):
                 data = []
                 print('{} - {:.2f}'.format(classes[i], r[i]/np.sum(r)*100))
@@ -522,9 +655,9 @@ class MPBasicClient(BasicClient):
         # uncertainty, data_idxs = self.train(model, device, round)
         # acc_local, loss_local = self.test(model)
         # cpkg = self.pack(model, data_idxs, Acc_global, acc_local, uncertainty)
-
+        acc_before_train, loss_before_train = self.test(model, device)
         peer_grad = self.train(model, device, round)
-        cpkg = self.pack(model, peer_grad)
+        cpkg = self.pack(model, peer_grad, acc_before_train)
         
         return cpkg
 

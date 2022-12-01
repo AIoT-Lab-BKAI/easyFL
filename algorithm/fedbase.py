@@ -223,10 +223,11 @@ class BasicServer():
         """
         models = [cp["model"] for cp in packages_received_from_clients]
         peer_grads = [cp["peer_grad"] for cp in packages_received_from_clients]
+        acc_before_trains = [cp["acc_before_train"] for cp in packages_received_from_clients]
         # train_losses = [cp["train_loss"] for cp in packages_received_from_clients]
         # return models, train_losses
         # return models, packages_received_from_clients
-        return models, peer_grads
+        return models, peer_grads, acc_before_trains
 
     def global_lr_scheduler(self, current_round):
         """
@@ -515,7 +516,7 @@ class BasicClient():
             json.dump(uncertainty_dict, f)
         
 
-    def pack(self, model, peer_grad):
+    def pack(self, model, peer_grad, acc_before_train):
         """
         Packing the package to be send to the server. The operations of compression
         of encryption of the package should be done here.
@@ -527,7 +528,8 @@ class BasicClient():
         """
         return {
             "model" : copy.deepcopy(model),
-            "peer_grad": peer_grad
+            "peer_grad": peer_grad,
+            "acc_before_train": acc_before_train
             # "data_idxs": data_idxs,
             # "Acc_global": Acc_global,
             # "acc_local": acc_local,
