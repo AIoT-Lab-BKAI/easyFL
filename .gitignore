@@ -20,6 +20,8 @@ dataset_idx/pill_dataset/server_dataset/pill_cropped
 singleset/
 benchmark/cifar10/data
 benchmark/cifar100/data
+benchmark/emnist/data
+benchmark/fashion_mnist/data
 wandb/
 benchmark/pilldataset/data/pill3*
 cmtx
