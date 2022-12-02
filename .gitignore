@@ -24,3 +24,4 @@ benchmark/emnist/data
 benchmark/fashion_mnist/data
 wandb/
 benchmark/pilldataset/data/pill3*
+results/
