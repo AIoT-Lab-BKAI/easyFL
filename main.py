@@ -88,7 +88,7 @@ def main():
     
     if option['wandb']:
         wandb.init(
-            project="sparseFL", 
+            project="sparseFL-benchmark", 
             entity="aiotlab",
             group=option['task'],
             name=runname[:-1],
