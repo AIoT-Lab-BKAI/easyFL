@@ -1,6 +1,6 @@
 GROUP="fmnist_sparse_N100_K10_E4"
 ALG="mp_feddyn"
-MODEL="cnn"
+MODEL="lr"
 WANDB=1
 ROUND=1000
 EPOCH_PER_ROUND=4

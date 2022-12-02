@@ -33,10 +33,12 @@ class TaskGen(DefaultTaskGen):
         train_x, train_y = self.train_data.tolist()
         self.train_data = {'x':train_x, 'y':train_y}
         return
-train_dataset = datasets.FashionMNIST("./benchmark/fmnist/data", train=True, download=True, transform=transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))]))
-test_dataset = datasets.FashionMNIST("./benchmark/fmnist/data", train=False, download=True, transform=transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))]))
+
+
 class TaskReader(CusTomTaskReader):
-    def __init__(self, taskpath=''):
+    def __init__(self, taskpath='', data_folder="./benchmark/emnist/data"):
+        train_dataset = datasets.FashionMNIST("./benchmark/fmnist/data", train=True, download=True, transform=transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))]))
+        test_dataset = datasets.FashionMNIST("./benchmark/fmnist/data", train=False, download=True, transform=transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))]))
         super(TaskReader, self).__init__(taskpath,train_dataset,test_dataset)
 
 class TaskCalculator(ClassifyCalculator):
