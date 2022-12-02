@@ -1,3 +1,5 @@
+# H.O.P.E: How Our Proposal Effective ?
+
 from .mp_fedbase import MPBasicServer, MPBasicClient
 from torch.utils.data import DataLoader
 from torchmetrics import ConfusionMatrix
@@ -53,24 +55,6 @@ class Server(MPBasicServer):
             "last_impact": ipft,
             "next_impact": (1 - mu) * ipft + mu * self.client_vols[client_id]/self.data_vol_this_round,
         }
-        
-    def test(self, model=None, device=None, round=None):
-        if model==None: 
-            model=self.model
-        if self.test_data:
-            # model.eval()
-            loss = 0
-            eval_metric = 0
-            data_loader = self.calculator.get_data_loader(self.test_data, batch_size=64)
-            for batch_id, batch_data in enumerate(data_loader):
-                bmean_eval_metric, bmean_loss = self.calculator.test(model, batch_data, device)
-                loss += bmean_loss * len(batch_data[1])
-                eval_metric += bmean_eval_metric * len(batch_data[1])
-            eval_metric /= len(self.test_data)
-            loss /= len(self.test_data)
-            return eval_metric, loss
-        else: 
-            return -1, -1
 
 
 class Client(MPBasicClient):
