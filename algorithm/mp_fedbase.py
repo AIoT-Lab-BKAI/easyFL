@@ -20,6 +20,7 @@ from utils.aggregate_funct import *
 from utils.plot_pca import *
 from sklearn.metrics import *
 from sklearn.cluster import KMeans
+from sklearn.cluster import SpectralClustering
 
 
 class MPBasicServer(BasicServer):
@@ -181,8 +182,10 @@ class MPBasicServer(BasicServer):
                     Y_.append(0)
             attacker_idx = np.nonzero(Y_)[0]        
             print(f"Attacker idx: {attacker_idx}")
-            kmeans = KMeans(n_clusters=2, init='k-means++', random_state=0).fit(X)
-            y_pred = kmeans.labels_
+            # kmeans = KMeans(n_clusters=2, init='k-means++', random_state=0).fit(X)
+            # y_pred = kmeans.labels_
+            spectral = SpectralClustering(n_clusters=2, affinity='nearest_neighbors',n_neighbors=5, assign_labels='discretize', random_state=0).fit(X)
+            y_pred = spectral.labels_
             cluster_0 = []
             cluster_1 = []
             # cluster_2 = []
@@ -242,7 +245,7 @@ class MPBasicServer(BasicServer):
                 print(f'Avg_acc_before_train_cluster_0 : {Avg_acc_before_train_cluster_0}')
                 print(f'Avg_acc_before_train_cluster_1 : {Avg_acc_before_train_cluster_1}')
                 if Avg_acc_before_train_cluster_0 > Avg_acc_before_train_cluster_1: 
-                    if Avg_acc_before_train_cluster_0 - Avg_acc_before_train_cluster_1 > 0.05:
+                    if (len(cluster_0) > len(cluster_1)) and (Avg_acc_before_train_cluster_0 - Avg_acc_before_train_cluster_1 > 0.05):
                         self.model = aggregate_model_cluster_0
                         chosen_cluster = cluster_0
                         attacker_cluster = cluster_1
@@ -251,7 +254,7 @@ class MPBasicServer(BasicServer):
                         chosen_cluster = [y for y in range(len(y_pred))]
                         attacker_cluster = []
                 else:
-                    if Avg_acc_before_train_cluster_1 - Avg_acc_before_train_cluster_0 > 0.05:
+                    if (len(cluster_1) > len(cluster_0)) and (Avg_acc_before_train_cluster_1 - Avg_acc_before_train_cluster_0 > 0.05):
                         self.model = aggregate_model_cluster_1
                         chosen_cluster = cluster_1
                         attacker_cluster = cluster_0
@@ -259,7 +262,6 @@ class MPBasicServer(BasicServer):
                         self.model = self.agg_fuction(models)
                         chosen_cluster = [y for y in range(len(y_pred))]
                         attacker_cluster = []
-                    
                 # test_metric_all, test_loss_all, inference_time_all = self.test(self.agg_fuction(models), device=torch.device('cuda'))
                 # test_metric_0, test_loss_0, inference_time_0 = self.test(aggregate_model_cluster_0, device=torch.device('cuda'))
                 # test_metric_1, test_loss_1, inference_time_1 = self.test(aggregate_model_cluster_1, device=torch.device('cuda'))
