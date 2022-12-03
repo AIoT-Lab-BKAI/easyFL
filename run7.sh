@@ -1,9 +1,9 @@
 #2,5,10 attacker with 50% noise on 10 classes: 2 clusters 5%
-for noise_rate_ in 0.5 
+for noise_rate_ in 1.0 
 do
     for proportion_ in 0.2
     do
-        for malicious_client_ in 2 5 
+        for malicious_client_ in 10 
         do
             # echo "$malicious_client_"
             for noise_type_ in gaussian 
