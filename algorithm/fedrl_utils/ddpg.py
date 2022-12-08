@@ -1,18 +1,12 @@
-from pathlib import Path
-from algorithm.fedrl_utils.ddpg_agent.utils import *
-from algorithm.fedrl_utils.ddpg_agent.networks import *
-from algorithm.fedrl_utils.ddpg_agent.policy import *
-from algorithm.fedrl_utils.ddpg_agent.buffer import *
+from algorithm.fedrl_utils.networks import *
+from algorithm.fedrl_utils.buffer import *
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from algorithm.fedrl_utils.ddpg_agent.policy import NormalizedActions
-import pickle
 
 
 def transform_action(action):
-    action = action.view(3,-1)
-    return torch.flatten(action[1] + 1/10 * action[2])
+    return torch.flatten(action[1]).tolist()
 
 
 class DDPG_Agent(nn.Module):
@@ -24,41 +18,21 @@ class DDPG_Agent(nn.Module):
         value_lr=1e-3,
         policy_lr=1e-3,
         replay_buffer_size=1000000,
-        max_steps=16*50,
         batch_size=4,
-        log_dir="./log/epochs",
         gamma = 0.99,
         soft_tau = 2e-2,
+        device = "cuda"
     ):
         super(DDPG_Agent, self).__init__()
         self.gamma = gamma
         self.soft_tau = soft_tau
-        self.device = torch.device("cuda:3" if torch.cuda.is_available() else "cpu")
-
-        print("\nInit State dim", state_dim)    # K x K
-        print("Init Action dim", action_dim)    # K x 3
+        self.device = device
 
         self.value_net = ValueNetwork(num_inputs=state_dim + action_dim, hidden_size=hidden_dim).to(self.device).double()
-        self.policy_net = PolicyNetwork(num_inputs=state_dim, num_outputs=action_dim, hidden_size=hidden_dim).to(self.device).double()
-
         self.target_value_net = ValueNetwork(num_inputs=state_dim + action_dim, hidden_size=hidden_dim).to(self.device).double()
-        self.target_policy_net = PolicyNetwork(num_inputs=state_dim, num_outputs=action_dim, hidden_size=hidden_dim).to(self.device).double()
-
-
-        model_path = "../models"
-        if Path(f"{model_path}/policy_net.pth").exists():
-            print("Loaing policy_net...")
-            self.policy_net.load_state_dict(torch.load(f"{model_path}/policy_net.pth"))
-        if Path(f"{model_path}/value_net.pth").exists():
-            print("Loaing value_net...")
-            self.value_net.load_state_dict(torch.load(f"{model_path}/value_net.pth"))
-        if Path(f"{model_path}/target_policy_net.pth").exists():
-            print("Loaing target_policy_net...")
-            self.target_policy_net.load_state_dict(torch.load(f"{model_path}/target_policy_net.pth"))
-        if Path(f"{model_path}/target_value_net.pth").exists():
-            print("Loaing target_value_net...")
-            self.target_value_net.load_state_dict(torch.load(f"{model_path}/target_value_net.pth"))
-
+        
+        self.policy_net = PolicyNetwork(num_inputs=state_dim, num_outputs=action_dim, hidden_size=hidden_dim).to(self.device).double()              # input K * 2, output K
+        self.target_policy_net = PolicyNetwork(num_inputs=state_dim, num_outputs=action_dim, hidden_size=hidden_dim).to(self.device).double()       # input K * 2, output K
 
         # store all the (s, a, s', r) during the transition process
         self.memory = Memory()
@@ -68,10 +42,7 @@ class DDPG_Agent(nn.Module):
         self.value_optimizer = optim.Adam(self.value_net.parameters(), lr=value_lr)
         self.policy_optimizer = optim.Adam(self.policy_net.parameters(), lr=policy_lr)
         self.value_criterion = nn.MSELoss()
-        self.step = 0
-        self.max_steps = max_steps
         self.batch_size = batch_size
-        self.log_dir = log_dir
 
         for target_param, param in zip(self.target_value_net.parameters(), self.value_net.parameters()):
             target_param.data.copy_(param.data)
@@ -79,24 +50,22 @@ class DDPG_Agent(nn.Module):
         for target_param, param in zip(self.target_policy_net.parameters(), self.policy_net.parameters()):
             target_param.data.copy_(param.data)
 
-
     def get_action(self, observation, prev_reward=None):
         done = observation['done']
-        models = observation['models']
+        losses = observation['losses']
+        n_samples = observation['n_samples']
 
         # reach to maximum step for each episode or get the done for this iteration
-        state = get_state(models)
-        state = torch.DoubleTensor(state).unsqueeze(0).to(self.device)  # current state
+        state = torch.tensor(losses + n_samples, dtype=torch.float64).unsqueeze(0).to(self.device) # dim K * 2
+        # state = torch.DoubleTensor(state).unsqueeze(0).to(self.device)  # current state
+        
         if prev_reward is not None:
-            print("prev_reward", prev_reward)
             self.memory.update(r=prev_reward)
 
         action = self.policy_net.get_action(state)
         self.memory.act(state, action)
 
-        # if self.step < self.max_steps:
         if self.memory.get_last_record() is None:
-            self.step += 1
             return transform_action(action)
         
         if len(self.replay_buffer) >= self.batch_size:
@@ -104,7 +73,6 @@ class DDPG_Agent(nn.Module):
 
         s, a, r, s_next = self.memory.get_last_record()
         self.replay_buffer.push(s, a, r, s_next, done)
-        self.step += 1
 
         return transform_action(action)
 
@@ -145,11 +113,3 @@ class DDPG_Agent(nn.Module):
 
             for target_param, param in zip(self.target_policy_net.parameters(), self.policy_net.parameters()):
                 target_param.data.copy_(target_param.data * (1.0 - self.soft_tau) + param.data * self.soft_tau)
-
-
-    def dump_buffer(self, buffer_path, run_name):
-        if not Path(buffer_path).exists():
-            os.system(f"mkdir -p {buffer_path}")
-            
-        with open(f"{buffer_path}/{run_name}.exp", "ab") as fp:
-            pickle.dump(self.replay_buffer.buffer, fp)
