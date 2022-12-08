@@ -14,20 +14,8 @@ class Server(MPBasicServer):
     def __init__(self, option, model, clients, test_data = None):
         super(Server, self).__init__(option, model, clients, test_data)
         self.data_vol_this_round = None
-        self.latest_impact_factor_records = [0 for cid in range(len(clients))]
         return
-        
-    def update_ipft_record(self):
-        mu_t = 1.0 * len(self.selected_clients)/len(self.clients)
-        for cid in range(len(self.latest_impact_factor_records)):
-            if cid in self.selected_clients: 
-                # If the client is selected this turn, renew its contribution
-                self.latest_impact_factor_records[cid] = (1 - mu_t) * self.latest_impact_factor_records[cid] + mu_t * self.client_vols[cid]/self.data_vol_this_round
-            else:
-                # If the client is not selected this turn, its contribution decays
-                self.latest_impact_factor_records[cid] = (1 - mu_t) * self.latest_impact_factor_records[cid]
-        return
-        
+  
     def iterate(self, t, pool):
         self.selected_clients = self.sample()        
         self.data_vol_this_round = np.sum([self.client_vols[cid] for cid in self.selected_clients])
@@ -43,47 +31,47 @@ class Server(MPBasicServer):
         new_model = self.aggregate(models, p = impact_factors)
         
         self.model = self.model + len(self.selected_clients)/len(self.clients) * (new_model - self.model)
-        self.update_ipft_record()
         return
     
     def pack(self, client_id):
-        ipft = self.latest_impact_factor_records[client_id]
         mu = len(self.selected_clients)/len(self.clients)
         
         return {
             "model" : copy.deepcopy(self.model),
-            "last_impact": ipft,
-            "next_impact": (1 - mu) * ipft + mu * self.client_vols[client_id]/self.data_vol_this_round,
+            "next_impact": self.client_vols[client_id]/self.data_vol_this_round,
+            "mu": mu,
         }
 
 
 class Client(MPBasicClient):
     def __init__(self, option, name='', train_data=None, valid_data=None):
         super(Client, self).__init__(option, name, train_data, valid_data)
-        self.local_model = None
+        self.latest_round = 0
+        self.contribution = None
+        self.last_ipft = 0
     
     def unpack(self, received_pkg):
-        return received_pkg['model'], received_pkg['last_impact'], received_pkg['next_impact']
+        return received_pkg['model'], received_pkg['mu'], received_pkg['next_impact']
     
-    def reply(self, svr_pkg, device, round):
-        global_model, last_impact, next_impact = self.unpack(svr_pkg)
-        model, train_loss = self.train(global_model, last_impact, next_impact, device, round)
+    def reply(self, svr_pkg, device, current_round):
+        global_model, mu, next_impact = self.unpack(svr_pkg)
+        model, train_loss = self.train(global_model, mu, next_impact, device, current_round)
         cpkg = self.pack(model, train_loss)
         return cpkg
     
-    def train(self, global_model: FModule, last_impact, next_impact, device, round):
+    def train(self, global_model: FModule, mu, next_impact, device, current_round):
         global_model = global_model.to(device)
         
-        # Initialize model & Find complement model
-        if self.local_model is None:
-            self.local_model = copy.deepcopy(global_model).to(device)
+        if self.contribution is None:
+            complement_model = global_model
+            self.latest_round = current_round
+            add_on = global_model.zeros_like()
         else:
-            self.local_model = self.local_model.to(device)
-            
-        with torch.no_grad():
-            complement_model = global_model - last_impact * self.local_model
+            self.contribution = self.contribution.to(device)
+            complement_model = global_model - (1 - mu)**(current_round - self.latest_round) * self.contribution
+            add_on = self.contribution * 1.0/(mu * self.last_ipft)
         
-        surogate_global_model = complement_model + next_impact * self.local_model
+        surogate_global_model = complement_model + mu * next_impact * add_on
         surogate_global_model.train()
         
         data_loader = self.calculator.get_data_loader(self.train_data, batch_size=self.batch_size)
@@ -101,7 +89,13 @@ class Client(MPBasicClient):
                 optimizer.step()
             mean_loss.append(np.mean(losses))
         
-        self.local_model = (surogate_global_model - complement_model) * 1.0/(next_impact)
-        self.local_model = self.local_model.to("cpu")
-        return self.local_model, np.mean(mean_loss)
+        local_model = (surogate_global_model - complement_model) * 1.0/(mu * next_impact)
+        local_model = local_model.to("cpu")
+        
+        # Update individual information
+        self.contribution = local_model * mu * next_impact
+        self.last_ipft = next_impact
+        self.latest_round = current_round
+        
+        return local_model, np.mean(mean_loss)
     
