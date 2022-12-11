@@ -11,7 +11,7 @@ class Server(MPBasicServer):
 
     def iterate(self, t, pool):
         self.selected_clients = self.sample()
-        models, train_losses = self.communicate(self.selected_clients, pool, t)
+        models, train_losses = self.communicate(self.selected_clients, pool)
                 
         device0 = torch.device(f"cuda:{self.server_gpu_id}")
         models = [i.to(device0) for i in models]

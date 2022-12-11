@@ -86,5 +86,5 @@ def get_module_from_model(model, res = None):
     return res
 
 def get_penultimate_layer(model):
-    penul = get_module_from_model(model)[-1]._parameters['weight']
+    penul = get_module_from_model(model)[-1]._parameters['bias']
     return penul

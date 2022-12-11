@@ -9,6 +9,8 @@ In which: lr = client_per_turn / all_clients
 """
 from .fedbase import BasicServer, BasicClient
 from utils import fmodule
+from algorithm.agg_utils.fedtest_utils import get_penultimate_layer
+from algorithm.cfmtx.cfmtx import cfmtx_test
 
 import torch.nn as nn
 import numpy as np
@@ -16,7 +18,9 @@ import numpy as np
 import torch
 import os
 import copy
-import wandb, time
+import wandb, time, json
+
+time_records = {"server_aggregation": {"overhead": [], "aggregation": []}, "local_training": {}}
 
 
 def KL_divergence(teacher_batch_input, student_batch_input, device):
@@ -60,6 +64,7 @@ def KL_divergence(teacher_batch_input, student_batch_input, device):
     return kl
 
 
+@torch.no_grad()
 def compute_similarity(a, b):
     """
     Parameters:
@@ -67,13 +72,9 @@ def compute_similarity(a, b):
     Returns:
         sum of pair-wise similarity between layers of a and b
     """
-    sim = []
-    for layer_a, layer_b in zip(a.parameters(), b.parameters()):
-        x, y = torch.flatten(layer_a), torch.flatten(layer_b)
-        sim.append((x.transpose(-1,0) @ y) / (torch.norm(x) * torch.norm(y)))
-
-    return torch.mean(torch.tensor(sim)), sim[-1]
-
+    pen_a = torch.flatten(get_penultimate_layer(a))
+    pen_b = torch.flatten(get_penultimate_layer(b))
+    return (pen_a @ pen_b) / (torch.norm(pen_a) * torch.norm(pen_b))
 
 class Server(BasicServer):
     def __init__(self, option, model, clients, test_data=None):
@@ -87,20 +88,21 @@ class Server(BasicServer):
         
         self.gamma = 1
         self.device = torch.device("cuda")
-        
-        self.Q_matrix[0:30,0:30] = 1
-        self.Q_matrix[30:60,0:60] = 1
-        self.Q_matrix[60:80,60:80] = 1
-        self.Q_matrix[80:90,80:90] = 1
-        self.Q_matrix[90:100,90:100] = 1
-        
-        self.freq_matrix += 1
-        
+               
         self.paras_name = ['kd_fct', 'sthr']
+        self.once_time_clients = []
         
+    def run(self):
+        super().run()
+        json.dump(time_records, open(f"./measures/{self.option['algorithm']}.json", "w"))
+        
+        acc, cfmtx = cfmtx_test(self.model, self.test_data, "cuda")
+        json.dump(cfmtx, open(f"./measures/{self.option['algorithm']}_cfmtx.json", "w"))
+        return
     
     def iterate(self, t):
         self.selected_clients = self.sample()
+                
         # print("Selected:", self.selected_clients)
         models, train_losses = self.communicate(self.selected_clients)
         models = [model.to(self.device) for model in models]
@@ -110,15 +112,24 @@ class Server(BasicServer):
 
         if not self.selected_clients:
             return
-                
-        # self.update_Q_matrix(models, self.selected_clients, t)
-        # if (len(self.selected_clients) < len(self.clients)) or (self.impact_factor is None):
-        self.impact_factor, self.gamma = self.get_impact_factor(self.selected_clients, t)
         
-        model_diff = self.aggregate(model_diffs, p = self.impact_factor)
-        self.model = self.model + self.gamma * model_diff
+        start = time.time()
+        self.update_Q_matrix(model_diffs, self.selected_clients, t)
+        if (len(self.selected_clients) < len(self.clients)) or (self.impact_factor is None):
+            self.impact_factor, self.gamma = self.get_impact_factor(self.selected_clients, t)
+        end = time.time()
+        time_records['server_aggregation']["overhead"].append(end - start)
+        
+        start = time.time()
+        self.model = self.aggregate(models, p=self.impact_factor)
+        end = time.time()
+        time_records['server_aggregation']["aggregation"].append(end - start)
+        
         self.update_threshold(t)
-            
+        for cid in self.selected_clients: 
+            if cid not in self.once_time_clients:
+                self.once_time_clients.append(cid)
+                
         return
     
     def compute_simXY(self, simXZ, simZY):
@@ -174,23 +185,28 @@ class Server(BasicServer):
 
     @torch.no_grad()
     def update_Q_matrix(self, model_list, client_idx, t=None):
-        
         new_similarity_matrix = torch.zeros_like(self.Q_matrix)
-        for i, model_i in zip(client_idx, model_list):
-            for j, model_j in zip(client_idx, model_list):
-                _ , new_similarity_matrix[i][j] = compute_similarity(model_i, model_j)
-                                
+                
+        for i, model_i in zip(range(len(client_idx)), model_list):
+            new_similarity_matrix[client_idx[i]][client_idx[i]] = 1
+            for j, model_j in zip(range(i+1, len(client_idx)), model_list):
+                new_similarity_matrix[client_idx[i]][client_idx[j]] = compute_similarity(model_i, model_j)
+                new_similarity_matrix[client_idx[j]][client_idx[i]] = new_similarity_matrix[client_idx[i]][client_idx[j]]
+
         new_freq_matrix = torch.zeros_like(self.freq_matrix)
-        for i in client_idx:
-            for j in client_idx:
-                new_freq_matrix[i][j] = 1
-                    
+
+        for i in range(len(client_idx)):
+            new_freq_matrix[client_idx[i]][client_idx[i]] = 1
+            for j in range(i+1, len(client_idx)):
+                new_freq_matrix[client_idx[i]][client_idx[j]] = 1
+                new_freq_matrix[client_idx[j]][client_idx[i]] = 1
+
         # Increase frequency
         self.freq_matrix += new_freq_matrix
         self.Q_matrix = self.Q_matrix + new_similarity_matrix
         
-        if 0 in self.freq_matrix and t > 0:
-            self.transitive_update_Q()
+        # if len(self.selected_clients) < len(self.clients):
+        #     self.transitive_update_Q()
         return
 
     @torch.no_grad()
@@ -241,6 +257,19 @@ class Client(BasicClient):
         super(Client, self).__init__(option, name, train_data, valid_data)
         self.lossfunc = nn.CrossEntropyLoss()
         self.kd_fct = option['kd_fct']
+        time_records['local_training'][self.name] = []
+        
+    def reply(self, svr_pkg):
+        model = self.unpack(svr_pkg)
+        loss = self.train_loss(model)
+        
+        start = time.time()
+        self.train(model)
+        end = time.time()
+        time_records['local_training'][self.name].append(end - start)
+        
+        cpkg = self.pack(model, loss)
+        return cpkg
         
     def train(self, model, device='cuda'):
         model = model.to(device)
@@ -261,10 +290,8 @@ class Client(BasicClient):
                 optimizer.step()
         return
     
-    
     def data_to_device(self, data, device):
         return data[0].to(device), data[1].to(device)
-
 
     def get_loss(self, model, src_model, data, device):
         tdata = self.data_to_device(data, device)    

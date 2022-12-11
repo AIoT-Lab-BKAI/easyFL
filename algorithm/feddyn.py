@@ -4,6 +4,9 @@ from utils import fmodule
 import torch
 import wandb
 import time
+import json
+
+time_records = {"server_aggregation": {"overhead": [], "aggregation": []}, "local_training": {}}
 
 class Server(BasicServer):
     def __init__(self, option, model, clients, test_data=None):
@@ -18,10 +21,24 @@ class Server(BasicServer):
         if not self.selected_clients: return
         self.model = self.aggregate(models)
         return
+    
+    def run(self):
+        super().run()
+        json.dump(time_records, open(f"./measures/{self.option['algorithm']}.json", "w"))
+        return
 
     def aggregate(self, models):
+        
+        start = time.time()
         self.h = self.h - self.alpha * (1.0 / self.num_clients * fmodule._model_sum(models) - self.model)
+        end = time.time()
+        time_records['server_aggregation']["overhead"].append(end - start)
+        
+        start = time.time()
         new_model = fmodule._model_average(models) - 1.0 / self.alpha * self.h
+        end = time.time()
+        time_records['server_aggregation']["aggregation"].append(end - start)
+        
         return new_model
 
 class Client(BasicClient):
@@ -29,6 +46,20 @@ class Client(BasicClient):
         super(Client, self).__init__(option, name, train_data, valid_data)
         self.gradL = None
         self.alpha = option['alpha']
+        time_records['local_training'][self.name] = []
+        return
+    
+    def reply(self, svr_pkg):
+        model = self.unpack(svr_pkg)
+        loss = self.train_loss(model)
+        
+        start = time.time()
+        self.train(model)
+        end = time.time()
+        time_records['local_training'][self.name].append(end - start)
+        
+        cpkg = self.pack(model, loss)
+        return cpkg
 
     def train(self, model):
         if self.gradL == None:

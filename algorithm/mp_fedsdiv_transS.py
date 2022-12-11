@@ -9,6 +9,7 @@ In which: lr = client_per_turn / all_clients
 """
 from .mp_fedbase import MPBasicServer, MPBasicClient
 from utils import fmodule
+from algorithm.cfmtx.cfmtx import cfmtx_test
 
 import torch.nn as nn
 import numpy as np
@@ -16,8 +17,8 @@ import numpy as np
 import torch
 import os
 import copy
-import wandb, time
-
+import wandb, time, json
+    
 
 def KL_divergence(teacher_batch_input, student_batch_input, device):
     """
@@ -88,14 +89,6 @@ class Server(MPBasicServer):
         self.gamma = 1
         self.device = torch.device("cuda")
         
-        # self.Q_matrix[0:30,0:30] = 1
-        # self.Q_matrix[30:60,0:60] = 1
-        # self.Q_matrix[60:80,60:80] = 1
-        # self.Q_matrix[80:90,80:90] = 1
-        # self.Q_matrix[90:100,90:100] = 1
-        
-        # self.freq_matrix += 1
-        
         self.paras_name = ['kd_fct', 'sthr']
         
     
@@ -104,7 +97,6 @@ class Server(MPBasicServer):
         # print("Selected:", self.selected_clients)
         models, train_losses = self.communicate(self.selected_clients, pool)
         models = [model.to(self.device) for model in models]
-        
         self.model = self.model.to(self.device)
         model_diffs = [model.to(self.device) - self.model for model in models]
 
@@ -118,7 +110,15 @@ class Server(MPBasicServer):
         model_diff = self.aggregate(model_diffs, p = self.impact_factor)
         self.model = self.model + self.gamma * model_diff
         self.update_threshold(t)
-            
+        
+        return
+    
+    def run(self):
+        super().run()
+        
+        acc, cfmtx = cfmtx_test(self.model, self.test_data, "cuda")
+        # json.dump(cfmtx, open(f"./measures/{self.option['algorithm']}_cfmtx.json", "w"), cls=NumpyEncoder)
+        np.savetxt(f"./measures/{self.option['algorithm']}_cfmtx.json", cfmtx, fmt="%.3f", delimiter=",")
         return
     
     def compute_simXY(self, simXZ, simZY):

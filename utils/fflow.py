@@ -68,7 +68,7 @@ def read_option():
     parser.add_argument('--load_model_path', help='path to model to continue training', type=str, required=False, default=None)
     parser.add_argument('--data_folder', help="path to data folder", type=str, default=None)
     parser.add_argument('--log_folder', help="folder to write results", type=str, default='fedtask')
-    parser.add_argument('--wandb', help="whether to use wandb or not", type=int, default=1)
+    parser.add_argument('--wandb', help="whether to use wandb or not", type=int, default=0)
     
     parser.add_argument('--neg_fct', help="Factor for negative learning (Fedtest)", type=float, default="1.0")
     parser.add_argument('--neg_mrg', help="Margin for negative learning (Fedtest)", type=float, default="5.0")

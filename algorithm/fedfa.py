@@ -2,7 +2,9 @@ from utils import fmodule
 from .fedbase import BasicServer, BasicClient
 import numpy as np
 import copy
-import time, wandb
+import time, wandb, json
+
+time_records = {"server_aggregation": {"overhead": [], "aggregation": []}, "local_training": {}}
 
 class Server(BasicServer):
     def __init__(self, option, model, clients, test_data = None):
@@ -14,6 +16,11 @@ class Server(BasicServer):
         self.gamma = option['gamma']
         self.eta = option['learning_rate']
         self.paras_name=['beta','gamma']
+        
+    def run(self):
+        super().run()
+        json.dump(time_records, open(f"./measures/{self.option['algorithm']}.json", "w"))
+        return
 
     def unpack(self, pkgs):
         ws = [p["model"] for p in pkgs]
@@ -28,6 +35,8 @@ class Server(BasicServer):
         # training
         ws, losses, ACC, F = self.communicate(self.selected_clients)
         if self.selected_clients == []: return
+        
+        start = time.time()
         # aggregate
         # calculate ACCi_inf, fi_inf
         sum_acc = np.sum(ACC)
@@ -44,7 +53,14 @@ class Server(BasicServer):
         dw = wnew - self.model
         # calculate m = γm+(1-γ)dw
         self.m = self.gamma * self.m + (1 - self.gamma) * dw
+        end = time.time()
+        time_records['server_aggregation']["overhead"].append(end - start)
+        
+        start = time.time()
         self.model = wnew - self.m * self.eta
+        end = time.time()
+        time_records['server_aggregation']["aggregation"].append(end - start)
+        
         return
 
 class Client(BasicClient):
@@ -52,11 +68,17 @@ class Client(BasicClient):
         super(Client, self).__init__(option, name, train_data, valid_data)
         self.frequency = 0
         self.momentum = option['gamma']
+        time_records['local_training'][self.name] = []
 
     def reply(self, svr_pkg):
         model = self.unpack(svr_pkg)
         acc, loss = self.test(model,'train')
+        
+        start = time.time()
         self.train(model)
+        end = time.time()
+        time_records['local_training'][self.name].append(end - start)
+        
         cpkg = self.pack(model, loss, acc)
         return cpkg
 
