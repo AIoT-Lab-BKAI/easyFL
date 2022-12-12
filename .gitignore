@@ -15,6 +15,7 @@ test*
 benchmark/pilldataset/pill_dataset
 */data/
 benchmark/mnist/data
+benchmark/emnist/data
 dataset_idx/pill_dataset/client_dataset/pill_cropped
 dataset_idx/pill_dataset/server_dataset/pill_cropped
 singleset/
@@ -22,3 +23,4 @@ benchmark/cifar10/data
 benchmark/cifar100/data
 wandb/
 benchmark/pilldataset/data/pill3*
+results/

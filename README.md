@@ -30,31 +30,16 @@ ujson>=4.0.2
 
 ## QuickStart
 
-**First**, run the command below to get the splited dataset MNIST:
+To run the experiments, simply:
+'''bash
+bash mnist_ex_cluster.sh
+'''
 
-```sh
-# generate the splited dataset
-python generate_fedtask.py --dataset mnist --dist 0 --skew 0 --num_clients 100
-```
-**dist is from 0 to 6 (except 4), skew from 0 to 7**
+Change the bash file as you wish to reproduce the results.
+The results will be stored in the folder: "./fedtask" which will be automatically created when running the bash file.
 
+To visualize the results, run the result_analysis.py in the folder: "./utils". Make sure you give the correct path.
 
-**Second**, run the command below to quickly get a result of the basic algorithm FedAvg on MNIST with a simple CNN:
-
-```sh
-python main.py --task mnist_cnum100_dist0_skew0_seed0 --model cnn --algorithm fedavg --num_rounds 20 --num_epochs 5 --learning_rate 0.215 --proportion 0.1 --batch_size 10 --eval_interval 1
-```
-
-The result will be stored in ` ./fedtask/mnist_cnum100_dist0_skew0_seed0/record/`.
-
-**Third**, run the command below to get a visualization of the result.
-
-```sh
-# change to the ./utils folder
-cd ../utils
-# visualize the results
-python result_analysis.py
-```
 ### Performance
 
 <table>
