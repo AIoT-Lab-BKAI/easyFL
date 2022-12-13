@@ -182,10 +182,10 @@ class MPBasicServer(BasicServer):
                     Y_.append(0)
             attacker_idx = np.nonzero(Y_)[0]        
             print(f"Attacker idx: {attacker_idx}")
-            # kmeans = KMeans(n_clusters=2, init='k-means++', random_state=0).fit(X)
-            # y_pred = kmeans.labels_
-            spectral = SpectralClustering(n_clusters=2, affinity='nearest_neighbors',n_neighbors=5, assign_labels='discretize', random_state=0).fit(X)
-            y_pred = spectral.labels_
+            kmeans = KMeans(n_clusters=2, init='k-means++', random_state=0).fit(X)
+            y_pred = kmeans.labels_
+            # spectral = SpectralClustering(n_clusters=2, affinity='nearest_neighbors',n_neighbors=5, assign_labels='discretize', random_state=0).fit(X)
+            # y_pred = spectral.labels_
             cluster_0 = []
             cluster_1 = []
             # cluster_2 = []
