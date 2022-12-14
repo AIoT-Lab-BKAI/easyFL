@@ -6,7 +6,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 import matplotlib.pyplot as plt
 
-def plot_updates_components(model, updates, peers_types, epoch, proportion, attacked_class, dirty_rate, num_malicious, agg_algorithm):
+def plot_updates_components(model, updates, peers_types, epoch, proportion, attacked_class, dirty_rate, num_malicious, agg_algorithm, algorithm):
     weight=False
     bias=False
     for i in range(3):
@@ -35,7 +35,7 @@ def plot_updates_components(model, updates, peers_types, epoch, proportion, atta
         grad_per_neuron = pd.DataFrame(data = flattened_updates,
                                         columns = ['o0','o1','o2','o3','o4','o5','o6','o7','o8','o9'])
         finalDf = pd.concat([grad_per_neuron, sum_gradsDf, peers_typesDf['target']], axis = 1)
-        path_csv = agg_algorithm + '/' 'attacked_class_{}/dirty_rate_{}/proportion_{}/num_malicious_{}/csv/{}'.format(len(attacked_class),dirty_rate,proportion*50,num_malicious,i)
+        path_csv = algorithm + '/' + agg_algorithm + '/' 'attacked_class_{}/dirty_rate_{}/proportion_{}/num_malicious_{}/csv/{}'.format(len(attacked_class),dirty_rate,proportion*50,num_malicious,i)
         if not os.path.exists(path_csv):
             os.makedirs(path_csv)
         finalDf.to_csv(path_csv + '/' + 'epoch{}.csv'.format(epoch))

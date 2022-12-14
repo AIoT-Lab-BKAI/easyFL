@@ -20,7 +20,6 @@ from utils.aggregate_funct import *
 from utils.plot_pca import *
 from sklearn.metrics import *
 from sklearn.cluster import KMeans
-from sklearn.cluster import SpectralClustering
 
 
 class MPBasicServer(BasicServer):
@@ -164,10 +163,10 @@ class MPBasicServer(BasicServer):
         # models, packages_received_from_clients = self.communicate(self.selected_clients, pool)
         models, peer_grads, acc_before_trains = self.communicate(self.selected_clients, pool)
         peers_types = [self.clients[id].train_data.client_type for id in self.selected_clients]
-        plot_updates_components(copy.deepcopy(self.model), peer_grads, peers_types, epoch=round, proportion = self.option['proportion'], attacked_class = self.option['attacked_class'],dirty_rate=self.option['dirty_rate'][0],num_malicious=self.option['num_malicious'], agg_algorithm=self.option['agg_algorithm'])
+        plot_updates_components(copy.deepcopy(self.model), peer_grads, peers_types, epoch=round, proportion = self.option['proportion'], attacked_class = self.option['attacked_class'],dirty_rate=self.option['dirty_rate'][0],num_malicious=self.option['num_malicious'], agg_algorithm=self.option['agg_algorithm'], algorithm= self.option['algorithm'])
         
         if self.option['agg_algorithm'] == "cluster_2_0.05":
-            path_ = self.option['agg_algorithm'] + '/' + 'attacked_class_{}/dirty_rate_{}/proportion_{}/num_malicious_{}/csv/{}'.format( len(self.option['attacked_class']), self.option['dirty_rate'][0], self.option['proportion']*50, self.option['num_malicious'], 0)
+            path_ = self.option['algorithm'] + '/' + self.option['agg_algorithm'] + '/' + 'attacked_class_{}/dirty_rate_{}/proportion_{}/num_malicious_{}/csv/{}'.format( len(self.option['attacked_class']), self.option['dirty_rate'][0], self.option['proportion']*50, self.option['num_malicious'], 0)
             
             file = f"epoch{round}.csv"
             path_csv = os.path.join(path_, file)
@@ -184,8 +183,6 @@ class MPBasicServer(BasicServer):
             print(f"Attacker idx: {attacker_idx}")
             kmeans = KMeans(n_clusters=2, init='k-means++', random_state=0).fit(X)
             y_pred = kmeans.labels_
-            # spectral = SpectralClustering(n_clusters=2, affinity='nearest_neighbors',n_neighbors=5, assign_labels='discretize', random_state=0).fit(X)
-            # y_pred = spectral.labels_
             cluster_0 = []
             cluster_1 = []
             # cluster_2 = []
@@ -245,7 +242,7 @@ class MPBasicServer(BasicServer):
                 print(f'Avg_acc_before_train_cluster_0 : {Avg_acc_before_train_cluster_0}')
                 print(f'Avg_acc_before_train_cluster_1 : {Avg_acc_before_train_cluster_1}')
                 if Avg_acc_before_train_cluster_0 > Avg_acc_before_train_cluster_1: 
-                    if (len(cluster_0) > len(cluster_1)) and (Avg_acc_before_train_cluster_0 - Avg_acc_before_train_cluster_1 > 0.05):
+                    if Avg_acc_before_train_cluster_0 - Avg_acc_before_train_cluster_1 > 0.05:
                         self.model = aggregate_model_cluster_0
                         chosen_cluster = cluster_0
                         attacker_cluster = cluster_1
@@ -254,7 +251,7 @@ class MPBasicServer(BasicServer):
                         chosen_cluster = [y for y in range(len(y_pred))]
                         attacker_cluster = []
                 else:
-                    if (len(cluster_1) > len(cluster_0)) and (Avg_acc_before_train_cluster_1 - Avg_acc_before_train_cluster_0 > 0.05):
+                    if Avg_acc_before_train_cluster_1 - Avg_acc_before_train_cluster_0 > 0.05:
                         self.model = aggregate_model_cluster_1
                         chosen_cluster = cluster_1
                         attacker_cluster = cluster_0
@@ -262,6 +259,7 @@ class MPBasicServer(BasicServer):
                         self.model = self.agg_fuction(models)
                         chosen_cluster = [y for y in range(len(y_pred))]
                         attacker_cluster = []
+                    
                 # test_metric_all, test_loss_all, inference_time_all = self.test(self.agg_fuction(models), device=torch.device('cuda'))
                 # test_metric_0, test_loss_0, inference_time_0 = self.test(aggregate_model_cluster_0, device=torch.device('cuda'))
                 # test_metric_1, test_loss_1, inference_time_1 = self.test(aggregate_model_cluster_1, device=torch.device('cuda'))
@@ -321,7 +319,7 @@ class MPBasicServer(BasicServer):
                 "test acc after agg": test_metric_agg,
                 "true prediction attacker": [int(i) for i in true_pred],
                 }
-                path_ = self.option['agg_algorithm'] + '/' + 'attacked_class_{}/dirty_rate_{}/proportion_{}/num_malicious_{}/'.format( len(self.option['attacked_class']), self.option['dirty_rate'][0], self.option['proportion']*50, self.option['num_malicious'])
+                path_ = self.option['algorithm'] + '/' + self.option['agg_algorithm'] + '/' + 'attacked_class_{}/dirty_rate_{}/proportion_{}/num_malicious_{}/'.format( len(self.option['attacked_class']), self.option['dirty_rate'][0], self.option['proportion']*50, self.option['num_malicious'])
                 listObj = []
                 if round != 1:
                     with open(path_ + 'log.json') as fp:
@@ -337,37 +335,37 @@ class MPBasicServer(BasicServer):
                 
             print(f'Done aggregate at round {self.current_round}')
         
-        attacked_class_accuracies = []
-        actuals, predictions = self.test_label_predictions(copy.deepcopy(self.model), device0)
-        classes = list(i for i in range(10))
-        print('{0:10s} - {1}'.format('Class','Accuracy'))
-        # for i, r in enumerate(confusion_matrix(actuals, predictions)):
-        #     print('{} - {:.2f}'.format(classes[i], r[i]/np.sum(r)*100))
-        #     if i in self.option['attacked_class']:
-        #         attacked_class_accuracies.append(np.round(r[i]/np.sum(r)*100, 2))
+        # attacked_class_accuracies = []
+        # actuals, predictions = self.test_label_predictions(copy.deepcopy(self.model), device0)
+        # classes = list(i for i in range(10))
+        # print('{0:10s} - {1}'.format('Class','Accuracy'))
+        # # for i, r in enumerate(confusion_matrix(actuals, predictions)):
+        # #     print('{} - {:.2f}'.format(classes[i], r[i]/np.sum(r)*100))
+        # #     if i in self.option['attacked_class']:
+        # #         attacked_class_accuracies.append(np.round(r[i]/np.sum(r)*100, 2))
 
         
-        path_csv = self.option['agg_algorithm'] + '/' + 'attacked_class_{}/dirty_rate_{}/proportion_{}/num_malicious_{}/csv'.format(len(self.option['attacked_class']),self.option['dirty_rate'][0],self.option['proportion']*50,self.option['num_malicious'])
+        # path_csv = self.option['algorithm'] + '/' + self.option['agg_algorithm'] + '/' + 'attacked_class_{}/dirty_rate_{}/proportion_{}/num_malicious_{}/csv'.format(len(self.option['attacked_class']),self.option['dirty_rate'][0],self.option['proportion']*50,self.option['num_malicious'])
         
-        with open(path_csv + '/' + 'confusion_matrix.csv', 'a', encoding='UTF8') as f:
-            writer = csv.writer(f)
-            pd.DataFrame(data= confusion_matrix(actuals, predictions),
-                         index=['Class' + str(i) for i in range(10)],
-                         columns= ['Class' + str(i) for i in range(10)]).to_csv(path_csv + '/' + 'round_{}.csv'.format(round))
+        # with open(path_csv + '/' + 'confusion_matrix.csv', 'a', encoding='UTF8') as f:
+        #     writer = csv.writer(f)
+        #     pd.DataFrame(data= confusion_matrix(actuals, predictions),
+        #                  index=['Class' + str(i) for i in range(10)],
+        #                  columns= ['Class' + str(i) for i in range(10)]).to_csv(path_csv + '/' + 'round_{}.csv'.format(round))
             
-            for i, r in enumerate(confusion_matrix(actuals, predictions)):
-                data = []
-                print('{} - {:.2f}'.format(classes[i], r[i]/np.sum(r)*100))
-                data.append(classes[i])
-                data.append(r[i]/np.sum(r)*100)
-                if i in self.option['attacked_class']:
-                    attacked_class_accuracies.append(np.round(r[i]/np.sum(r)*100, 2))
-                    data.append('attacked')
-                else:
-                    data.append('clean')
-                writer.writerow(data)
-            writer.writerow(['','',''])
-            writer.writerow(['','',''])
+        #     for i, r in enumerate(confusion_matrix(actuals, predictions)):
+        #         data = []
+        #         print('{} - {:.2f}'.format(classes[i], r[i]/np.sum(r)*100))
+        #         data.append(classes[i])
+        #         data.append(r[i]/np.sum(r)*100)
+        #         if i in self.option['attacked_class']:
+        #             attacked_class_accuracies.append(np.round(r[i]/np.sum(r)*100, 2))
+        #             data.append('attacked')
+        #         else:
+        #             data.append('clean')
+        #         writer.writerow(data)
+        #     writer.writerow(['','',''])
+        #     writer.writerow(['','',''])
             
         
         return
@@ -529,7 +527,7 @@ class MPBasicClient(BasicClient):
             for iter in range(self.epochs):
                 for batch_id, batch_data in enumerate(data_loader):
                     model.zero_grad()
-                    optimizer.step()
+                    # optimizer.step()
                     loss = self.calculator.get_loss_not_uncertainty(model, batch_data, device)
                     loss.backward()
                     # Get gradient
