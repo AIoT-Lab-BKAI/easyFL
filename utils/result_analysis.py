@@ -195,13 +195,14 @@ def main_func(task, headers, flt):
 if __name__ == '__main__':
     # task+record
     headers = [
-        'scaffold_Mcnn',
-        'mp_fedavg_Mcnn', 
-        # 'mp_fedprox', 
-        'mp_proposal_Mcnn', 
-        # 'mp_alg', 
+        'scaffold',
+        'mp_fedavg', 
+        'mp_feddrl', 
+        'mp_proposal', 
+        'mp_hope', 
+        'mp_hopev2', 
         # 'mp_alg_mse', 
-        'feddyn',
+        # 'feddyn',
         # 'mp_fedkdr',
         # 'mp_fedfsl-mi-adv'
     ]
@@ -216,7 +217,7 @@ if __name__ == '__main__':
     
     # numclient = 10
     for s in [1]:
-        task = f'cifar100_sparse_N100_K10/cifar100/sparse/100client/cifar100_sparse'
+        task = f'mnist_iid_N10_K10/mnist/iid/10client/mnist_iid'
         try:
             main_func(task, headers, flt)
         except ValueError:
