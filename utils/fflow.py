@@ -107,14 +107,14 @@ def initialize(option):
         task_reader = getattr(importlib.import_module(bmk_core_path), 'TaskReader')(taskpath=option['dataidx_filename'], data_folder=option['data_folder'], dataidx_path=option['dataidx_path'])
     else:
         task_reader = getattr(importlib.import_module(bmk_core_path), 'TaskReader')(taskpath=option['dataidx_filename'], data_folder=option['data_folder'])
-    train_datas, test_data, num_clients = task_reader.read_data()
+    local_train_datas, local_test_datas, test_data, num_clients = task_reader.read_data()
     print("done")
 
     # init client
     print('init clients...', end='')
     client_path = '%s.%s' % ('algorithm', option['algorithm'])
     Client=getattr(importlib.import_module(client_path), 'Client')
-    clients = [Client(option, name = cid, train_data = train_datas[cid]) for cid in range(num_clients)]
+    clients = [Client(option, name = cid, train_data = local_train_datas[cid], valid_data = local_test_datas[cid]) for cid in range(num_clients)]
     print('done')
 
     # init server

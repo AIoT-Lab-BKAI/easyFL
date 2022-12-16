@@ -182,8 +182,7 @@ class MPBasicClient(BasicClient):
             eval_metric: task specified evaluation metric
             loss: task specified loss
         """
-        # dataset = self.train_data if dataflag=='train' else self.valid_data
-        dataset = self.train_data
+        dataset = self.train_data if dataflag=='train' else self.valid_data
         model = model.to(device)
         model.eval()
         loss = 0

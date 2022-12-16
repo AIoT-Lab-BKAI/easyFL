@@ -479,7 +479,7 @@ class XYTaskReader(BasicTaskReader):
         return train_datas, valid_datas, test_data, feddata['client_names']
     
 class CusTomTaskReader(BasicTaskReader):
-    def __init__(self, taskpath,train_dataset, test_dataset):
+    def __init__(self, taskpath, train_dataset, test_dataset):
         super().__init__(taskpath)
         self.test_dataset = test_dataset
         self.train_dataset = train_dataset
@@ -487,15 +487,24 @@ class CusTomTaskReader(BasicTaskReader):
     
     def load_dataset_idx(self,path="data"):
         import json
-        list_idx = json.load(open(path, 'r'))
+        try:
+            list_idx = json.load(open(path, 'r'))
+        except:
+            print("Error loading ", path)
+            exit(0)
+        
         return {int(k): v for k, v in list_idx.items()}
     
     def read_data(self):
-        data_idx = self.load_dataset_idx('dataset_idx/'+ self.taskpath)
-        n_clients = len(data_idx)
-        train_data = [CustomDataset(self.train_dataset,data_idx[idx]) for idx in range(n_clients)]
-        test_data = self.test_dataset
-        return train_data, test_data, n_clients
+        train_dataidx = self.load_dataset_idx('dataset_idx/'+ self.taskpath)
+        test_dataidx = self.load_dataset_idx('dataset_idx/'+ self.taskpath.replace('.json', '_test.json'))
+        
+        n_clients = len(train_dataidx)
+        local_train_datas = [CustomDataset(self.train_dataset, train_dataidx[idx]) for idx in range(n_clients)]
+        local_test_datas = [CustomDataset(self.test_dataset, test_dataidx[idx]) for idx in range(n_clients)]
+        server_test_data = self.test_dataset
+        
+        return local_train_datas, local_test_datas, server_test_data, n_clients
     
 class IDXTaskReader(BasicTaskReader):
     def __init__(self, taskpath=''):
