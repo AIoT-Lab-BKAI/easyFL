@@ -1,8 +1,8 @@
 from torch import nn
 import torch.nn.functional as F
+from utils.fmodule import FModule
 
-
-class ClientModel(nn.Module):
+class ClientModel(FModule):
     def __init__(self):
         super().__init__()
         self.head = ClientHead()
@@ -17,7 +17,7 @@ class ClientModel(nn.Module):
         self.head.freeze_grad()
         self.tail.freeze_grad()
 
-class ClientHead(nn.Module):
+class ClientHead(FModule):
     def __init__(self):
         super().__init__()
         self.conv1 = nn.Conv2d(in_channels=1, out_channels=32, kernel_size=5, padding=2)
@@ -38,7 +38,7 @@ class ClientHead(nn.Module):
             p.requires_grad = False
     
     
-class ClientTail(nn.Module):
+class ClientTail(FModule):
     def __init__(self):
         super().__init__()
         self.fc2 = nn.Linear(512, 256)
@@ -54,7 +54,7 @@ class ClientTail(nn.Module):
             p.requires_grad = False
             
     
-class ServerTail(nn.Module):
+class ServerTail(FModule):
     def __init__(self):
         super().__init__()
         self.fc1 = nn.Linear(512, 1028)
