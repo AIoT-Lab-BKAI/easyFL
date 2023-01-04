@@ -152,7 +152,7 @@ def create_legend(records=[], keys=[]):
         return records
     res = []
     for rec in records:
-        s = [rec[:rec.find('_M')]]
+        s = [rec[:rec.find('_R')]]
         values = [k + get_key_from_filename(rec, k) for k in keys]
         s.extend(values)
         res.append(" ".join(s))
@@ -197,12 +197,15 @@ def main_func(task, headers, flt):
 if __name__ == '__main__':
     # task+record
     headers = [
-        # 'scaffold',
+        'scaffold',
         'mp_fedavg', 
         # 'mp_feddrl', 
         'mp_proposal', 
+        # 'mp_proposal2_Mmlp', 
+        # 'mp_proposal3_Mmlp', 
         # 'mp_hope', 
-        # 'mp_hopev2', 
+        # 'mp_opfl', 
+        # 'mp_opfl_Mop_cnn', 
         # 'mp_alg_mse', 
         # 'feddyn',
         # 'mp_fedkdr',
@@ -212,14 +215,14 @@ if __name__ == '__main__':
         # 'E': '1',
         # 'B': '4',
         # 'LR': '0.01',
-        # 'R': '10',
+        'R': '250',
         # 'P': '1',
         # 'S': '0',
     }
     
     # numclient = 10
     for s in [1]:
-        task = f'mnist_sparse_N100_K10/mnist/sparse/100client/mnist_sparse'
+        task = f'cifar10_sparse_N100_K10/cifar10/sparse/100client/cifar10_sparse_old'
         try:
             main_func(task, headers, flt)
         except ValueError:

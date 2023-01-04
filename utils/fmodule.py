@@ -40,7 +40,11 @@ class FModule(nn.Module):
         return _model_scale(self, -1.0)
 
     def norm(self, p=2):
-        return self**p
+        sum = 0
+        for param in self.parameters():
+            sum += torch.norm(torch.pow(param, p))
+        norm = torch.pow(sum, 1.0/p)
+        return norm
 
     def zeros_like(self):
         return self*0
