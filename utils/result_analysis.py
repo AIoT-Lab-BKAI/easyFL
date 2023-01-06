@@ -159,7 +159,7 @@ def create_legend(records=[], keys=[]):
     return res
 
 
-def main_func(task, headers, flt):
+def main_func(task, headers, flt, allPerFL=0.95):
     # read and filter the filenames
     records = set()
     for h in headers:
@@ -180,6 +180,10 @@ def main_func(task, headers, flt):
     legends = create_legend(records, ['P','B'])
     for curve in curve_names:
         plt.figure(figsize=(8,6))
+        if curve == 'mean_valid_accs':
+            plt.axhline(y=allPerFL, xmin=0, xmax=1000, color='purple')
+            plt.text(y=allPerFL + 0.02, x=-10, s='Baseline', fontdict={'color': 'purple', 'fontsize': 12})
+            
         draw_curve(dicts, curve, legends)
         plt.title(task.split('/')[0].replace('_', ' '), pad=10)
         plt.xlabel("communication rounds")
@@ -215,15 +219,15 @@ if __name__ == '__main__':
         # 'E': '1',
         # 'B': '4',
         # 'LR': '0.01',
-        'R': '250',
+        # 'R': '250',
         # 'P': '1',
         # 'S': '0',
     }
     
     # numclient = 10
     for s in [1]:
-        task = f'cifar10_sparse_N100_K10/cifar10/sparse/100client/cifar10_sparse_old'
+        task = f'cifar10_dir_sparse_N100_K10/cifar10/dirichlet/dir_1_sparse/100client/cifar10_sparse'
         try:
-            main_func(task, headers, flt)
+            main_func(task, headers, flt, 0.6889)
         except ValueError:
             print("error:", task)

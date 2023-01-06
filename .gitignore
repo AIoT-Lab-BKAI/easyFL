@@ -11,7 +11,6 @@ __pycache__/
 /utils/figures/
 /utils/__pycache__
 *.txt
-test*
 benchmark/pilldataset/pill_dataset
 */data/
 benchmark/mnist/data
