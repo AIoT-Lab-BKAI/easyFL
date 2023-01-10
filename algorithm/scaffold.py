@@ -15,6 +15,8 @@ class Server(BasicServer):
         self.eta = option['eta']
         self.cg = self.model.zeros_like()
         self.paras_name = ['eta']
+        self.max_acc = 0
+        return
 
     def pack(self, client_id):
         return {
@@ -25,19 +27,33 @@ class Server(BasicServer):
     def unpack(self, pkgs):
         dys = [p["dy"] for p in pkgs]
         dcs = [p["dc"] for p in pkgs]
-        return dys, dcs
+        accs = [p["acc"] for p in pkgs]
+        return dys, dcs, accs
 
     def iterate(self, t):
-        # sample clients
         self.selected_clients = self.sample()
-        # local training
-        dys, dcs = self.communicate(self.selected_clients)
+        dys, dcs, per_accs = self.communicate(self.selected_clients)
         if self.selected_clients == []: return
-        # aggregate
         self.model, self.cg = self.aggregate(dys, dcs)
+        
+        self.max_acc = max(self.max_acc, np.mean(per_accs))
+
+        # wandb record
+        if self.wandb:
+            wandb.log(
+                {
+                    "Mean Client Accuracy": np.mean(per_accs),
+                    "Std Client Accuracy":  np.std(per_accs),
+                    "Max Testing Accuracy": self.max_acc
+                }
+            )
+            
+        print(f"Max Testing Accuracy: {self.max_acc:>.3f}")
+        print(f"Mean of Client Accuracy: {np.mean(per_accs):>.3f}")
+        print(f"Std of Client Accuracy: {np.std(per_accs):>.3f}")
         return
 
-    def aggregate(self, dys, dcs):  # c_list is c_i^+
+    def aggregate(self, dys, dcs):
         dw = fmodule._model_average(dys)
         dc = fmodule._model_average(dcs)
         new_model = self.model + self.eta * dw
@@ -80,13 +96,15 @@ class Client(BasicClient):
     def reply(self, svr_pkg):
         model, c_g = self.unpack(svr_pkg)
         dy, dc = self.train(model, c_g)
-        cpkg = self.pack(dy, dc)
+        fin_acc, _ = self.test(model)
+        cpkg = self.pack(dy, dc, fin_acc)
         return cpkg
 
-    def pack(self, dy, dc):
+    def pack(self, dy, dc, fin_acc):
         return {
             "dy": dy,
             "dc": dc,
+            "acc": fin_acc
         }
 
     def unpack(self, received_pkg):
