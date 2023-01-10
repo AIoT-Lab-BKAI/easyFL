@@ -482,8 +482,8 @@ class CusTomTaskReader(BasicTaskReader):
         return {int(k): v for k, v in list_idx.items()}
     
     def read_data(self):
-        train_dataidx = self.load_dataset_idx('dataset_idx/'+ self.taskpath)
-        test_dataidx = self.load_dataset_idx('dataset_idx/'+ self.taskpath.replace('.json', '_test.json'))
+        train_dataidx = self.load_dataset_idx(os.path.join('dataset_idx/', self.taskpath, "train.json"))
+        test_dataidx = self.load_dataset_idx(os.path.join('dataset_idx/', self.taskpath, "test.json"))
         
         n_clients = len(train_dataidx)
         local_train_datas = [CustomDataset(self.train_dataset, train_dataidx[idx]) for idx in range(n_clients)]
