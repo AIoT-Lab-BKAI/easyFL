@@ -87,7 +87,7 @@ def main():
     
     if option['wandb']:
         wandb.init(
-            project="perFL", 
+            project="HungNN-perFL", 
             entity="aiotlab",
             group=option['task'],
             name=runname[:-1],
