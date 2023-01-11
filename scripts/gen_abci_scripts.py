@@ -3,8 +3,8 @@ from pathlib import Path
 
 dataset = "cifar10"
 noniid = "dir_1_sparse"
-N = 20
-K = 5
+N = 200
+K = 10
 total_epochs = 4000
 batch_size = 16
 
@@ -20,7 +20,7 @@ header_text = "\
 # #$ -cwd\n\
 # #$ -l rt_G.small=1\n\
 # #$ -l h_rt=36:00:00\n\
-# #$ -o /home/aaa10078nj/Federated_Learning/Hung_test/logs/motiv1/$JOB_NAME_$JOB_ID.log\n\
+# #$ -o /home/aaa10078nj/Federated_Learning/Hung_perFL/logs/cifar10/$JOB_NAME_$JOB_ID.log\n\
 # #$ -j y\n\n\
 # source /etc/profile.d/modules.sh\n\
 # module load gcc/11.2.0\n\
@@ -30,7 +30,7 @@ header_text = "\
 # module load nccl/2.11/2.11.4-1\n\
 # module load python/3.10/3.10.4\n\
 # source ~/venv/pytorch1.11+horovod/bin/activate\n\n\
-# LOG_DIR=\"/home/aaa10078nj/Federated_Learning/Hung_test/logs/motiv1/cifar10/$JOB_NAME_$JOB_ID\"\n\
+# LOG_DIR=\"/home/aaa10078nj/Federated_Learning/Hung_perFL/logs/cifar10/$JOB_NAME_$JOB_ID\"\n\
 # rm -r ${LOG_DIR}\n\
 # mkdir ${LOG_DIR}\n\n\
 # #Dataset\n\
@@ -79,7 +79,7 @@ for E in [1, 8, 16, 32]:
 
     for algo in algos:
         command = formated_command.format(
-            task_name, algo, model, int(total_epochs/E), E, batch_size, K/N, 1, task_name, dataset, noniid, N
+            task_name, algo, model, max(300, int(total_epochs/E)), E, batch_size, K/N, 1, task_name, dataset, noniid, N
         )
         
         file = open(f"./{dataset}/{N}_clients/{task_name}_{algo}.sh", "w")
