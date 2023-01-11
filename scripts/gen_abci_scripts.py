@@ -3,8 +3,8 @@ from pathlib import Path
 
 dataset = "cifar10"
 noniid = "dir_1_sparse"
-N = 200
-K = 10
+N = 20
+K = 5
 total_epochs = 4000
 batch_size = 16
 
@@ -51,7 +51,7 @@ NUM_THRESH_PER_GPU=1\n\
 NUM_GPUS={}\n\
 SERVER_GPU_ID=0\n\
 TASK=\"{}\"\n\
-IDX_DIR=\"{}/{}/{}client\"\n\n\
+IDX_DIR=\"{}/dirichlet/{}/{}client\"\n\n\
 cd easyFL\n\n\
 "
 
@@ -68,7 +68,7 @@ python main.py \
 --num_epochs ${EPOCH_PER_ROUND} \
 --proportion ${PROPOTION} \
 --batch_size ${BATCH} \
---learning_rate 0.005\
+--learning_rate 0.005 \
 --num_threads_per_gpu ${NUM_THRESH_PER_GPU} \
 --num_gpus ${NUM_GPUS} \
 --server_gpu_id ${SERVER_GPU_ID}"
