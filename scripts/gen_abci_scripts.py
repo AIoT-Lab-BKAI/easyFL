@@ -1,22 +1,15 @@
 import os
 from pathlib import Path
 
-visible_cudas = [0, 1]
-cudas = ",".join([str(i) for i in visible_cudas])
-task_file = "main.py"
-
-dataset = "cifar100"
-noniid = "sparse"
-N = 500
-K = 10
-total_epochs = 8000
-batch_size = 8
+dataset = "cifar10"
+noniid = "dir_1_sparse"
+N = 20
+K = 5
+total_epochs = 4000
+batch_size = 16
 
 model = "cnn"
-algos = ["scaffold", "mp_hope", "mp_fedavg", "mp_fedprox", "mp_feddyn"]
-data_folder = f"./benchmark/{dataset}/data"
-# data_folder = f"./benchmark/fashion_mnist/data"
-log_folder = f"motiv/{dataset}"
+algos = ["scaffold", "mp_fedavg", "mp_fedprox", "mp_proposal"]
 
 if not Path(f"./{dataset}/{N}_clients").exists():
     os.makedirs(f"./{dataset}/{N}_clients")
@@ -58,25 +51,37 @@ NUM_THRESH_PER_GPU=1\n\
 NUM_GPUS={}\n\
 SERVER_GPU_ID=0\n\
 TASK=\"{}\"\n\
-DATA_IDX_FILE=\"{}/{}/{}client/{}_{}.json\"\n\n\
+IDX_DIR=\"{}/{}/{}client\"\n\n\
 cd easyFL\n\n\
 "
 
-for E in [4]:
+body_text = "\
+python main.py \
+--task ${TASK} \
+--model ${MODEL} \
+--algorithm ${ALG} \
+--wandb ${WANDB} \
+--data_folder ${DATA_DIR} \
+--log_folder ${LOG_DIR} \
+--dataidx_filename ${IDX_DIR} \
+--num_rounds ${ROUND} \
+--num_epochs ${EPOCH_PER_ROUND} \
+--proportion ${PROPOTION} \
+--batch_size ${BATCH} \
+--learning_rate 0.005\
+--num_threads_per_gpu ${NUM_THRESH_PER_GPU} \
+--num_gpus ${NUM_GPUS} \
+--server_gpu_id ${SERVER_GPU_ID}"
+
+
+for E in [1, 8, 16, 32]:
     task_name = f"{dataset}_{noniid}_N{N}_K{K}_E{E}"
 
     for algo in algos:
-        # if E < 20:
-        #     command = formated_command.format(
-        #         task_name, algo, model, int(total_epochs/E), E, batch_size, K/N, task_name
-        #     )
-        # else:
         command = formated_command.format(
-            task_name, algo, model, 1000, E, batch_size, K/N, len(visible_cudas), task_name, dataset, noniid, N, dataset, noniid
+            task_name, algo, model, int(total_epochs/E), E, batch_size, K/N, 1, task_name, dataset, noniid, N
         )
         
-        body_text = "python main.py  --task ${TASK}  --model ${MODEL}  --algorithm ${ALG}  --wandb ${WANDB} --data_folder ${DATA_DIR}  --log_folder ${LOG_DIR}   --dataidx_filename ${DATA_IDX_FILE}   --num_rounds ${ROUND} --num_epochs ${EPOCH_PER_ROUND} --proportion ${PROPOTION} --batch_size ${BATCH} --num_threads_per_gpu ${NUM_THRESH_PER_GPU}  --num_gpus ${NUM_GPUS} --server_gpu_id ${SERVER_GPU_ID} "
-
         file = open(f"./{dataset}/{N}_clients/{task_name}_{algo}.sh", "w")
         file.write(header_text + command + body_text)
         file.close()
