@@ -40,6 +40,7 @@ class Server(MPBasicServer):
         self.distill_epochs = max(8, option['num_epochs'])
         self.temperature = 1.5
         self.distill_lossfnc = torch.nn.CrossEntropyLoss()
+        self.max_acc = 0
     
     def pack(self, client_id):
         return {"model" : copy.deepcopy(self.server_tail)}
