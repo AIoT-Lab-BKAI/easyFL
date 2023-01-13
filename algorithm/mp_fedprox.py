@@ -43,7 +43,7 @@ class Client(MPBasicClient):
         super(Client, self).__init__(option, name, train_data, valid_data)
         self.mu = option['mu']
 
-    def train(self, model, device):
+    def train(self, model, device, round):
         # global parameters
         model = model.to(device)
         src_model = copy.deepcopy(model)
