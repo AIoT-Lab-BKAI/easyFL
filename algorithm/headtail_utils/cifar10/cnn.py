@@ -64,9 +64,9 @@ class ServerTail(FModule):
         self.decoder = nn.Sequential(
             nn.Linear(1600, 512),
             nn.ReLU(),
-            nn.Linear(512, 256),
+            nn.Linear(512, 512),
             nn.ReLU(),
-            nn.Linear(256, 10),
+            nn.Linear(512, 10),
         )
     
     def forward(self, x):

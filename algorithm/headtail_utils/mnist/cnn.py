@@ -55,7 +55,7 @@ class ClientTail(FModule):
 class ServerTail(FModule):
     def __init__(self):
         super().__init__()
-        self.fc1 = nn.Linear(512, 1028)
+        self.fc1 = nn.Linear(3136, 1028)
         self.fc2 = nn.Linear(1028, 512)
         self.fc3 = nn.Linear(512, 10)
     
