@@ -22,7 +22,8 @@ class ClientModel(FModule):
 class ClientHead(FModule):
     def __init__(self):
         super().__init__()
-        self.fc1 = nn.Linear(3*32*32, 256)
+        self.fc1 = nn.Linear(3*32*32, 128)
+        self.fc2 = nn.Linear(128, 128)
         
     def forward(self, x):
         x = x.view(-1, x.shape[1] * x.shape[-2] * x.shape[-1])
@@ -37,7 +38,7 @@ class ClientHead(FModule):
 class ClientTail(FModule):
     def __init__(self):
         super().__init__()
-        self.fc3 = nn.Linear(256, 10)
+        self.fc3 = nn.Linear(128, 10)
 
     def forward(self, x):
         return self.fc3(x)
@@ -50,9 +51,9 @@ class ClientTail(FModule):
 class ServerTail(FModule):
     def __init__(self):
         super().__init__()
-        self.fc1 = nn.Linear(256, 512)
-        self.fc2 = nn.Linear(512, 256)
-        self.fc3 = nn.Linear(256, 10)
+        self.fc1 = nn.Linear(128, 256)
+        self.fc2 = nn.Linear(256, 128)
+        self.fc3 = nn.Linear(128, 10)
     
     def forward(self, x):
         x = F.relu(self.fc1(x))
