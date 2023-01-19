@@ -5,8 +5,7 @@ from torch.utils.data import Dataset, DataLoader
 
 import copy
 import torch
-import wandb
-import numpy as np
+
 
 class DistillDataset(Dataset):
     def __init__(self, datawares_dict):
@@ -37,18 +36,25 @@ class Server(MPBasicServer):
     def __init__(self, option, model, clients, test_data = None):
         super(Server, self).__init__(option, model, clients, test_data)
         self.server_tail = initialize(dataset="algorithm.headtail_utils." + option['task'].split('_')[0], architecture=option['model'], modelname="ServerTail")
-        self.distill_epochs = min(8, self.option['epochs'])
-        self.temperature = 1.
+        self.distill_epochs = 8
+        self.temperature = 1.5
         self.distill_lossfnc = torch.nn.CrossEntropyLoss()
         self.max_acc = 0
+        return
+    
+    def test(self, model=None, device=None, round=None):
+        return 0, 0
+    
+    def test_on_clients(self, dataflag='valid', device='cuda', round=None):
+        evals, losses = [], []
+        for c in self.clients:
+            eval_value, loss = c.test(dataflag, device=device, round=round)
+            evals.append(eval_value)
+            losses.append(loss)
+        return evals, losses
     
     def pack(self, client_id):
         return {"model" : copy.deepcopy(self.server_tail)}
-    
-    def unpack(self, packages_received_from_clients):
-        tails = [cp["tail"] for cp in packages_received_from_clients]
-        datawares = [cp["dataware"] for cp in packages_received_from_clients]
-        return tails, datawares
     
     def iterate(self, t, pool):
         self.selected_clients = self.sample()
@@ -57,7 +63,9 @@ class Server(MPBasicServer):
         if not self.selected_clients: 
             return
         
-        device0 = torch.device(f"cuda:{self.server_gpu_id}")        
+        device0 = torch.device(f"cuda:{self.server_gpu_id}")
+        # client_heads = [i.to(device0) for i in client_heads]
+        
         assembled_dataware = assemble_data(client_datawares)
         self.distill(assembled_dataware, device0)
         return
@@ -94,7 +102,24 @@ class Client(MPBasicClient):
         self.temperature = 1.5
         self.dataware = {"intermediate_output": [], "final_output": []}
         return
-           
+    
+        
+    def test(self, dataflag='valid', device='cpu', round=None):
+        dataset = self.train_data if dataflag=='train' else self.valid_data
+        model = self.model.to(device)
+        model.eval()
+        loss = 0
+        eval_metric = 0
+        data_loader = self.calculator.get_data_loader(dataset, batch_size=64)
+        for batch_id, batch_data in enumerate(data_loader):
+            bmean_eval_metric, bmean_loss = self.calculator.test(model, batch_data, device)
+            loss += bmean_loss * len(batch_data[1])
+            eval_metric += bmean_eval_metric * len(batch_data[1])
+        eval_metric =1.0 * eval_metric / len(dataset)
+        loss = 1.0 * loss / len(dataset)
+        return eval_metric, loss
+        
+        
     def train(self, server_tail, device, round): 
         server_tail = server_tail.to(device)
         server_tail.freeze_grad()
@@ -117,6 +142,7 @@ class Client(MPBasicClient):
         self.dataware["final_output"] = torch.vstack(self.dataware["final_output"])
         return
     
+    
     def get_loss(self, model, server_tail, batch_data, storing, device):
         X, Y = self.calculator.data_to_device(batch_data, device)
         
@@ -133,15 +159,9 @@ class Client(MPBasicClient):
             
         return classification_loss + self.distill_factor * distillation_loss
         
+        
     def reply(self, svr_pkg, device, round):
         server_tail = self.unpack(svr_pkg)
         self.train(server_tail, device, round)
-        cpkg = self.pack(self.model.tail, self.dataware)
+        cpkg = self.pack(copy.deepcopy(self.model.tail), self.dataware)
         return cpkg
-
-    def pack(self, tail, dataware):
-        return {
-            "id" : int(self.name),
-            "tail" : tail,
-            "dataware": dataware,
-        }

@@ -15,7 +15,6 @@ class Server(BasicServer):
         self.eta = option['eta']
         self.cg = self.model.zeros_like()
         self.paras_name = ['eta']
-        self.max_acc = 0
         return
 
     def pack(self, client_id):
@@ -27,30 +26,13 @@ class Server(BasicServer):
     def unpack(self, pkgs):
         dys = [p["dy"] for p in pkgs]
         dcs = [p["dc"] for p in pkgs]
-        accs = [p["acc"] for p in pkgs]
-        return dys, dcs, accs
+        return dys, dcs
 
     def iterate(self, t):
         self.selected_clients = self.sample()
-        dys, dcs, per_accs = self.communicate(self.selected_clients)
+        dys, dcs = self.communicate(self.selected_clients)
         if self.selected_clients == []: return
         self.model, self.cg = self.aggregate(dys, dcs)
-        
-        self.max_acc = max(self.max_acc, np.mean(per_accs))
-
-        # wandb record
-        if self.wandb:
-            wandb.log(
-                {
-                    "Mean Client Accuracy": np.mean(per_accs),
-                    "Std Client Accuracy":  np.std(per_accs),
-                    "Max Testing Accuracy": self.max_acc
-                }
-            )
-            
-        print(f"Max Testing Accuracy: {self.max_acc:>.3f}")
-        print(f"Mean of Client Accuracy: {np.mean(per_accs):>.3f}")
-        print(f"Std of Client Accuracy: {np.std(per_accs):>.3f}")
         return
 
     def aggregate(self, dys, dcs):
@@ -96,15 +78,13 @@ class Client(BasicClient):
     def reply(self, svr_pkg):
         model, c_g = self.unpack(svr_pkg)
         dy, dc = self.train(model, c_g)
-        fin_acc, _ = self.test(model)
-        cpkg = self.pack(dy, dc, fin_acc)
+        cpkg = self.pack(dy, dc)
         return cpkg
 
-    def pack(self, dy, dc, fin_acc):
+    def pack(self, dy, dc):
         return {
             "dy": dy,
-            "dc": dc,
-            "acc": fin_acc
+            "dc": dc
         }
 
     def unpack(self, received_pkg):
