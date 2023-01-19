@@ -19,20 +19,19 @@ class Server(MPBasicServer):
         return evals, losses
     
 class Client(MPBasicClient):
-    def __init__(self, option, name='', train_data=None, valid_data=None):
-        super(Client, self).__init__(option, name, train_data, valid_data)
+    def __init__(self, option, name='', init_model=None, train_data=None, valid_data=None):
+        super().__init__(option, name, init_model, train_data, valid_data)
         self.mu = option['mu']
-        self.model = None
     
     def test(self, dataflag='valid', device='cpu', round=None):
         dataset = self.train_data if dataflag=='train' else self.valid_data
-        model = self.model.to(device)
-        model.eval()
+        self.model = self.model.to(device)
+        self.model.eval()
         loss = 0
         eval_metric = 0
         data_loader = self.calculator.get_data_loader(dataset, batch_size=64)
         for batch_id, batch_data in enumerate(data_loader):
-            bmean_eval_metric, bmean_loss = self.calculator.test(model, batch_data, device)
+            bmean_eval_metric, bmean_loss = self.calculator.test(self.model, batch_data, device)
             loss += bmean_loss * len(batch_data[1])
             eval_metric += bmean_eval_metric * len(batch_data[1])
         eval_metric =1.0 * eval_metric / len(dataset)

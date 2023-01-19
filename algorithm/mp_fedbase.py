@@ -146,9 +146,9 @@ class MPBasicServer(BasicServer):
         return evals, losses
 
 class MPBasicClient(BasicClient):
-    def __init__(self, option, name='', train_data=None, valid_data=None):
+    def __init__(self, option, name='', init_model=None, train_data=None, valid_data=None):
         super().__init__(option, name, train_data, valid_data)
-
+        self.model = init_model
 
     def train(self, model, device, round):
         """

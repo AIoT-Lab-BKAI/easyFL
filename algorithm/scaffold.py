@@ -52,11 +52,11 @@ class Server(BasicServer):
     
 
 class Client(BasicClient):
-    def __init__(self, option, name='', train_data=None, valid_data=None):
+    def __init__(self, option, name='', init_model=None, train_data=None, valid_data=None):
         super(Client, self).__init__(option, name, train_data, valid_data)
         self.c = None
-        self.model = None
-        
+        self.model = init_model
+                
     def train(self, model, cg):
         model.train()
         if not self.c:
@@ -104,6 +104,7 @@ class Client(BasicClient):
 
     def test(self, dataflag='valid', device='cpu', round=None):
         dataset = self.train_data if dataflag=='train' else self.valid_data
+        self.model = self.model.to(device)
         self.model.eval()
         loss = 0
         eval_metric = 0
