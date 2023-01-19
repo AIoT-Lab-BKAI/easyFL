@@ -41,11 +41,21 @@ class Server(BasicServer):
         new_model = self.model + self.eta * dw
         new_c = self.cg + 1.0 * len(dcs) / self.num_clients * dc
         return new_model, new_c
+    
+    def test_on_clients(self, round, dataflag='valid', device='cpu'):
+        evals, losses = [], []
+        for c in self.clients:
+            eval_value, loss = c.test(dataflag, device, round)
+            evals.append(eval_value)
+            losses.append(loss)
+        return evals, losses
+    
 
 class Client(BasicClient):
     def __init__(self, option, name='', train_data=None, valid_data=None):
         super(Client, self).__init__(option, name, train_data, valid_data)
         self.c = None
+        self.model = None
         
     def train(self, model, cg):
         model.train()
@@ -79,6 +89,7 @@ class Client(BasicClient):
         model, c_g = self.unpack(svr_pkg)
         dy, dc = self.train(model, c_g)
         cpkg = self.pack(dy, dc)
+        self.model = model
         return cpkg
 
     def pack(self, dy, dc):
@@ -90,3 +101,17 @@ class Client(BasicClient):
     def unpack(self, received_pkg):
         # unpack the received package
         return received_pkg['model'], received_pkg['cg']
+
+    def test(self, dataflag='valid', device='cpu', round=None):
+        dataset = self.train_data if dataflag=='train' else self.valid_data
+        self.model.eval()
+        loss = 0
+        eval_metric = 0
+        data_loader = self.calculator.get_data_loader(dataset, batch_size=32)
+        for batch_id, batch_data in enumerate(data_loader):
+            bmean_eval_metric, bmean_loss = self.calculator.test(self.model, batch_data, device)
+            loss += bmean_loss * len(batch_data[1])
+            eval_metric += bmean_eval_metric * len(batch_data[1])
+        eval_metric =1.0 * eval_metric / len(dataset)
+        loss = 1.0 * loss / len(dataset)
+        return eval_metric, loss

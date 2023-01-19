@@ -42,9 +42,6 @@ class Server(MPBasicServer):
         self.max_acc = 0
         return
     
-    def test(self, model=None, device=None, round=None):
-        return 0, 0
-    
     def test_on_clients(self, dataflag='valid', device='cuda', round=None):
         evals, losses = [], []
         for c in self.clients:
