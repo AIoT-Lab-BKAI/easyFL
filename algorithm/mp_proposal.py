@@ -37,7 +37,7 @@ class Server(MPBasicServer):
     def __init__(self, option, model, clients, test_data = None):
         super(Server, self).__init__(option, model, clients, test_data)
         self.server_tail = initialize(dataset="algorithm.headtail_utils." + option['task'].split('_')[0], architecture=option['model'], modelname="ServerTail")
-        self.distill_epochs = min(8, self.option['epochs'])
+        self.distill_epochs = min(8, self.option['num_epochs'])
         self.temperature = 1.
         self.distill_lossfnc = torch.nn.CrossEntropyLoss()
         self.max_acc = 0
