@@ -88,8 +88,8 @@ class Server(MPBasicServer):
 
 
 class Client(MPBasicClient):
-    def __init__(self, option, name='', init_model=None, train_data=None, valid_data=None):
-        super().__init__(option, name, init_model, train_data, valid_data)
+    def __init__(self, option, name='', train_data=None, valid_data=None):
+        super().__init__(option, name, train_data, valid_data)
         self.model = initialize(dataset="algorithm.headtail_utils." + option['task'].split('_')[0], architecture=option['model'], modelname="ClientModel")
         self.class_lossfnc = torch.nn.CrossEntropyLoss()
         self.distill_lossfnc = torch.nn.CrossEntropyLoss()
