@@ -10,46 +10,32 @@ import copy
 class Server(MPBasicServer):
     def __init__(self, option, model, clients, test_data = None):
         super(Server, self).__init__(option, model, clients, test_data)
+        self.client_ids = [i for i in range(len(self.clients))]
+        self.latest_personal_test_acc = [0. for client_id in self.client_ids]
         
     def test_on_clients(self, dataflag='valid', device='cuda', round=None):
-        evals, losses = [], []
-        for c in self.clients:
-            eval_value, loss = c.test(dataflag, device=device, round=round)
-            evals.append(eval_value)
-            losses.append(loss)
-        return evals, losses
+        return self.latest_personal_test_acc, 0
+    
+    def iterate(self, t, pool):
+        self.selected_clients = sorted(self.sample())
+        models, personal_accs = self.communicate(self.selected_clients, pool, t)
+                
+        for client_id, personal_acc in zip(self.selected_clients, personal_accs):
+            self.latest_personal_test_acc[client_id] = personal_acc
+            
+        if not self.selected_clients: return
+        device0 = torch.device(f"cuda:{self.server_gpu_id}")
+        models = [i.to(device0) for i in models]
+        self.model = self.aggregate(models, p = [1.0 * self.client_vols[cid]/self.data_vol for cid in self.selected_clients])
+        return
         
 class Client(MPBasicClient):
-    def __init__(self, option, name='', init_model=None, train_data=None, valid_data=None):
-        super().__init__(option, name, init_model, train_data, valid_data)
-        self.base_model = copy.deepcopy(self.model)
-    
-    def test(self, dataflag='valid', device='cpu', round=None):
-        dataset = self.train_data if dataflag=='train' else self.valid_data
-        
-        self.model = self.model.to(device)
-        diff = self.model - self.base_model.to(device)
-        
-        print("Client", self.name, f"diff: {diff.norm():>.5f}", end=" -> ")
-        
-        self.model.eval()
-        loss = 0
-        eval_metric = 0
-        data_loader = self.calculator.get_data_loader(dataset, batch_size=64)
-        for batch_id, batch_data in enumerate(data_loader):
-            bmean_eval_metric, bmean_loss = self.calculator.test(self.model, batch_data, device)
-            loss += bmean_loss * len(batch_data[1])
-            eval_metric += bmean_eval_metric * len(batch_data[1])
-        eval_metric =1.0 * eval_metric / len(dataset)
-        loss = 1.0 * loss / len(dataset)
-        
-        print("eval:", eval_metric)
-        return eval_metric, loss
+    def __init__(self, option, name='', train_data=None, valid_data=None):
+        super().__init__(option, name, train_data, valid_data)
     
     def reply(self, svr_pkg, device, round):
-        self.model = self.unpack(svr_pkg)
-        self.train(self.model, device, round)
-        diff = self.model - self.base_model.to(device)
-        print("Client", self.name, f"done training, diff: {diff.norm():>.3f}")
-        cpkg = self.pack(self.model, 0)
+        model = self.unpack(svr_pkg)
+        self.train(model, device, round)
+        acc, loss = self.test(model, device=device)
+        cpkg = self.pack(model, acc)
         return cpkg

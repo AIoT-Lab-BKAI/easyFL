@@ -114,7 +114,7 @@ def initialize(option):
     print('init clients...', end='')
     client_path = '%s.%s' % ('algorithm', option['algorithm'])
     Client=getattr(importlib.import_module(client_path), 'Client')
-    clients = [Client(option, name = cid, init_model=utils.fmodule.Model().to(utils.fmodule.device), train_data = local_train_datas[cid], valid_data = local_test_datas[cid]) for cid in range(num_clients)]
+    clients = [Client(option, name = cid, train_data = local_train_datas[cid], valid_data = local_test_datas[cid]) for cid in range(num_clients)]
     print('done')
 
     # init server

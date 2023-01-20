@@ -25,7 +25,7 @@ class MyLogger(flw.Logger):
                 "mean_valid_accs":[]
             }
         
-        valid_metrics, valid_losses = server.test_on_clients(dataflag='valid', device='cuda', round=round)
+        valid_metrics, _ = server.test_on_clients(dataflag='valid', device='cuda', round=round)
 
         self.output['mean_curve'].append(np.mean(valid_metrics))
         self.output['var_curve'].append(np.std(valid_metrics))

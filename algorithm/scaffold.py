@@ -15,6 +15,9 @@ class Server(BasicServer):
         self.eta = option['eta']
         self.cg = self.model.zeros_like()
         self.paras_name = ['eta']
+        
+        self.client_ids = [i for i in range(len(self.clients))]
+        self.latest_personal_test_acc = [0. for client_id in self.client_ids]
         return
 
     def pack(self, client_id):
@@ -26,11 +29,16 @@ class Server(BasicServer):
     def unpack(self, pkgs):
         dys = [p["dy"] for p in pkgs]
         dcs = [p["dc"] for p in pkgs]
-        return dys, dcs
+        accs = [p["acc"] for p in pkgs]
+        return dys, dcs, accs
 
     def iterate(self, t):
-        self.selected_clients = self.sample()
-        dys, dcs = self.communicate(self.selected_clients)
+        self.selected_clients = sorted(self.sample())
+        dys, dcs, personal_accs = self.communicate(self.selected_clients)
+        
+        for client_id, personal_acc in zip(self.selected_clients, personal_accs):
+            self.latest_personal_test_acc[client_id] = personal_acc
+            
         if self.selected_clients == []: return
         self.model, self.cg = self.aggregate(dys, dcs)
         return
@@ -43,19 +51,13 @@ class Server(BasicServer):
         return new_model, new_c
     
     def test_on_clients(self, round, dataflag='valid', device='cpu'):
-        evals, losses = [], []
-        for c in self.clients:
-            eval_value, loss = c.test(dataflag, device, round)
-            evals.append(eval_value)
-            losses.append(loss)
-        return evals, losses
+        return self.latest_personal_test_acc, 0
     
 
 class Client(BasicClient):
-    def __init__(self, option, name='', init_model=None, train_data=None, valid_data=None):
+    def __init__(self, option, name='', train_data=None, valid_data=None):
         super(Client, self).__init__(option, name, train_data, valid_data)
         self.c = None
-        self.model = init_model
                 
     def train(self, model, cg):
         model.train()
@@ -88,31 +90,18 @@ class Client(BasicClient):
     def reply(self, svr_pkg):
         model, c_g = self.unpack(svr_pkg)
         dy, dc = self.train(model, c_g)
-        cpkg = self.pack(dy, dc)
+        acc, loss = self.test(model)
+        cpkg = self.pack(dy, dc, acc)
         self.model = model
         return cpkg
 
-    def pack(self, dy, dc):
+    def pack(self, dy, dc, acc):
         return {
             "dy": dy,
-            "dc": dc
+            "dc": dc,
+            "acc": acc
         }
 
     def unpack(self, received_pkg):
         # unpack the received package
         return received_pkg['model'], received_pkg['cg']
-
-    def test(self, dataflag='valid', device='cpu', round=None):
-        dataset = self.train_data if dataflag=='train' else self.valid_data
-        self.model = self.model.to(device)
-        self.model.eval()
-        loss = 0
-        eval_metric = 0
-        data_loader = self.calculator.get_data_loader(dataset, batch_size=32)
-        for batch_id, batch_data in enumerate(data_loader):
-            bmean_eval_metric, bmean_loss = self.calculator.test(self.model, batch_data, device)
-            loss += bmean_loss * len(batch_data[1])
-            eval_metric += bmean_eval_metric * len(batch_data[1])
-        eval_metric =1.0 * eval_metric / len(dataset)
-        loss = 1.0 * loss / len(dataset)
-        return eval_metric, loss
