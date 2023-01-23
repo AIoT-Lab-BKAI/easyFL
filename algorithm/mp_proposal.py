@@ -11,8 +11,7 @@ class Server(MPBasicServer):
         self.latest_impact_factor_records = [0 for cid in range(len(clients))]
         return
         
-    def update_ipft_record(self):
-        mu_t = 1.0 * len(self.selected_clients)/len(self.clients)
+    def update_ipft_record(self, mu_t):
         for cid in range(len(self.latest_impact_factor_records)):
             if cid in self.selected_clients: 
                 # If the client is selected this turn, renew its contribution
@@ -36,8 +35,9 @@ class Server(MPBasicServer):
         impact_factors = [1.0 * self.client_vols[cid]/self.data_vol_this_round for cid in self.selected_clients]
         new_model = self.aggregate(models, p = impact_factors)
         
-        self.model = self.model + len(self.selected_clients)/len(self.clients) * (new_model - self.model)
-        self.update_ipft_record()
+        mu_t = len(self.selected_clients)/len(self.clients)
+        self.model = self.model + mu_t * (new_model - self.model)
+        self.update_ipft_record(mu_t)
         return
     
     def pack(self, client_id):
@@ -60,7 +60,6 @@ class Client(MPBasicClient):
     
     def reply(self, svr_pkg, device):
         global_model, last_impact, next_impact = self.unpack(svr_pkg)
-        # loss = self.train_loss(global_model, device)
         model, train_loss = self.train(global_model, last_impact, next_impact, device)
         cpkg = self.pack(model, train_loss)
         return cpkg
@@ -93,6 +92,7 @@ class Client(MPBasicClient):
                 optimizer.zero_grad()
                 global_target_loss.backward()
                 optimizer.step()
+                
             mean_loss.append(np.mean(losses))
         
         self.local_model = (surogate_global_model - complement_model) * 1.0/(next_impact)
