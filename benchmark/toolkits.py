@@ -33,6 +33,14 @@ import json
 import os
 from PIL import Image
 import time
+from utils.fmodule import FModule
+
+def check_model_nan(model: FModule):
+    for p in model.parameters():
+        if torch.isnan(p.data).any():
+            print("Model contains nan values")
+            return True
+    return False
 
 def set_random_seed(seed=0):
     """Set random seed"""
@@ -412,13 +420,11 @@ class ClassifyCalculator(BasicTaskCalculator):
         """Metric = Accuracy"""
         tdata = self.data_to_device(data, device)
         model = model.to(device)
-        start = time.time()
         outputs = model(tdata[0])
-        end = time.time()
         loss = self.lossfunc(outputs, tdata[-1])
         y_pred = outputs.data.max(1, keepdim=True)[1]
         correct = y_pred.eq(tdata[1].data.view_as(y_pred)).long().cpu().sum()
-        return (1.0 * correct / len(tdata[1])).item(), loss.item(), (end - start)
+        return (1.0 * correct / len(tdata[1])).item(), loss.item()
 
     def data_to_device(self, data, device=None):
         if device is None:
@@ -459,7 +465,7 @@ class XYTaskReader(BasicTaskReader):
         return train_datas, valid_datas, test_data, feddata['client_names']
     
 class CusTomTaskReader(BasicTaskReader):
-    def __init__(self, taskpath,train_dataset, test_dataset):
+    def __init__(self, taskpath, train_dataset, test_dataset):
         super().__init__(taskpath)
         self.test_dataset = test_dataset
         self.train_dataset = train_dataset
@@ -467,15 +473,24 @@ class CusTomTaskReader(BasicTaskReader):
     
     def load_dataset_idx(self,path="data"):
         import json
-        list_idx = json.load(open(path, 'r'))
+        try:
+            list_idx = json.load(open(path, 'r'))
+        except:
+            print("Error loading ", path)
+            exit(0)
+        
         return {int(k): v for k, v in list_idx.items()}
     
     def read_data(self):
-        data_idx = self.load_dataset_idx('dataset_idx/'+ self.taskpath)
-        n_clients = len(data_idx)
-        train_data = [CustomDataset(self.train_dataset,data_idx[idx]) for idx in range(n_clients)]
-        test_data = self.test_dataset
-        return train_data, test_data, n_clients
+        train_dataidx = self.load_dataset_idx(os.path.join('dataset_idx/', self.taskpath, "train.json"))
+        test_dataidx = self.load_dataset_idx(os.path.join('dataset_idx/', self.taskpath, "test.json"))
+        
+        n_clients = len(train_dataidx)
+        local_train_datas = [CustomDataset(self.train_dataset, train_dataidx[idx]) for idx in range(n_clients)]
+        local_test_datas = [CustomDataset(self.test_dataset, test_dataidx[idx]) for idx in range(n_clients)]
+        server_test_data = self.test_dataset
+        
+        return local_train_datas, local_test_datas, server_test_data, n_clients
     
 class IDXTaskReader(BasicTaskReader):
     def __init__(self, taskpath=''):

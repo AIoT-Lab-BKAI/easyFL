@@ -264,19 +264,16 @@ class BasicServer():
             model.eval()
             loss = 0
             eval_metric = 0
-            inference_metric = 0
             data_loader = self.calculator.get_data_loader(self.test_data, batch_size=64)
             for batch_id, batch_data in enumerate(data_loader):
-                bmean_eval_metric, bmean_loss, inference_time = self.calculator.test(model, batch_data, device)                
+                bmean_eval_metric, bmean_loss = self.calculator.test(model, batch_data, device)                
                 loss += bmean_loss * len(batch_data[1])
                 eval_metric += bmean_eval_metric * len(batch_data[1])
-                inference_metric += inference_time
             eval_metric /= len(self.test_data)
             loss /= len(self.test_data)
-            inference_metric /= len(self.test_data)
-            return eval_metric, loss, inference_metric
+            return eval_metric, loss
         else: 
-            return -1,-1,-1
+            return -1,-1
 
 class BasicClient():
     def __init__(self, option, name='', train_data=None, valid_data=None):
@@ -284,7 +281,7 @@ class BasicClient():
         self.frequency = 0
         # create local dataset
         self.train_data = train_data
-        # self.valid_data = valid_data
+        self.valid_data = valid_data
         self.datavol = len(self.train_data)
         # local calculator
         self.calculator = fmodule.TaskCalculator(device=fmodule.device)
@@ -322,7 +319,7 @@ class BasicClient():
                 optimizer.step()
         return
 
-    def test(self, model, dataflag='valid', device='cpu'):
+    def test(self, model, dataflag='valid', device='cpu', round=None):
         """
         Evaluate the model with local data (e.g. training data or validating data).
         :param
@@ -332,14 +329,13 @@ class BasicClient():
             eval_metric: task specified evaluation metric
             loss: task specified loss
         """
-        # dataset = self.train_data if dataflag=='train' else self.valid_data
-        dataset = self.train_data
+        dataset = self.train_data if dataflag=='train' else self.valid_data
         model.eval()
         loss = 0
         eval_metric = 0
         data_loader = self.calculator.get_data_loader(dataset, batch_size=32)
         for batch_id, batch_data in enumerate(data_loader):
-            bmean_eval_metric, bmean_loss, _ = self.calculator.test(model, batch_data, device)
+            bmean_eval_metric, bmean_loss = self.calculator.test(model, batch_data, device)
             loss += bmean_loss * len(batch_data[1])
             eval_metric += bmean_eval_metric * len(batch_data[1])
         eval_metric =1.0 * eval_metric / len(dataset)

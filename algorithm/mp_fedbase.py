@@ -1,3 +1,4 @@
+import copy
 from pathlib import Path
 import time
 from algorithm.fedbase import BasicServer, BasicClient
@@ -32,7 +33,8 @@ class MPBasicServer(BasicServer):
             self.global_lr_scheduler(round)
 
             logger.time_end('Time Cost')
-            if logger.check_if_log(round, self.eval_interval): logger.log(self)
+            if logger.check_if_log(round, self.eval_interval): 
+                logger.log(self, round=round)
 
         print("=================End==================")
         logger.time_end('Total Time Cost')
@@ -52,7 +54,7 @@ class MPBasicServer(BasicServer):
         # sample clients: MD sampling as default but with replacement=False
         self.selected_clients = self.sample()
         # training
-        models, train_losses = self.communicate(self.selected_clients, pool)
+        models, train_losses = self.communicate(self.selected_clients, pool, t)
         # check whether all the clients have dropped out, because the dropped clients will be deleted from self.selected_clients
         if not self.selected_clients: return
         # aggregate: pk = 1/K as default where K=len(selected_clients)
@@ -62,7 +64,7 @@ class MPBasicServer(BasicServer):
 
         return
 
-    def communicate(self, selected_clients, pool):
+    def communicate(self, selected_clients, pool, round):
         """
         The whole simulating communication procedure with the selected clients.
         This part supports for simulating the client dropping out.
@@ -71,36 +73,38 @@ class MPBasicServer(BasicServer):
         :return
             :the unpacked response from clients that is created ny self.unpack()
         """
-        packages_received_from_clients = []        
+        packages_received_from_clients = []
+        selected_clients = [(client_id, round) for client_id in selected_clients]
         packages_received_from_clients = pool.map(self.communicate_with, selected_clients)
-        self.selected_clients = [selected_clients[i] for i in range(len(selected_clients)) if packages_received_from_clients[i]]
-        
+        self.selected_clients = [selected_clients[i][0] for i in range(len(selected_clients)) if packages_received_from_clients[i]]
         packages_received_from_clients = [pi for pi in packages_received_from_clients if pi]
+        packages_received_from_clients = sorted(packages_received_from_clients, key=lambda d: d['id'])
         return self.unpack(packages_received_from_clients)
 
-    def communicate_with(self, client_id):
+    def communicate_with(self, client_zip):
         """
         Pack the information that is needed for client_id to improve the global model
         :param
-            client_id: the id of the client to communicate with
+            client_zip: = (client_id: the id of the client to communicate with, round)
         :return
             client_package: the reply from the client and will be 'None' if losing connection
         """
-        
         gpu_id = int(mp.current_process().name[-1]) - 1
         gpu_id = gpu_id % self.gpus
-
         torch.manual_seed(0)
         torch.cuda.set_device(gpu_id)
         device = torch.device('cuda') # This is only 'cuda' so its can find the propriate cuda id to train
+        
+        client_id, round = client_zip
         # package the necessary information
         svr_pkg = self.pack(client_id)
         # listen for the client's response and return None if the client drops out
-        if self.clients[client_id].is_drop(): return None
-        return self.clients[client_id].reply(svr_pkg, device)
+        if self.clients[client_id].is_drop(): 
+            return None
+        return self.clients[client_id].reply(svr_pkg, device, round=round)
 
 
-    def test(self, model=None, device=None):
+    def test(self, model=None, device=None, round=None):
         """
         Evaluate the model on the test dataset owned by the server.
         :param
@@ -114,21 +118,18 @@ class MPBasicServer(BasicServer):
             model.eval()
             loss = 0
             eval_metric = 0
-            inference_metric = 0
             data_loader = self.calculator.get_data_loader(self.test_data, batch_size=64)
             for batch_id, batch_data in enumerate(data_loader):
-                bmean_eval_metric, bmean_loss, inference_time = self.calculator.test(model, batch_data, device)
+                bmean_eval_metric, bmean_loss = self.calculator.test(model, batch_data, device)
                 loss += bmean_loss * len(batch_data[1])
                 eval_metric += bmean_eval_metric * len(batch_data[1])
-                inference_metric += inference_time
             eval_metric /= len(self.test_data)
             loss /= len(self.test_data)
-            inference_metric /= len(self.test_data)
-            return eval_metric, loss, inference_metric
+            return eval_metric, loss
         else: 
-            return -1, -1, -1
+            return -1, -1
 
-    def test_on_clients(self, round, dataflag='valid', device='cuda'):
+    def test_on_clients(self, dataflag='valid', device='cuda', round=None):
         """
         Validate accuracies and losses on clients' local datasets
         :param
@@ -140,7 +141,7 @@ class MPBasicServer(BasicServer):
         """
         evals, losses = [], []
         for c in self.clients:
-            eval_value, loss = c.test(self.model, dataflag, device=device)
+            eval_value, loss = c.test(self.model, dataflag, device=device, round=round)
             evals.append(eval_value)
             losses.append(loss)
         return evals, losses
@@ -149,8 +150,7 @@ class MPBasicClient(BasicClient):
     def __init__(self, option, name='', train_data=None, valid_data=None):
         super().__init__(option, name, train_data, valid_data)
 
-
-    def train(self, model, device):
+    def train(self, model, device, round):
         """
         Standard local training procedure. Train the transmitted model with local training dataset.
         :param
@@ -172,7 +172,7 @@ class MPBasicClient(BasicClient):
         return
 
 
-    def test(self, model, dataflag='valid', device='cpu'):
+    def test(self, model, dataflag='valid', device='cpu', round=None):
         """
         Evaluate the model with local data (e.g. training data or validating data).
         :param
@@ -182,15 +182,14 @@ class MPBasicClient(BasicClient):
             eval_metric: task specified evaluation metric
             loss: task specified loss
         """
-        # dataset = self.train_data if dataflag=='train' else self.valid_data
-        dataset = self.train_data
+        dataset = self.train_data if dataflag=='train' else self.valid_data
         model = model.to(device)
         model.eval()
         loss = 0
         eval_metric = 0
         data_loader = self.calculator.get_data_loader(dataset, batch_size=64)
         for batch_id, batch_data in enumerate(data_loader):
-            bmean_eval_metric, bmean_loss, _ = self.calculator.test(model, batch_data, device)
+            bmean_eval_metric, bmean_loss = self.calculator.test(model, batch_data, device)
             loss += bmean_loss * len(batch_data[1])
             eval_metric += bmean_eval_metric * len(batch_data[1])
         eval_metric =1.0 * eval_metric / len(dataset)
@@ -198,7 +197,7 @@ class MPBasicClient(BasicClient):
         return eval_metric, loss
 
 
-    def reply(self, svr_pkg, device):
+    def reply(self, svr_pkg, device, round):
         """
         Reply to server with the transmitted package.
         The whole local procedure should be planned here.
@@ -212,16 +211,22 @@ class MPBasicClient(BasicClient):
             client_pkg: the package to be send to the server
         """
         model = self.unpack(svr_pkg)
-        loss = self.train_loss(model, device)
-        self.train(model, device)
+        loss = self.train_loss(model, device, round)
+        self.train(model, device, round)
         cpkg = self.pack(model, loss)
         return cpkg
 
+    def pack(self, model, loss):
+        return {
+            "id" : int(self.name),
+            "model" : model,
+            "train_loss": loss,
+        }
 
-    def train_loss(self, model, device):
+    def train_loss(self, model, device, round):
         """
         Get the task specified loss of the model on local training data
         :param model:
         :return:
         """
-        return self.test(model,'train', device)[1]
+        return self.test(model, 'train', device, round)[1]

@@ -1,6 +1,7 @@
 from torchvision import datasets, transforms
 from benchmark.toolkits import ClassifyCalculator, DefaultTaskGen, XYTaskReader, CusTomTaskReader
 
+
 class TaskGen(DefaultTaskGen):
     def __init__(self, dist_id, num_clients = 1, skewness = 0.5):
         super(TaskGen, self).__init__(benchmark='emnist',

@@ -1,101 +1,162 @@
+from pathlib import Path
 from .mp_fedbase import MPBasicServer, MPBasicClient
-import torch
-import numpy as np
+from algorithm.headtail_utils.utils import initialize
+from torch.utils.data import Dataset, DataLoader
+
 import copy
-from utils.fmodule import FModule
+import torch
 
+
+class DistillDataset(Dataset):
+    def __init__(self, datawares_dict):
+        super(DistillDataset, self).__init__()
+        self.intermidate = datawares_dict['intermediate_output']
+        self.output = datawares_dict['final_output']
+        return
+                    
+    def __getitem__(self, idx):
+        return (self.intermidate[idx], self.output[idx])
+    
+    def __len__(self):
+        return self.intermidate.shape[0]
+    
+    
+def assemble_data(client_datawares):
+    assembled_dataware = {"intermediate_output": [], "final_output": []}
+    for ware in client_datawares:
+        assembled_dataware["intermediate_output"].append(ware["intermediate_output"])
+        assembled_dataware["final_output"].append(ware["final_output"])
+    
+    assembled_dataware["intermediate_output"] = torch.vstack(assembled_dataware["intermediate_output"])
+    assembled_dataware["final_output"] = torch.vstack(assembled_dataware["final_output"])
+    return assembled_dataware
+
+    
 class Server(MPBasicServer):
-    def __init__(self, option, model, clients, test_data = None):
-        super(Server, self).__init__(option, model, clients, test_data)
-        self.data_vol_this_round = None
-        self.latest_impact_factor_records = [0 for cid in range(len(clients))]
-        return
-        
-    def update_ipft_record(self, mu_t):
-        for cid in range(len(self.latest_impact_factor_records)):
-            if cid in self.selected_clients: 
-                # If the client is selected this turn, renew its contribution
-                self.latest_impact_factor_records[cid] = (1 - mu_t) * self.latest_impact_factor_records[cid] + mu_t * self.client_vols[cid]/self.data_vol_this_round
-            else:
-                # If the client is not selected this turn, its contribution decays
-                self.latest_impact_factor_records[cid] = (1 - mu_t) * self.latest_impact_factor_records[cid]
-        return
-        
-    def iterate(self, t, pool):
-        self.selected_clients = self.sample()        
-        self.data_vol_this_round = np.sum([self.client_vols[cid] for cid in self.selected_clients])
-        
-        models, train_losses = self.communicate(self.selected_clients, pool)
-        if not self.selected_clients: 
-            return
-
-        device0 = torch.device(f"cuda:{self.server_gpu_id}")
-        models = [i.to(device0) for i in models]
-        
-        impact_factors = [1.0 * self.client_vols[cid]/self.data_vol_this_round for cid in self.selected_clients]
-        new_model = self.aggregate(models, p = impact_factors)
-        
-        mu_t = len(self.selected_clients)/len(self.clients)
-        self.model = self.model + mu_t * (new_model - self.model)
-        self.update_ipft_record(mu_t)
+    def __init__(self, option, model, clients, test_data=None):
+        super().__init__(option, model, clients, test_data)
+        self.server_tail = initialize(dataset="algorithm.headtail_utils." + option['task'].split('_')[0], architecture=option['model'], modelname="ServerTail")
+        self.distill_epochs = 8
+        self.temperature = 1.5
+        self.distill_lossfnc = torch.nn.CrossEntropyLoss()
+        self.max_acc = 0
         return
     
+    def test_on_clients(self, dataflag='valid', device='cuda', round=None):
+        evals, losses = [], []
+        for c in self.clients:
+            eval_value, loss = c.test(dataflag, device=device, round=round)
+            evals.append(eval_value)
+            losses.append(loss)
+        return evals, losses
+    
     def pack(self, client_id):
-        ipft = self.latest_impact_factor_records[client_id]
-        mu = len(self.selected_clients)/len(self.clients)
+        return {"model" : copy.deepcopy(self.server_tail)}
+    
+    def iterate(self, t, pool):
+        self.selected_clients = self.sample()
+        _, client_datawares = self.communicate(self.selected_clients, pool, t)
         
-        return {
-            "model" : copy.deepcopy(self.model),
-            "last_impact": ipft,
-            "next_impact": (1 - mu) * ipft + mu * self.client_vols[client_id]/self.data_vol_this_round,
-        }
+        if not self.selected_clients: 
+            return
+        
+        device0 = torch.device(f"cuda:{self.server_gpu_id}")        
+        assembled_dataware = assemble_data(client_datawares)
+        self.distill(assembled_dataware, device0)
+        return
+    
+    def distill(self, client_datawares, device):
+        self.server_tail = self.server_tail.to(device)
+        optimizer = torch.optim.SGD(self.server_tail.parameters(), lr=0.001)
+        
+        dataset = DistillDataset(client_datawares)
+        dataloader = DataLoader(dataset, batch_size=self.clients_per_round, shuffle=True)
+        
+        for epoch in range(self.distill_epochs):
+            for intermediate_output, client_output in dataloader:
+
+                intermediate_output = intermediate_output.to(device)
+                client_output = client_output.to(device)
+                
+                server_output = self.server_tail(intermediate_output)
+                loss = self.distill_lossfnc(torch.softmax(server_output/self.temperature, dim=1), torch.softmax(client_output/self.temperature, dim=1))
+                
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+        return        
+
 
 class Client(MPBasicClient):
     def __init__(self, option, name='', train_data=None, valid_data=None):
-        super(Client, self).__init__(option, name, train_data, valid_data)
-        self.local_model = None
+        super().__init__(option, name, train_data, valid_data)
+        self.model = initialize(dataset="algorithm.headtail_utils." + option['task'].split('_')[0], architecture=option['model'], modelname="ClientModel")
+        self.class_lossfnc = torch.nn.CrossEntropyLoss()
+        self.distill_lossfnc = torch.nn.CrossEntropyLoss()
+        self.distill_factor = 0.1
+        self.temperature = 1.5
+        self.dataware = {"intermediate_output": [], "final_output": []}
+        return
     
-    def unpack(self, received_pkg):
-        return received_pkg['model'], received_pkg['last_impact'], received_pkg['next_impact']
-    
-    def reply(self, svr_pkg, device):
-        global_model, last_impact, next_impact = self.unpack(svr_pkg)
-        model, train_loss = self.train(global_model, last_impact, next_impact, device)
-        cpkg = self.pack(model, train_loss)
-        return cpkg
-    
-    def train(self, global_model: FModule, last_impact, next_impact, device):
-        global_model = global_model.to(device)
         
-        # Initialize model & Find complement model
-        if self.local_model is None:
-            self.local_model = copy.deepcopy(global_model).to(device)
-        else:
-            self.local_model = self.local_model.to(device)
-            
-        with torch.no_grad():
-            complement_model = global_model - last_impact * self.local_model
+    def test(self, dataflag='valid', device='cpu', round=None):
+        dataset = self.train_data if dataflag=='train' else self.valid_data
+        model = self.model.to(device)
+        model.eval()
+        loss = 0
+        eval_metric = 0
+        data_loader = self.calculator.get_data_loader(dataset, batch_size=64)
+        for batch_id, batch_data in enumerate(data_loader):
+            bmean_eval_metric, bmean_loss = self.calculator.test(model, batch_data, device)
+            loss += bmean_loss * len(batch_data[1])
+            eval_metric += bmean_eval_metric * len(batch_data[1])
+        eval_metric =1.0 * eval_metric / len(dataset)
+        loss = 1.0 * loss / len(dataset)
+        return eval_metric, loss
         
-        surogate_global_model = complement_model + next_impact * self.local_model
-        surogate_global_model.train()
+        
+    def train(self, server_tail, device, round): 
+        server_tail = server_tail.to(device)
+        server_tail.freeze_grad()
+        
+        model = self.model.to(device)
+        model.train()
         
         data_loader = self.calculator.get_data_loader(self.train_data, batch_size=self.batch_size)
-        optimizer = self.calculator.get_optimizer(self.optimizer_name, surogate_global_model, lr=self.learning_rate, weight_decay=self.weight_decay, momentum=self.momentum)
+        optimizer = self.calculator.get_optimizer(self.optimizer_name, model, lr = self.learning_rate, weight_decay=self.weight_decay, momentum=self.momentum)
         
-        mean_loss = []
+        self.dataware = {"intermediate_output": [], "final_output": []}
         for iter in range(self.epochs):
-            losses = []
-            for batch_idx, batch_data in enumerate(data_loader):
-                global_target_loss = self.calculator.get_loss(surogate_global_model, batch_data, device)                    
-                losses.append(global_target_loss.detach().cpu())
-                
-                optimizer.zero_grad()
-                global_target_loss.backward()
+            for batch_id, batch_data in enumerate(data_loader):
+                model.zero_grad()
+                loss = self.get_loss(model, server_tail, batch_data, iter == self.epochs - 1, device)
+                loss.backward()
                 optimizer.step()
-                
-            mean_loss.append(np.mean(losses))
         
-        self.local_model = (surogate_global_model - complement_model) * 1.0/(next_impact)
-        self.local_model = self.local_model.to("cpu")
-        return self.local_model, np.mean(mean_loss)
+        self.dataware["intermediate_output"] = torch.vstack(self.dataware["intermediate_output"])
+        self.dataware["final_output"] = torch.vstack(self.dataware["final_output"])
+        return
     
+    
+    def get_loss(self, model, server_tail, batch_data, storing, device):
+        X, Y = self.calculator.data_to_device(batch_data, device)
+        
+        intermediate_output = model.head(X)
+        local_output = model.tail(intermediate_output)
+        server_output = server_tail(intermediate_output)
+        
+        classification_loss = self.class_lossfnc(local_output, Y)
+        distillation_loss = self.distill_lossfnc(torch.softmax(local_output/self.temperature, dim=1), torch.softmax(server_output/self.temperature, dim=1))
+        
+        if storing:
+            self.dataware["intermediate_output"].append(intermediate_output.detach().cpu())
+            self.dataware["final_output"].append(local_output.detach().cpu())
+            
+        return classification_loss + self.distill_factor * distillation_loss
+        
+        
+    def reply(self, svr_pkg, device, round):
+        server_tail = self.unpack(svr_pkg)
+        self.train(server_tail, device, round)
+        cpkg = self.pack(copy.deepcopy(self.model.tail), self.dataware)
+        return cpkg

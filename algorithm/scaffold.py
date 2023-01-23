@@ -2,6 +2,12 @@ from .fedbase import BasicServer, BasicClient
 import copy
 from utils import fmodule
 import time, wandb
+from torch.utils.data import DataLoader
+from torchmetrics import ConfusionMatrix
+import torch
+import numpy as np
+import os
+from pathlib import Path
 
 class Server(BasicServer):
     def __init__(self, option, model, clients, test_data=None):
@@ -9,6 +15,10 @@ class Server(BasicServer):
         self.eta = option['eta']
         self.cg = self.model.zeros_like()
         self.paras_name = ['eta']
+        
+        self.client_ids = [i for i in range(len(self.clients))]
+        self.latest_personal_test_acc = [0. for client_id in self.client_ids]
+        return
 
     def pack(self, client_id):
         return {
@@ -19,31 +29,36 @@ class Server(BasicServer):
     def unpack(self, pkgs):
         dys = [p["dy"] for p in pkgs]
         dcs = [p["dc"] for p in pkgs]
-        return dys, dcs
+        accs = [p["acc"] for p in pkgs]
+        return dys, dcs, accs
 
     def iterate(self, t):
-        # sample clients
-        self.selected_clients = self.sample()
-        # local training
-        dys, dcs = self.communicate(self.selected_clients)
+        self.selected_clients = sorted(self.sample())
+        dys, dcs, personal_accs = self.communicate(self.selected_clients)
+        
+        for client_id, personal_acc in zip(self.selected_clients, personal_accs):
+            self.latest_personal_test_acc[client_id] = personal_acc
+            
         if self.selected_clients == []: return
-        # aggregate
         self.model, self.cg = self.aggregate(dys, dcs)
         return
 
-    def aggregate(self, dys, dcs):  # c_list is c_i^+
+    def aggregate(self, dys, dcs):
         dw = fmodule._model_average(dys)
         dc = fmodule._model_average(dcs)
         new_model = self.model + self.eta * dw
         new_c = self.cg + 1.0 * len(dcs) / self.num_clients * dc
         return new_model, new_c
-
+    
+    def test_on_clients(self, round, dataflag='valid', device='cpu'):
+        return self.latest_personal_test_acc, 0
+    
 
 class Client(BasicClient):
     def __init__(self, option, name='', train_data=None, valid_data=None):
         super(Client, self).__init__(option, name, train_data, valid_data)
         self.c = None
-        
+                
     def train(self, model, cg):
         model.train()
         if not self.c:
@@ -75,13 +90,16 @@ class Client(BasicClient):
     def reply(self, svr_pkg):
         model, c_g = self.unpack(svr_pkg)
         dy, dc = self.train(model, c_g)
-        cpkg = self.pack(dy, dc)
+        acc, loss = self.test(model)
+        cpkg = self.pack(dy, dc, acc)
+        self.model = model
         return cpkg
 
-    def pack(self, dy, dc):
+    def pack(self, dy, dc, acc):
         return {
             "dy": dy,
             "dc": dc,
+            "acc": acc
         }
 
     def unpack(self, received_pkg):

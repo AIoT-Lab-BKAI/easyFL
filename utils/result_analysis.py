@@ -46,8 +46,9 @@ def read_data_into_dicts(task, records):
     return res
 
 def draw_curve(dicts, curve='train_losses', legends = [], final_round = -1):
-    # plt.figure(figsize=(100,100), dpi=100)
-    if not legends: legends = [d['meta']['algorithm'] for d in dicts]
+    # plt.figure(figsize=(5,5), dpi=5)
+    if not legends: 
+        legends = [d['meta']['algorithm'] for d in dicts]
     for i,dict in enumerate(dicts):
         num_rounds = dict['meta']['num_rounds']
         eval_interval = dict['meta']['eval_interval']
@@ -65,7 +66,8 @@ def draw_curve(dicts, curve='train_losses', legends = [], final_round = -1):
                  linestyle=linestyle_tuple[i%len(linestyle_tuple)], 
                  color=color_list[i%(len(color_list))])
         if final_round>0: plt.xlim((0, final_round))
-    plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.2), ncol=1)
+    # plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.2), ncol=1)
+    plt.legend(loc='best', ncol=1)
     return
 
 def filename_filter(fnames=[], filter={}):
@@ -139,8 +141,9 @@ def scan_records(task, header = '', filter = {}):
 #     print(tb)
 
 def get_key_from_filename(record, key = ''):
-    if key=='': return ''
-    value_start = record.find('_'+key)+len(key)+1
+    if key=='': 
+        return ''
+    value_start = record.find('_' + key) + len(key) + 1
     value_end = record.find('_',value_start)
     return record[value_start:value_end]
 
@@ -149,14 +152,14 @@ def create_legend(records=[], keys=[]):
         return records
     res = []
     for rec in records:
-        s = [rec[:rec.find('_M')]]
-        values = [k+get_key_from_filename(rec, k) for k in keys]
+        s = [rec[:rec.find('_R')]]
+        values = [k + get_key_from_filename(rec, k) for k in keys]
         s.extend(values)
         res.append(" ".join(s))
     return res
 
 
-def main_func(task, headers, flt):
+def main_func(task, headers, flt, allPerFL=0.95):
     # read and filter the filenames
     records = set()
     for h in headers:
@@ -165,23 +168,27 @@ def main_func(task, headers, flt):
     # read the selected files into dicts
     dicts = read_data_into_dicts(task, records)
 
-    # print table
-    # print_table(records, dicts)
-
     # draw curves
     curve_names = [
         'train_losses',
+        # 'valid_accss',
+        "mean_valid_accs",
         'test_losses',
         'test_accs',
     ]
     # create legends
-    legends = create_legend(records, ['P','LR'])
+    legends = create_legend(records, ['P','B'])
     for curve in curve_names:
         plt.figure(figsize=(8,6))
+        if curve == 'mean_valid_accs':
+            plt.axhline(y=allPerFL, xmin=0, xmax=1000, color='purple')
+            plt.text(y=allPerFL + 0.02, x=-10, s='Baseline', fontdict={'color': 'purple', 'fontsize': 12})
+            
         draw_curve(dicts, curve, legends)
         plt.title(task.split('/')[0].replace('_', ' '), pad=10)
         plt.xlabel("communication rounds")
         plt.ylabel(curve.replace('_', ' '))
+        plt.axis('tight')
         ax = plt.gca()
         plt.grid()
         plt.show()
@@ -195,20 +202,46 @@ if __name__ == '__main__':
     # task+record
     headers = [
         'scaffold',
+<<<<<<< HEAD
         'mp_proposal',
         # 'mp_fedkdrv2'
+=======
+        'mp_fedavg', 
+        # 'mp_feddrl', 
+        'mp_proposal', 
+        # 'mp_proposal2_Mmlp', 
+        # 'mp_proposal3_Mmlp', 
+        # 'mp_hope', 
+        # 'mp_opfl', 
+        # 'mp_opfl_Mop_cnn', 
+        # 'mp_alg_mse', 
+        # 'feddyn',
+        # 'mp_fedkdr',
+        # 'mp_fedfsl-mi-adv'
+>>>>>>> c2bc07d27b28f832d182547468dbef8942d60ee5
     ]
     flt = {
-        # 'E': '8',
-        # 'B': '8',
+        # 'E': '1',
+        # 'B': '4',
         # 'LR': '0.01',
+<<<<<<< HEAD
         # 'R': '100',
         # 'P': '0.01',
+=======
+        # 'R': '250',
+        # 'P': '1',
+>>>>>>> c2bc07d27b28f832d182547468dbef8942d60ee5
         # 'S': '0',
     }
+    
+    # numclient = 10
     for s in [1]:
+<<<<<<< HEAD
         task = f'mnist/mnist_pareto_N100_K10/mnist/100client/pareto/MNIST-noniid-pareto_1'
+=======
+        task = f'cifar10_dir_sparse_N100_K10/cifar10/dirichlet/dir_1_sparse/100client/cifar10_sparse'
+>>>>>>> c2bc07d27b28f832d182547468dbef8942d60ee5
         try:
-            main_func(task, headers, flt)
+            main_func(task, headers, flt, 0.6889)
         except ValueError:
             print("error:", task)

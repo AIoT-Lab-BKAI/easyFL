@@ -77,6 +77,10 @@ def read_option():
     parser.add_argument('--kd_fct', help="Knowledge distillation factor (Fedsdiv)", type=float, default="1.0")
     parser.add_argument('--sthr', help="Similarity threshold for clustering (Fedsdiv)", type=float, default="0.975")
     
+    # Proposal 4
+    parser.add_argument('--cpg', help="Number of clients per group", type=int, default=2)
+    parser.add_argument('--se', help="Number of epochs used in second step training", type=int, default=4)
+    
     try: option = vars(parser.parse_args())
     except IOError as msg: parser.error(str(msg))
     return option
@@ -103,14 +107,14 @@ def initialize(option):
         task_reader = getattr(importlib.import_module(bmk_core_path), 'TaskReader')(taskpath=option['dataidx_filename'], data_folder=option['data_folder'], dataidx_path=option['dataidx_path'])
     else:
         task_reader = getattr(importlib.import_module(bmk_core_path), 'TaskReader')(taskpath=option['dataidx_filename'], data_folder=option['data_folder'])
-    train_datas, test_data, num_clients = task_reader.read_data()
+    local_train_datas, local_test_datas, test_data, num_clients = task_reader.read_data()
     print("done")
 
     # init client
     print('init clients...', end='')
     client_path = '%s.%s' % ('algorithm', option['algorithm'])
     Client=getattr(importlib.import_module(client_path), 'Client')
-    clients = [Client(option, name = cid, train_data = train_datas[cid]) for cid in range(num_clients)]
+    clients = [Client(option, name = cid, train_data = local_train_datas[cid], valid_data = local_test_datas[cid]) for cid in range(num_clients)]
     print('done')
 
     # init server
@@ -123,7 +127,7 @@ def initialize(option):
 def output_filename(option, server):
     header = "{}_".format(option["algorithm"])
     for para in server.paras_name: header = header + para + "{}_".format(option[para])
-    output_name = header + "M{}_R{}_B{}_E{}_LR{:.4f}_P{:.2f}_S{}_LD{:.3f}_WD{:.3f}_DR{:.2f}_AC{:.2f}.json".format(
+    output_name = header + "M{}_R{}_B{}_E{}_LR{:.3f}_P{:.1f}_S{}_LD{:.3f}_WD{:.3f}_DR{:.2f}_AC{:.2f}.json".format(
         option['model'],
         option['num_rounds'],
         option['batch_size'],
@@ -131,7 +135,7 @@ def output_filename(option, server):
         option['learning_rate'],
         option['proportion'],
         option['seed'],
-        option['lr_scheduler']+option['learning_rate_decay'],
+        option['lr_scheduler'] + option['learning_rate_decay'],
         option['weight_decay'],
         option['net_drop'],
         option['net_active'])

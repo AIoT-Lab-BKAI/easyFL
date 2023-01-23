@@ -10,7 +10,7 @@ class MyLogger(flw.Logger):
         super().__init__()
         self.max_acc = 0
         
-    def log(self, server=None):
+    def log(self, server=None, round=None):
         if server==None: return
         if self.output == {}:
             self.output = {
@@ -23,17 +23,20 @@ class MyLogger(flw.Logger):
                 "valid_accs":[],
                 "client_accs":{},
                 "mean_valid_accs":[],
-                "inference_time": [],
+                # "inference_time": [],
                 "max_acc": []
+
             }
+        
         if "mp_" in server.name:
-            test_metric, test_loss, inference_time = server.test(device=torch.device('cuda'))
+                test_metric, test_loss, inference_time = server.test(device=torch.device('cuda'))
         else:
             test_metric, test_loss, inference_time = server.test(device="cuda")
         
         valid_metrics, valid_losses = server.test_on_clients(self.current_round, 'valid', 'cuda')
         # train_metrics, train_losses = server.test_on_clients(self.current_round, 'train', 'cuda')
         train_metrics, train_losses = (valid_metrics, valid_losses)
+        
         self.max_acc = max(self.max_acc, test_metric)
         
         self.output['train_losses'].append(1.0*sum([ck * closs for ck, closs in zip(server.client_vols, train_losses)])/server.data_vol)
@@ -50,11 +53,12 @@ class MyLogger(flw.Logger):
             self.output['client_accs'][server.clients[cid].name]=[self.output['valid_accs'][i][cid] for i in range(len(self.output['valid_accs']))]
         
         print(self.temp.format("Training Loss:", self.output['train_losses'][-1]))
-        print(self.temp.format("Testing Loss:", self.output['test_losses'][-1]))
+        # print(self.temp.format("Testing Loss:", self.output['test_losses'][-1]))
         print(self.temp.format("Testing Accuracy:", self.output['test_accs'][-1]))
-        print(self.temp.format("Validating Accuracy:", self.output['mean_valid_accs'][-1]))
+        # print(self.temp.format("Validating Accuracy:", self.output['mean_valid_accs'][-1]))
         print(self.temp.format("Mean of Client Accuracy:", self.output['mean_curve'][-1]))
         print(self.temp.format("Std of Client Accuracy:", self.output['var_curve'][-1]))
+        print(self.temp.format("Max of Mean Client Accuracy:", self.output['max_acc'][-1]))
         # print(self.temp.format("Mean of Inference Time:", self.output['inference_time'][-1]))
 
         # wandb record
