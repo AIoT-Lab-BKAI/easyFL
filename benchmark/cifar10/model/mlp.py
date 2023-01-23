@@ -6,7 +6,7 @@ class Model(FModule):
     def __init__(self, dim_in=3*32*32, dim_hidden=256, dim_out=10):
         super(Model, self).__init__()
         self.fc1 = nn.Linear(dim_in, dim_hidden)
-        self.fc2 = nn.Linear(dim_in, dim_hidden)
+        self.fc2 = nn.Linear(dim_hidden, dim_hidden)
         self.relu = nn.ReLU()
         self.fc3 = nn.Linear(dim_hidden, dim_out)
 

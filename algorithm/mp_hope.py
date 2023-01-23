@@ -69,9 +69,8 @@ class Client(MPBasicClient):
     
     def reply(self, svr_pkg, device, round):
         global_model, last_impact, next_impact = self.unpack(svr_pkg)
-        model, personal_model, _ = self.train(global_model, last_impact, next_impact, device)
-        acc, _ = self.test(personal_model, device=device, round=round)
-        cpkg = self.pack(model, acc)
+        model, test_acc = self.train(global_model, last_impact, next_impact, device)
+        cpkg = self.pack(model, test_acc)
         return cpkg
     
     def train(self, global_model: FModule, last_impact, next_impact, device):
@@ -105,6 +104,9 @@ class Client(MPBasicClient):
                 
             mean_loss.append(np.mean(losses))
         
+        acc, _ = self.test(surogate_global_model, device=device, round=round)
+        
         self.local_model = (surogate_global_model - complement_model) * 1.0/(next_impact)
         self.local_model = self.local_model.to("cpu")
-        return self.local_model, surogate_global_model, np.mean(mean_loss)
+        
+        return self.local_model, acc

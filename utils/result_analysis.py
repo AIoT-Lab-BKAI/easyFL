@@ -34,7 +34,7 @@ color_list = ['blue', 'green', 'orange', 'red', 'violet', "teal", "brown", "dark
 size = 0
 
 def read_data_into_dicts(task, records):
-    path = '../results/'+ task #+'/record'
+    path = '../fedtask/'+ task #+'/record'
     files = os.listdir(path)
     res = []
     for f in records:
@@ -100,7 +100,7 @@ def filename_filter(fnames=[], filter={}):
 #     return
 
 def scan_records(task, header = '', filter = {}):
-    path = '../results/' + task #+ '/record'
+    path = '../fedtask/' + task #+ '/record'
     files = os.listdir(path)
     # check headers
     files = [f for f in files if f.startswith(header+'_')]
@@ -170,11 +170,12 @@ def main_func(task, headers, flt, allPerFL=0.95):
 
     # draw curves
     curve_names = [
-        'train_losses',
-        # 'valid_accss',
+        # 'mean_curve',
+        'var_curve',
         "mean_valid_accs",
         'test_losses',
         'test_accs',
+        'max_acc'
     ]
     # create legends
     legends = create_legend(records, ['P','B'])
@@ -202,45 +203,21 @@ if __name__ == '__main__':
     # task+record
     headers = [
         'scaffold',
-<<<<<<< HEAD
-        'mp_proposal',
-        # 'mp_fedkdrv2'
-=======
-        'mp_fedavg', 
-        # 'mp_feddrl', 
-        'mp_proposal', 
-        # 'mp_proposal2_Mmlp', 
-        # 'mp_proposal3_Mmlp', 
-        # 'mp_hope', 
-        # 'mp_opfl', 
-        # 'mp_opfl_Mop_cnn', 
-        # 'mp_alg_mse', 
-        # 'feddyn',
-        # 'mp_fedkdr',
-        # 'mp_fedfsl-mi-adv'
->>>>>>> c2bc07d27b28f832d182547468dbef8942d60ee5
+        'mp_hope',
+        'mp_fedavg',
     ]
     flt = {
         # 'E': '1',
         # 'B': '4',
         # 'LR': '0.01',
-<<<<<<< HEAD
         # 'R': '100',
         # 'P': '0.01',
-=======
-        # 'R': '250',
-        # 'P': '1',
->>>>>>> c2bc07d27b28f832d182547468dbef8942d60ee5
         # 'S': '0',
     }
     
     # numclient = 10
     for s in [1]:
-<<<<<<< HEAD
-        task = f'mnist/mnist_pareto_N100_K10/mnist/100client/pareto/MNIST-noniid-pareto_1'
-=======
-        task = f'cifar10_dir_sparse_N100_K10/cifar10/dirichlet/dir_1_sparse/100client/cifar10_sparse'
->>>>>>> c2bc07d27b28f832d182547468dbef8942d60ee5
+        task = f'cifar10_dir_sparse_N100_K10_E8/cifar10/dirichlet/dir_0'
         try:
             main_func(task, headers, flt, 0.6889)
         except ValueError:
