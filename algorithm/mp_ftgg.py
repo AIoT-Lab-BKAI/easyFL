@@ -4,6 +4,7 @@ import numpy as np
 import copy
 from utils.fmodule import FModule
 
+# type: ignore     
 class Server(MPBasicServer):
     def __init__(self, option, model, clients, test_data = None):
         super(Server, self).__init__(option, model, clients, test_data)
@@ -75,7 +76,7 @@ class Client(MPBasicClient):
     
     def train(self, global_model: FModule, last_impact, next_impact, device):
         global_model = global_model.to(device)
-        
+    
         # Initialize model & Find complement model
         if self.local_model is None:
             self.local_model = copy.deepcopy(global_model).to(device)
@@ -83,19 +84,19 @@ class Client(MPBasicClient):
             self.local_model = self.local_model.to(device)
             
         with torch.no_grad():
-            complement_model = global_model - last_impact * self.local_model
+            surogate_global_model = global_model - last_impact * self.local_model
         
-        surogate_global_model = complement_model + next_impact * self.local_model
-        surogate_global_model.train()
+        complemented_model = surogate_global_model + next_impact * self.local_model
+        complemented_model.train()
         
         data_loader = self.calculator.get_data_loader(self.train_data, batch_size=self.batch_size)
-        optimizer = self.calculator.get_optimizer(self.optimizer_name, surogate_global_model, lr=self.learning_rate, weight_decay=self.weight_decay, momentum=self.momentum)
+        optimizer = self.calculator.get_optimizer(self.optimizer_name, complemented_model, lr=self.learning_rate, weight_decay=self.weight_decay, momentum=self.momentum)
         
         mean_loss = []
         for iter in range(self.epochs):
             losses = []
             for batch_idx, batch_data in enumerate(data_loader):
-                global_target_loss = self.calculator.get_loss(surogate_global_model, batch_data, device)                    
+                global_target_loss = self.calculator.get_loss(complemented_model, batch_data, device)                    
                 losses.append(global_target_loss.detach().cpu())
                 
                 optimizer.zero_grad()
@@ -104,9 +105,9 @@ class Client(MPBasicClient):
                 
             mean_loss.append(np.mean(losses))
         
-        acc, _ = self.test(surogate_global_model, device=device, round=round)
+        acc, _ = self.test(complemented_model, device=device, round=round)
         
-        self.local_model = (surogate_global_model - complement_model) * 1.0/(next_impact)
+        self.local_model = (complemented_model - surogate_global_model) * 1.0/(next_impact)
         self.local_model = self.local_model.to("cpu")
         
         return self.local_model, acc
