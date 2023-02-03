@@ -67,3 +67,9 @@ class ServerTail(FModule):
     def freeze_grad(self):
         for p in self.parameters():
             p.requires_grad = False
+
+
+class ServerModel(ClientModel):
+    def __init__(self):
+        super().__init__()
+        self.tail = ServerTail()

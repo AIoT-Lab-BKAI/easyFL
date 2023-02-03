@@ -25,17 +25,22 @@ class MyLogger(flw.Logger):
                 "mean_valid_accs":[]
             }
         
+        # test_metric, test_loss = server.test(device="cuda")
         valid_metrics, _ = server.test_on_clients(dataflag='valid', device='cuda', round=round)
 
         self.output['mean_curve'].append(np.mean(valid_metrics))
         self.output['var_curve'].append(np.std(valid_metrics))
+        # self.output['test_accs'].append(test_metric)
+        # self.output['test_losses'].append(test_loss)
         
         for cid in range(server.num_clients):
             self.output['client_accs'][server.clients[cid].name]=[self.output['valid_accs'][i][cid] for i in range(len(self.output['valid_accs']))]
         
         print(self.temp.format("Mean of Client Accuracy:", self.output['mean_curve'][-1]))
         print(self.temp.format("Std of Client Accuracy:", self.output['var_curve'][-1]))
-        
+        # print(self.temp.format("Testing Loss:", self.output['test_losses'][-1]))
+        # print(self.temp.format("Testing Accuracy:", self.output['test_accs'][-1]))
+                
         self.max_acc = max(self.max_acc, self.output['mean_curve'][-1])
 
         # wandb record

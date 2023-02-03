@@ -11,29 +11,19 @@ import wandb
 class Server(MPBasicServer):
     def __init__(self, option, model, clients, test_data = None):
         super(Server, self).__init__(option, model, clients, test_data)
-        self.max_acc = 0
-        return
+        self.client_ids = [i for i in range(len(self.clients))]
+        self.latest_personal_test_acc = [0. for client_id in self.client_ids]
+        
+    def test_on_clients(self, dataflag='valid', device='cuda', round=None):
+        return self.latest_personal_test_acc, 0
         
     def iterate(self, t, pool):
-        self.selected_clients = self.sample()
-        _, per_accs = self.communicate(self.selected_clients, pool, t)
-        self.max_acc = max(self.max_acc, np.mean(per_accs))
-
-        # wandb record
-        if self.wandb:
-            wandb.log(
-                {
-                    "Mean Client Accuracy": np.mean(per_accs),
-                    "Std Client Accuracy":  np.std(per_accs),
-                    "Max Testing Accuracy": self.max_acc
-                }
-            )
-        
-        print(f"Max Testing Accuracy: {self.max_acc:>.3f}")
-        print(f"Mean of Client Accuracy: {np.mean(per_accs):>.3f}")
-        print(f"Std of Client Accuracy: {np.std(per_accs):>.3f}")
+        self.selected_clients = sorted(self.sample())
+        _, personal_accs = self.communicate(self.selected_clients, pool, t)
+                
+        for client_id, personal_acc in zip(self.selected_clients, personal_accs):
+            self.latest_personal_test_acc[client_id] = personal_acc
         return
-        
         
 class Client(MPBasicClient):
     def __init__(self, option, name='', train_data=None, valid_data=None):

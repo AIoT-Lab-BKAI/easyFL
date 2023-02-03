@@ -1,6 +1,7 @@
 from torch import nn
 from utils.fmodule import FModule
-
+import numpy as np
+import torch.nn.functional as F
 
 class ClientModel(FModule):
     def __init__(self):
@@ -15,7 +16,11 @@ class ClientModel(FModule):
     
     def freeze_grad(self):
         self.head.freeze_grad()
-        self.tail.freeze_grad() 
+        self.tail.freeze_grad()
+        
+    def get_features(self, x):
+        x = self.head(x)
+        return self.tail.get_features(x)
         
 
 class ClientHead(FModule):
@@ -42,37 +47,68 @@ class ClientHead(FModule):
 class ClientTail(FModule):
     def __init__(self):
         super().__init__()
-        self.decoder = nn.Sequential(
-            nn.Linear(1600, 256),
-            nn.ReLU(),
-            nn.Linear(256, 128),
-            nn.ReLU(),
-            nn.Linear(128, 10),
-        )
+        self.fc1 = nn.Linear(1600, 512)
+        self.fc2 = nn.Linear(512, 10)
     
     def forward(self, x):
-        return self.decoder(x)
+        x = F.relu(self.fc1(x))
+        x = self.fc2(x)
+        return x
     
     def freeze_grad(self):
         for p in self.parameters():
             p.requires_grad = False
+            
+    def get_features(self, x):
+        features = [x]
+        x = F.relu(self.fc1(x))
+        features.append(x)
+        x = self.fc2(x)
+        features.append(x)
+        return features
             
     
 class ServerTail(FModule):
     def __init__(self):
         super().__init__()
-        self.decoder = nn.Sequential(
-            nn.Linear(1600, 512),
-            nn.ReLU(),
-            nn.Linear(512, 512),
-            nn.ReLU(),
-            nn.Linear(512, 10),
-        )
+        self.fc1 = nn.Linear(1600, 512)
+        self.fc2 = nn.Linear(512, 512)
+        self.fc3 = nn.Linear(512, 512)
+        self.fc4 = nn.Linear(512, 512)
+        self.fc5 = nn.Linear(512, 10)
     
     def forward(self, x):
-        return self.decoder(x)
+        x = F.relu(self.fc1(x))
+        x = F.relu(self.fc2(x))
+        x = F.relu(self.fc3(x))
+        x = F.relu(self.fc4(x))
+        x = self.fc5(x)
+        return x
     
     def freeze_grad(self):
         for p in self.parameters():
             p.requires_grad = False
-            
+    
+    def get_features(self, x):
+        features = [x]        
+        x = F.relu(self.fc1(x))
+        # features.append(x)
+        x = F.relu(self.fc2(x))
+        # features.append(x)
+        x = F.relu(self.fc3(x))
+        features.append(x)
+        x = F.relu(self.fc4(x))
+        # features.append(x)
+        x = self.fc5(x)
+        features.append(x)
+        return features
+    
+
+class ServerModel(ClientModel):
+    def __init__(self):
+        super().__init__()
+        self.tail = ServerTail()
+        
+    def get_features(self, x):
+        x = self.head(x)
+        return self.tail.get_features(x)

@@ -35,7 +35,7 @@ def assemble_data(client_datawares):
 class Server(MPBasicServer):
     def __init__(self, option, model, clients, test_data=None):
         super().__init__(option, model, clients, test_data)
-        self.server_tail = initialize(dataset="algorithm.headtail_utils." + option['task'].split('_')[0], architecture=option['model'], modelname="ServerTail")
+        self.model = initialize(dataset="algorithm.headtail_utils." + option['task'].split('_')[0], architecture=option['model'], modelname="ServerModel")
         self.distill_epochs = 8
         self.temperature = 1.5
         self.distill_lossfnc = torch.nn.CrossEntropyLoss()
@@ -51,23 +51,26 @@ class Server(MPBasicServer):
         return evals, losses
     
     def pack(self, client_id):
-        return {"model" : copy.deepcopy(self.server_tail)}
+        return {"head" : copy.deepcopy(self.model.head), "tail": copy.deepcopy(self.model.tail)}
     
     def iterate(self, t, pool):
         self.selected_clients = self.sample()
-        _, client_datawares = self.communicate(self.selected_clients, pool, t)
+        heads, client_datawares = self.communicate(self.selected_clients, pool, t)
         
         if not self.selected_clients: 
             return
         
-        device0 = torch.device(f"cuda:{self.server_gpu_id}")        
+        device0 = torch.device(f"cuda:{self.server_gpu_id}")
+        heads = [head.to(device0) for head in heads]
+        self.model.head = self.aggregate(heads,p=[1.0 * self.client_vols[cid]/self.data_vol for cid in self.selected_clients])
+                
         assembled_dataware = assemble_data(client_datawares)
         self.distill(assembled_dataware, device0)
         return
     
     def distill(self, client_datawares, device):
-        self.server_tail = self.server_tail.to(device)
-        optimizer = torch.optim.SGD(self.server_tail.parameters(), lr=0.001)
+        self.model.tail = self.model.tail.to(device)
+        optimizer = torch.optim.SGD(self.model.tail.parameters(), lr=0.001)
         
         dataset = DistillDataset(client_datawares)
         dataloader = DataLoader(dataset, batch_size=self.clients_per_round, shuffle=True)
@@ -78,7 +81,7 @@ class Server(MPBasicServer):
                 intermediate_output = intermediate_output.to(device)
                 client_output = client_output.to(device)
                 
-                server_output = self.server_tail(intermediate_output)
+                server_output = self.model.tail(intermediate_output)
                 loss = self.distill_lossfnc(torch.softmax(server_output/self.temperature, dim=1), torch.softmax(client_output/self.temperature, dim=1))
                 
                 optimizer.zero_grad()
@@ -93,9 +96,9 @@ class Client(MPBasicClient):
         self.model = initialize(dataset="algorithm.headtail_utils." + option['task'].split('_')[0], architecture=option['model'], modelname="ClientModel")
         self.class_lossfnc = torch.nn.CrossEntropyLoss()
         self.distill_lossfnc = torch.nn.CrossEntropyLoss()
-        self.distill_factor = 0.1
-        self.temperature = 1.5
-        self.offset = 100
+        self.distill_factor = 1.
+        self.temperature = 2
+        self.offset = 50
         self.dataware = {"intermediate_output": [], "final_output": []}
         return
     
@@ -146,18 +149,23 @@ class Client(MPBasicClient):
         local_output = model.tail(intermediate_output)
         server_output = server_tail(intermediate_output)
         
-        classification_loss = self.class_lossfnc(local_output, Y)
-        distillation_loss = self.distill_lossfnc(torch.softmax(local_output/self.temperature, dim=1), torch.softmax(server_output/self.temperature, dim=1))
+        loss = self.class_lossfnc(local_output, Y)
+        
+        if round >= self.offset:
+            loss += self.distill_factor * self.distill_lossfnc(torch.softmax(local_output/self.temperature, dim=1), torch.softmax(server_output/self.temperature, dim=1))
         
         if storing:
             self.dataware["intermediate_output"].append(intermediate_output.detach().cpu())
             self.dataware["final_output"].append(local_output.detach().cpu())
-            
-        return classification_loss + self.distill_factor * distillation_loss
+        
+        return loss
         
         
     def reply(self, svr_pkg, device, round):
-        server_tail = self.unpack(svr_pkg)
+        self.model.head, server_tail = self.unpack(svr_pkg)
         self.train(server_tail, device, round)
-        cpkg = self.pack(copy.deepcopy(self.model.tail), self.dataware)
+        cpkg = self.pack(self.model.head, self.dataware)
         return cpkg
+    
+    def unpack(self, received_pkg):
+        return received_pkg['head'], received_pkg['tail']
