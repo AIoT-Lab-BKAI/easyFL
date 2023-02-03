@@ -31,7 +31,7 @@ class MyLogger(flw.Logger):
         else:
             test_metric, test_loss = server.test(device="cuda")
         
-        valid_metrics, valid_losses = server.test_on_clients(self.current_round, 'valid', 'cuda')
+        valid_metrics, valid_losses = server.test_on_clients('valid', 'cuda')
         
         self.max_acc = max(self.max_acc, test_metric)
         

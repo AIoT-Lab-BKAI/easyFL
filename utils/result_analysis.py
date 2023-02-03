@@ -203,7 +203,7 @@ if __name__ == '__main__':
     # task+record
     headers = [
         'scaffold',
-        'mp_hope',
+        'mp_proposal',
         'mp_fedavg',
     ]
     flt = {
@@ -217,7 +217,7 @@ if __name__ == '__main__':
     
     # numclient = 10
     for s in [1]:
-        task = f'cifar10_dir_sparse_N100_K10_E8/cifar10/dirichlet/dir_0'
+        task = f'cifar10_dir_sparse_N100_K10_E16/cifar10/dirichlet/dir_0'
         try:
             main_func(task, headers, flt, 0.6889)
         except ValueError:
