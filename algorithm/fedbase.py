@@ -223,10 +223,13 @@ class BasicServer():
         """
         models = [cp["model"] for cp in packages_received_from_clients]
         peer_grads = [cp["peer_grad"] for cp in packages_received_from_clients]
+        acc_before_trains = [cp["acc_before_train"] for cp in packages_received_from_clients]
+        loss_before_trains = [cp["loss_before_train"] for cp in packages_received_from_clients]
+        confidence_score_dicts = [cp["confidence_score_dict"] for cp in packages_received_from_clients]
         # train_losses = [cp["train_loss"] for cp in packages_received_from_clients]
         # return models, train_losses
         # return models, packages_received_from_clients
-        return models, peer_grads
+        return models, peer_grads, acc_before_trains, loss_before_trains, confidence_score_dicts
 
     def global_lr_scheduler(self, current_round):
         """
@@ -267,6 +270,8 @@ class BasicServer():
         if self.sample_option == 'uniform':
             # original sample proposed by fedavg
             selected_clients = list(np.random.choice(all_clients, self.clients_per_round, replace=False))
+            # selected_clients = all_clients
+            # selected_clients = [all_clients[self.option['client_id']]]
         elif self.sample_option =='md':
             # the default setting that is introduced by FedProx
             selected_clients = list(np.random.choice(all_clients, self.clients_per_round, replace=True, p=[nk / self.data_vol for nk in self.client_vols]))
@@ -307,6 +312,7 @@ class BasicServer():
         else:
             sump = sum(p)
             p = [pk/sump for pk in p]
+            print('p = ', p)
             return fmodule._model_sum([model_k * pk for model_k, pk in zip(models, p)])
 
     def test_on_clients(self, round, dataflag='valid', device='cpu'):
@@ -515,7 +521,7 @@ class BasicClient():
             json.dump(uncertainty_dict, f)
         
 
-    def pack(self, model, peer_grad):
+    def pack(self, model, peer_grad, acc_before_train,loss_before_train,confidence_score_dict):
         """
         Packing the package to be send to the server. The operations of compression
         of encryption of the package should be done here.
@@ -527,7 +533,10 @@ class BasicClient():
         """
         return {
             "model" : copy.deepcopy(model),
-            "peer_grad": peer_grad
+            "peer_grad": peer_grad,
+            "acc_before_train": acc_before_train,
+            "loss_before_train": loss_before_train,
+            "confidence_score_dict": confidence_score_dict
             # "data_idxs": data_idxs,
             # "Acc_global": Acc_global,
             # "acc_local": acc_local,

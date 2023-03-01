@@ -64,7 +64,8 @@ class MyLogger(flw.Logger):
                     "Validating Accuracy":  self.output['mean_valid_accs'][-1],
                     "Mean Client Accuracy": self.output['mean_curve'][-1],
                     "Std Client Accuracy":  self.output['var_curve'][-1],
-                    "Inference Time":       self.output['inference_time'][-1]
+                    "Inference Time":       self.output['inference_time'][-1],
+                    "Max Testing Accuracy": max(self.output['test_accs'])
                 }
             )
 
@@ -87,8 +88,8 @@ def main():
         wandb.init(
             project="dirtyFL", 
             entity="aiotlab",
-            group=option['task'],
-            name=f"{option['noise_type']}_{option['aggregate']}_num_malicious_{option['num_malicious']}_proportion_{option['proportion']}_dirty_rate_{option['dirty_rate'][0]}",
+            group=f"{option['task']}_{option['noise_type']}_num_malicious_{option['num_malicious']}_proportion_{option['proportion']}_dirty_rate_{option['dirty_rate'][0]}",
+            name=f"{option['aggregate']}_{option['agg_algorithm']}",
             config=option
         )
         

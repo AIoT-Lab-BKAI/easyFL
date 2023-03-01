@@ -405,8 +405,19 @@ class ClassifyCalculator(BasicTaskCalculator):
     def get_loss_not_uncertainty(self, model, data, device=None):
         tdata = self.data_to_device(data, device)
         outputs = model(tdata[0])
+        softmax = torch.nn.Softmax(dim=1)
+        # print('outputs =', outputs)
+        # print('torch.max(softmax(outputs), dim=1)[0] =', torch.max(softmax(outputs), dim=1)[0])
+        # print('tdata[2] =', tdata[2])
+        # breakpoint()
+        # for i in torch.max(softmax(outputs), dim=1)[0].tolist():
+        #     if i > 1.0:
+        #         print('output :', outputs)
+        #         print('output :', max(softmax(outputs)))
+        #         print('output :', torch.max(softmax(outputs), dim=1)[0])
+        #         break
         loss = self.lossfunc(outputs, tdata[1])
-        return loss
+        return loss#, torch.max(softmax(outputs), dim=1)[0].tolist(), tdata[2].tolist()
     
     def get_loss(self, model, data, epoch, device=None):
         tdata = self.data_to_device(data, device)
@@ -444,7 +455,7 @@ class ClassifyCalculator(BasicTaskCalculator):
     @torch.no_grad()
     def test(self, model, data, device=None):
         """Metric = Accuracy"""
-        tdata = self.data_to_device(data, device)
+        tdata = self.data_to_device_test(data, device)
         model = model.to(device)
         start = time.time()
         outputs = model(tdata[0])
@@ -454,7 +465,27 @@ class ClassifyCalculator(BasicTaskCalculator):
         correct = y_pred.eq(tdata[1].data.view_as(y_pred)).long().cpu().sum()
         return (1.0 * correct / len(tdata[1])).item(), loss.item(), (end - start)
 
+    @torch.no_grad()
+    def test_client(self, model, data, device=None):
+        """Metric = Accuracy"""
+        tdata = self.data_to_device(data, device)
+        model = model.to(device)
+        softmax = torch.nn.Softmax(dim=1)
+        start = time.time()
+        outputs = model(tdata[0])
+        end = time.time()
+        loss = self.lossfunc(outputs, tdata[1])
+        y_pred = outputs.data.max(1, keepdim=True)[1]
+        correct = y_pred.eq(tdata[1].data.view_as(y_pred)).long().cpu().sum()
+        return (1.0 * correct / len(tdata[1])).item(), loss.item(), (end - start), torch.max(softmax(outputs), dim=1)[0].tolist(), tdata[2].tolist()
+
     def data_to_device(self, data, device=None):
+        if device is None:
+            return data[0].to(self.device), data[1].to(self.device), data[2]
+        else:
+            return data[0].to(device), data[1].to(device), data[2]
+
+    def data_to_device_test(self, data, device=None):
         if device is None:
             return data[0].to(self.device), data[1].to(self.device)
         else:
@@ -635,8 +666,14 @@ class DirtyDataset(Dataset):
         else:
             self.client_type = 'benign'
         
-        # np.random.seed(self.seed)
-        # self.dirty_dataidx = np.random.choice(self.idxs, dirty_quantity, replace=False).tolist()
+        
+        np.random.seed(self.seed)
+        self.dirty_dataidx = np.random.choice(self.idxs, dirty_quantity, replace=False).tolist()
+        self.clean_dataidx = list(set(self.idxs) - set(self.dirty_dataidx))
+        self.type_image_idx = {
+            'noise': self.dirty_dataidx,
+            'clean': self.clean_dataidx
+        }
         # if seed in [0, 1]:
         #     print(f'client {seed}, dirty {self.dirty_dataidx}')
         # path_dirty_dataidx = f'./results/dirty_dataidx/10000data_dirty_rate_{dirty_rate}'
@@ -654,6 +691,7 @@ class DirtyDataset(Dataset):
         self.blurrer = T.GaussianBlur(kernel_size=(5, 9), sigma=(9, 11))
         self.addgaussiannoise = AddGaussianNoise(magnitude, 0.5, self.seed)
         from torchvision.transforms import Grayscale
+        from skimage.util import random_noise
         self.gray_transform = Grayscale(num_output_channels=3)
         # self.beta = 1
         # self.beta_idxs = self.idxs
@@ -681,22 +719,52 @@ class DirtyDataset(Dataset):
         # random.seed(self.seed) # apply this seed to img transforms
         image, label = self.dataset[self.idxs[item]]
         if self.client_type == "attacker":
-            if label in self.option['attacked_class']:
-                rand = torch.randn(1)
-                if rand <= self.dirty_rate:
+            # if label in self.option['attacked_class']:
+                # torch.manual_seed(self.idxs[item])
+                # rand = torch.randn(1)
+                # if rand <= self.dirty_rate:
+                if self.idxs[item] in self.dirty_dataidx:
+                    # self.type_image_idx['noise'].add(self.idxs[item])
                     if self.noise_type == 'gaussian':
                         if DirtyDataset.count < 2:
                             imshow(image, f"pics_noise_grad_{self.noise_type}", f"{self.idxs[item]}_before.png")
-                        torch.manual_seed(item)
+                        torch.manual_seed(self.idxs[item])
                         noise_image = torch.randn(image.size())
                         # noise_image = self.blurrer(self.addgaussiannoise(self.rotater(noise_image)))
-                        noise_image += image
+                        if self.option['outside_noise'] == 'inside':
+                            noise_image += image
                         noise_image = (noise_image - torch.min(noise_image))/(torch.max(noise_image) - torch.min(noise_image))
                         if DirtyDataset.count < 2:
                             imshow(noise_image, f"pics_noise_grad_{self.noise_type}", f"{self.idxs[item]}_after.png")
                             DirtyDataset.count += 1
-                        return noise_image, label 
-        return image, label
+                        return noise_image, label, self.idxs[item]
+                    
+                    #salt&peppernoise
+                    elif self.noise_type == 'salt_pepper':
+                        if DirtyDataset.count < 2:
+                            imshow(image, f"pics_noise_grad_{self.noise_type}", f"{self.idxs[item]}_before.png")
+                        torch.manual_seed(self.idxs[item])
+                        noisy_mask = torch.randint(low=0, high=int(1/self.magnitude)+1, size=image.size())
+                
+                        zeros_pixel = np.where(noisy_mask == 0)
+                        one_pixel = np.where(noisy_mask == int(1/self.magnitude))
+                        noise_image = self.gray_transform(image)
+                        # print(torch.max(image))
+                        # print(torch.min(image))
+                        noise_image[zeros_pixel] = 0.0
+                        noise_image[one_pixel] = 1.0
+                    
+                        if DirtyDataset.count < 2:
+                            imshow(noise_image, f"pics_noise_grad_{self.noise_type}", f"{self.idxs[item]}_after.png")
+                            DirtyDataset.count += 1
+                        return noise_image, label, self.idxs[item]
+        #         else:
+        #             self.type_image_idx['clean'].add(self.idxs[item])
+        #     else:
+        #         self.type_image_idx['clean'].add(self.idxs[item])
+        # else:
+        #     self.type_image_idx['clean'].add(self.idxs[item])
+        return image, label, self.idxs[item]
         # if self.idxs[item] in self.dirty_dataidx:
         #     if DirtyDataset.count < 2:
         #         imshow(image, f"pics_noise_{self.noise_type}", f"{self.idxs[item]}_before.png")

@@ -85,7 +85,10 @@ def read_option():
     parser.add_argument('--noise_type', help='noise_type', type=str)
     parser.add_argument('--num_malicious', help='the number of malicious clients', type=int)
     parser.add_argument('--attacked_class', help="(Dirty dataset only)", nargs='+', type=int)   
-    
+    parser.add_argument('--agg_algorithm', help='aggregation algorithm', type=str)
+    parser.add_argument('--client_id', help='', type=int)
+    parser.add_argument('--outside_noise', help='', type=str)
+    # parser.add_argument('--path_to_log', help='path to log results', type=str)
     
 
 
