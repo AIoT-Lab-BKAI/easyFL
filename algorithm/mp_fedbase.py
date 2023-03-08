@@ -32,35 +32,35 @@ class MPBasicServer(BasicServer):
         self.log_folder = option['log_folder']
         self.confidence_score = {}
         self.type_image = {}
-        self.min_avg_cs_clean_threshold = [0.2, 0.2, 0.2, 0.2, 0.2]
-        self.frequent_update_threshold = [0, 0, 0, 0, 0]
-        self.cs_clean_recently = [[0.2, 0.2, 0.2],[0.2, 0.2, 0.2],[0.2, 0.2, 0.2],[0.2, 0.2, 0.2],[0.2, 0.2, 0.2]]
+        # self.min_avg_cs_clean_threshold = [0.2, 0.2, 0.2, 0.2, 0.2]
+        # self.frequent_update_threshold = [0, 0, 0, 0, 0]
+        # self.cs_clean_recently = [[0.2, 0.2, 0.2],[0.2, 0.2, 0.2],[0.2, 0.2, 0.2],[0.2, 0.2, 0.2],[0.2, 0.2, 0.2]]
     
-    def check_converge(self, round):
-        number_predict_noise = 0
-        previous_number_predict_noise = 0
-        PATH = 'results/uncertainty_all_samples/{}/{}/{}'.format(self.option['model'],self.option['file_save_model'], round)
-        for i in range(0, 5):
-            with open(PATH + f'/{i}.json', 'r') as f:
-                list_uncertainty = json.load(f)
-            for key in list_uncertainty.keys():
-                if list_uncertainty[key] == 1:
-                    number_predict_noise += 1
+    # def check_converge(self, round):
+    #     number_predict_noise = 0
+    #     previous_number_predict_noise = 0
+    #     PATH = 'results/uncertainty_all_samples/{}/{}/{}'.format(self.option['model'],self.option['file_save_model'], round)
+    #     for i in range(0, 5):
+    #         with open(PATH + f'/{i}.json', 'r') as f:
+    #             list_uncertainty = json.load(f)
+    #         for key in list_uncertainty.keys():
+    #             if list_uncertainty[key] == 1:
+    #                 number_predict_noise += 1
         
-        Pre_PATH = 'results/uncertainty_all_samples/{}/{}/{}'.format(self.option['model'],self.option['file_save_model'], round-1)
-        for i in range(0, 5):
-            with open(Pre_PATH + f'/{i}.json', 'r') as f:
-                list_uncertainty = json.load(f)
-            for key in list_uncertainty.keys():
-                if list_uncertainty[key] == 1:
-                    previous_number_predict_noise += 1
+    #     Pre_PATH = 'results/uncertainty_all_samples/{}/{}/{}'.format(self.option['model'],self.option['file_save_model'], round-1)
+    #     for i in range(0, 5):
+    #         with open(Pre_PATH + f'/{i}.json', 'r') as f:
+    #             list_uncertainty = json.load(f)
+    #         for key in list_uncertainty.keys():
+    #             if list_uncertainty[key] == 1:
+    #                 previous_number_predict_noise += 1
         
-        if number_predict_noise < 25000 and number_predict_noise > 22000 and abs(number_predict_noise - previous_number_predict_noise) < 250:
-            print(number_predict_noise)
-            print(previous_number_predict_noise)
-            return True
-        else:
-            return False
+    #     if number_predict_noise < 25000 and number_predict_noise > 22000 and abs(number_predict_noise - previous_number_predict_noise) < 250:
+    #         print(number_predict_noise)
+    #         print(previous_number_predict_noise)
+    #         return True
+    #     else:
+    #         return False
     
     def agg_fuction(self, client_models):
         print(self.agg_option)
@@ -131,7 +131,7 @@ class MPBasicServer(BasicServer):
             self.iterate(round, pool)
             
             if round == self.num_rounds:
-                path_js = self.option['algorithm'] + '/' + self.option['agg_algorithm'] + '/' + 'attacked_class_{}/dirty_rate_{}/type_noise_{}/proportion_{}/num_malicious_{}/'.format( len(self.option['attacked_class']), self.option['dirty_rate'][0], self.option['outside_noise'], self.option['proportion']*50, self.option['num_malicious'])
+                path_js = self.log_folder + '/' + self.option['task'] + '/' + self.option['noise_type'] + '/' + 'num_malicious_{}/dirty_rate_{}/attacked_class_{}/'.format( self.option['num_malicious'], self.option['dirty_rate'][0], len(self.option['attacked_class'])) + self.option['agg_algorithm'] + '/'
                 
                 for client in self.clients:
                     # dict_set = client.train_data.type_image_idx 
@@ -150,7 +150,8 @@ class MPBasicServer(BasicServer):
             # with open(f'results/result/{self.result_file_name}', 'w') as f:
             
             #         json.dump(self.result, f)
-            path_save_model = './results/checkpoints/{}_{}_{}.pt'.format(self.option['model'], self.option['noise_type'], self.option['aggregate'])
+            # path_save_model = './results/checkpoints/{}_{}_{}.pt'.format(self.option['model'], self.option['noise_type'], self.option['aggregate'])
+            path_save_model = self.log_folder + '/' + self.option['task'] + '/' + self.option['noise_type'] + '/' + 'num_malicious_{}/dirty_rate_{}/attacked_class_{}/'.format( self.option['num_malicious'], self.option['dirty_rate'][0], len(self.option['attacked_class'])) + self.option['agg_algorithm'] + '/model.pt' 
             torch.save(self.model.state_dict(), path_save_model)
             # if self.option['percent_noise_remove'] == 0:
             #     if round >= 5:
@@ -160,236 +161,237 @@ class MPBasicServer(BasicServer):
         print("=================End==================")
         logger.time_end('Total Time Cost')
         # # save results as .json file
-        # filepath = os.path.join(self.log_folder, self.option['task'], self.option['dataidx_filename']).split('.')[0]
-        # if not Path(filepath).exists():
-        #     os.system(f"mkdir -p {filepath}")
+        filepath = os.path.join(self.log_folder, 'log/' + self.option['task'] + '/' + self.option['noise_type'] + '/' + 'num_malicious_{}/dirty_rate_{}/attacked_class_{}/'.format( self.option['num_malicious'], self.option['dirty_rate'][0], len(self.option['attacked_class'])) + self.option['agg_algorithm'])
+        if not Path(filepath).exists():
+            os.system(f"mkdir -p {filepath}")
+        logger.save(os.path.join(filepath, 'logger.json'))
         # logger.save(os.path.join(filepath, flw.output_filename(self.option, self)))
-        with open('./results/defences/{}_{}.csv'.format(self.option['noise_type'], self.option['num_malicious']), 'a') as f:
-            row = [self.option['aggregate'], logger.output['test_accs'][-1]]
-            writer = csv.writer(f)
-            writer.writerow(row)
+        # with open('./results/defences/{}_{}.csv'.format(self.option['noise_type'], self.option['num_malicious']), 'a') as f:
+        #     row = [self.option['aggregate'], logger.output['test_accs'][-1]]
+        #     writer = csv.writer(f)
+        #     writer.writerow(row)
 
-    def cluster_2(self, list_idx, models, acc_before_trains, round, iter, cluster_client_id):
-        print(f'Cluster client {cluster_client_id}')
-        if len(list_idx) == 0:
-            return [], {}, 2
-        elif len(list_idx) == 1:
-            for idx,client in enumerate(self.selected_clients):
-                if idx in list_idx:
-                    confidence_score_dict_client = self.confidence_score[round][int(client)]
-                    avg_confidence_score = sum(confidence_score_dict_client.values())/len(confidence_score_dict_client)
-            path_ = self.option['algorithm'] + '/' + self.option['agg_algorithm'] + '/' + 'attacked_class_{}/dirty_rate_{}/proportion_{}/num_malicious_{}/csv/{}'.format( len(self.option['attacked_class']), self.option['dirty_rate'][0], self.option['proportion']*50, self.option['num_malicious'], 0)
-            file = f"epoch{round}.csv"
-            path_csv = os.path.join(path_, file)
-            df = pd.read_csv(path_csv, index_col=0)
-            X = df.loc[list_idx, ["o0", "o1", "o2", "o3", "o4", "o5", "o6", "o7", "o8", "o9"]].to_numpy()
-            Y = df.loc[list_idx,["target"]].to_numpy()
-            Y_ = []
-            attacker_idx = []
-            for y, idx in enumerate(list_idx):
-                if Y[y] == "attacker":
-                    attacker_idx.append(idx)
-                    Y_.append(1)
-                else:
-                    Y_.append(0)
-            print(f"Attacker idx: {attacker_idx}")
-            if avg_confidence_score < self.min_avg_cs_clean_threshold[cluster_client_id]:  
-                attacker_cluster = list_idx
-                chosen_cluster = []
-            else: 
-                attacker_cluster = []
-                chosen_cluster = list_idx
-                self.cs_clean_recently[cluster_client_id].pop(0)
-                self.cs_clean_recently[cluster_client_id].append(avg_confidence_score)
-            true_pred = list(set(attacker_idx) & set(attacker_cluster))
-            print("True prediction attackers: {}/{}".format(len(true_pred),len(attacker_idx)))
+    # def cluster_2(self, list_idx, models, acc_before_trains, round, iter, cluster_client_id):
+    #     print(f'Cluster client {cluster_client_id}')
+    #     if len(list_idx) == 0:
+    #         return [], {}, 2
+    #     elif len(list_idx) == 1:
+    #         for idx,client in enumerate(self.selected_clients):
+    #             if idx in list_idx:
+    #                 confidence_score_dict_client = self.confidence_score[round][int(client)]
+    #                 avg_confidence_score = sum(confidence_score_dict_client.values())/len(confidence_score_dict_client)
+    #         path_ = self.option['algorithm'] + '/' + self.option['agg_algorithm'] + '/' + 'attacked_class_{}/dirty_rate_{}/proportion_{}/num_malicious_{}/csv/{}'.format( len(self.option['attacked_class']), self.option['dirty_rate'][0], self.option['proportion']*50, self.option['num_malicious'], 0)
+    #         file = f"epoch{round}.csv"
+    #         path_csv = os.path.join(path_, file)
+    #         df = pd.read_csv(path_csv, index_col=0)
+    #         X = df.loc[list_idx, ["o0", "o1", "o2", "o3", "o4", "o5", "o6", "o7", "o8", "o9"]].to_numpy()
+    #         Y = df.loc[list_idx,["target"]].to_numpy()
+    #         Y_ = []
+    #         attacker_idx = []
+    #         for y, idx in enumerate(list_idx):
+    #             if Y[y] == "attacker":
+    #                 attacker_idx.append(idx)
+    #                 Y_.append(1)
+    #             else:
+    #                 Y_.append(0)
+    #         print(f"Attacker idx: {attacker_idx}")
+    #         if avg_confidence_score < self.min_avg_cs_clean_threshold[cluster_client_id]:  
+    #             attacker_cluster = list_idx
+    #             chosen_cluster = []
+    #         else: 
+    #             attacker_cluster = []
+    #             chosen_cluster = list_idx
+    #             self.cs_clean_recently[cluster_client_id].pop(0)
+    #             self.cs_clean_recently[cluster_client_id].append(avg_confidence_score)
+    #         true_pred = list(set(attacker_idx) & set(attacker_cluster))
+    #         print("True prediction attackers: {}/{}".format(len(true_pred),len(attacker_idx)))
             
-            dictionary = {
-            "attacker_idx": attacker_idx,
-            "cluster 0": [],
-            "cluster 1": [],
-            "Avg_acc_before_train_cluster_0": 0,
-            "Avg_acc_before_train_cluster_1": 0,
-            "Chosen cluster": chosen_cluster,
-            "attacker_cluster": attacker_cluster,
-            "true prediction attacker": [int(i) for i in true_pred],
-            }
-            return chosen_cluster, dictionary, 2
+    #         dictionary = {
+    #         "attacker_idx": attacker_idx,
+    #         "cluster 0": [],
+    #         "cluster 1": [],
+    #         "Avg_acc_before_train_cluster_0": 0,
+    #         "Avg_acc_before_train_cluster_1": 0,
+    #         "Chosen cluster": chosen_cluster,
+    #         "attacker_cluster": attacker_cluster,
+    #         "true prediction attacker": [int(i) for i in true_pred],
+    #         }
+    #         return chosen_cluster, dictionary, 2
             
-        path_ = self.option['algorithm'] + '/' + self.option['agg_algorithm'] + '/' + 'attacked_class_{}/dirty_rate_{}/proportion_{}/num_malicious_{}/csv/{}'.format( len(self.option['attacked_class']), self.option['dirty_rate'][0], self.option['proportion']*50, self.option['num_malicious'], 0)
-        file = f"epoch{round}.csv"
-        path_csv = os.path.join(path_, file)
-        df = pd.read_csv(path_csv, index_col=0)
-        X = df.loc[list_idx, ["o0", "o1", "o2", "o3", "o4", "o5", "o6", "o7", "o8", "o9"]].to_numpy()
-        avg_confidence_score_list = []
-        for idx,client in enumerate(self.selected_clients):
-            if idx in list_idx:
-                confidence_score_dict_client = self.confidence_score[round][int(client)]
-                avg_confidence_score_list.append(sum(confidence_score_dict_client.values())/len(confidence_score_dict_client))
-        # avg_confidence_score_array = np.expand_dims(np.asarray(avg_confidence_score_list),axis=1)
-        # X = np.concatenate((X, avg_confidence_score_array), axis=1)
-        Y = df.loc[list_idx,["target"]].to_numpy()
-        Y_ = []
-        attacker_idx = []
-        for y, idx in enumerate(list_idx):
-            if Y[y] == "attacker":
-                attacker_idx.append(idx)
-                Y_.append(1)
-            else:
-                Y_.append(0)
-        # attacker_idx = np.nonzero(Y_)[0]        
-        print(f"Attacker idx: {attacker_idx}")
-        kmeans = KMeans(n_clusters=2, init='k-means++', random_state=0).fit(X)
-        y_pred = kmeans.labels_
-        cluster_0 = []
-        cluster_0_id = []
-        cluster_1 = []
-        cluster_1_id = []
+    #     path_ = self.option['algorithm'] + '/' + self.option['agg_algorithm'] + '/' + 'attacked_class_{}/dirty_rate_{}/proportion_{}/num_malicious_{}/csv/{}'.format( len(self.option['attacked_class']), self.option['dirty_rate'][0], self.option['proportion']*50, self.option['num_malicious'], 0)
+    #     file = f"epoch{round}.csv"
+    #     path_csv = os.path.join(path_, file)
+    #     df = pd.read_csv(path_csv, index_col=0)
+    #     X = df.loc[list_idx, ["o0", "o1", "o2", "o3", "o4", "o5", "o6", "o7", "o8", "o9"]].to_numpy()
+    #     avg_confidence_score_list = []
+    #     for idx,client in enumerate(self.selected_clients):
+    #         if idx in list_idx:
+    #             confidence_score_dict_client = self.confidence_score[round][int(client)]
+    #             avg_confidence_score_list.append(sum(confidence_score_dict_client.values())/len(confidence_score_dict_client))
+    #     # avg_confidence_score_array = np.expand_dims(np.asarray(avg_confidence_score_list),axis=1)
+    #     # X = np.concatenate((X, avg_confidence_score_array), axis=1)
+    #     Y = df.loc[list_idx,["target"]].to_numpy()
+    #     Y_ = []
+    #     attacker_idx = []
+    #     for y, idx in enumerate(list_idx):
+    #         if Y[y] == "attacker":
+    #             attacker_idx.append(idx)
+    #             Y_.append(1)
+    #         else:
+    #             Y_.append(0)
+    #     # attacker_idx = np.nonzero(Y_)[0]        
+    #     print(f"Attacker idx: {attacker_idx}")
+    #     kmeans = KMeans(n_clusters=2, init='k-means++', random_state=0).fit(X)
+    #     y_pred = kmeans.labels_
+    #     cluster_0 = []
+    #     cluster_0_id = []
+    #     cluster_1 = []
+    #     cluster_1_id = []
         
-        # cluster_2 = []
-        for i,idx in enumerate(list_idx):
-            if y_pred[i] == 0:
-                cluster_0.append(idx)
-                cluster_0_id.append(i)
-            elif y_pred[i] == 1:
-                cluster_1.append(idx)
-                cluster_1_id.append(i)
+    #     # cluster_2 = []
+    #     for i,idx in enumerate(list_idx):
+    #         if y_pred[i] == 0:
+    #             cluster_0.append(idx)
+    #             cluster_0_id.append(i)
+    #         elif y_pred[i] == 1:
+    #             cluster_1.append(idx)
+    #             cluster_1_id.append(i)
                 
-            # else: 
-            #     cluster_2.append(y)
-        print(f"Cluster 0: {cluster_0}")
-        print(f"Cluster 1: {cluster_1}")
+    #         # else: 
+    #         #     cluster_2.append(y)
+    #     print(f"Cluster 0: {cluster_0}")
+    #     print(f"Cluster 1: {cluster_1}")
         
-        models_cluster_0 = [models[i] for i in cluster_0]
-        models_cluster_1 = [models[i] for i in cluster_1]
-        # models_cluster_2 = [models[i] for i in cluster_2]
+    #     models_cluster_0 = [models[i] for i in cluster_0]
+    #     models_cluster_1 = [models[i] for i in cluster_1]
+    #     # models_cluster_2 = [models[i] for i in cluster_2]
         
-        acc_before_train_cluster_0 = [avg_confidence_score_list[i] for i in cluster_0_id]
-        acc_before_train_cluster_1 = [avg_confidence_score_list[i] for i in cluster_1_id]
+    #     acc_before_train_cluster_0 = [avg_confidence_score_list[i] for i in cluster_0_id]
+    #     acc_before_train_cluster_1 = [avg_confidence_score_list[i] for i in cluster_1_id]
         
-        Avg_acc_before_train_cluster_0 = sum(acc_before_train_cluster_0)/len(acc_before_train_cluster_0)
-        Avg_acc_before_train_cluster_1 = sum(acc_before_train_cluster_1)/len(acc_before_train_cluster_1)
+    #     Avg_acc_before_train_cluster_0 = sum(acc_before_train_cluster_0)/len(acc_before_train_cluster_0)
+    #     Avg_acc_before_train_cluster_1 = sum(acc_before_train_cluster_1)/len(acc_before_train_cluster_1)
         
-        # aggregate_model_cluster_0 = self.agg_fuction(models_cluster_0)
-        # aggregate_model_cluster_1 = self.agg_fuction(models_cluster_1)
-        # aggregate_model_cluster_2 = self.agg_fuction(models_cluster_2)
+    #     # aggregate_model_cluster_0 = self.agg_fuction(models_cluster_0)
+    #     # aggregate_model_cluster_1 = self.agg_fuction(models_cluster_1)
+    #     # aggregate_model_cluster_2 = self.agg_fuction(models_cluster_2)
         
-        print(f'Avg_acc_before_train_cluster_0 : {Avg_acc_before_train_cluster_0}')
-        print(f'Avg_acc_before_train_cluster_1 : {Avg_acc_before_train_cluster_1}')
+    #     print(f'Avg_acc_before_train_cluster_0 : {Avg_acc_before_train_cluster_0}')
+    #     print(f'Avg_acc_before_train_cluster_1 : {Avg_acc_before_train_cluster_1}')
         
-        # if round < 10:
-        #     attack_threshold = (round/2)*0.04 + 0.21
-        # else:
-        #     attack_threshold = 0.40
-        if Avg_acc_before_train_cluster_0 > Avg_acc_before_train_cluster_1: 
+    #     # if round < 10:
+    #     #     attack_threshold = (round/2)*0.04 + 0.21
+    #     # else:
+    #     #     attack_threshold = 0.40
+    #     if Avg_acc_before_train_cluster_0 > Avg_acc_before_train_cluster_1: 
             
-            # if Avg_acc_before_train_cluster_0 - Avg_acc_before_train_cluster_1 > 0.02:
-            #     # self.model = aggregate_model_cluster_0
-            #     chosen_cluster = cluster_0
-            #     attacker_cluster = cluster_1
-            # else: 
-            #     if Avg_acc_before_train_cluster_0 > 0.1 and Avg_acc_before_train_cluster_1 > 0.1:
-            #     # self.model = self.agg_fuction(models)
-            #         chosen_cluster = list_idx
-            #         attacker_cluster = []
-            #     else: 
-            #         chosen_cluster = []
-            #         attacker_cluster = list_idx
-            if Avg_acc_before_train_cluster_0 - Avg_acc_before_train_cluster_1 >= 0.02:
-                    # self.model = aggregate_model_cluster_0
-                    chosen_cluster = cluster_0
-                    min_avg_cs_clean_cluster = min(acc_before_train_cluster_0)
-                    attacker_cluster = cluster_1
-                    self.cs_clean_recently[cluster_client_id].pop(0)
-                    self.cs_clean_recently[cluster_client_id].append(min_avg_cs_clean_cluster)
-            else: 
-                # if iter == 0:
-                #     return [], [], 1.0
-                # else:
-                    if Avg_acc_before_train_cluster_0 < self.min_avg_cs_clean_threshold[cluster_client_id]:
-                        chosen_cluster = []
-                        min_avg_cs_clean_cluster = 2
-                        attacker_cluster = list_idx
-                    else:
-                        chosen_cluster = list_idx
-                        min_avg_cs_clean_cluster = 2
-                        attacker_cluster = []
-                        self.cs_clean_recently[cluster_client_id].pop(0)
-                        self.cs_clean_recently[cluster_client_id].append(min(acc_before_train_cluster_1))
-                # if Avg_acc_before_train_cluster_0 < attack_threshold:
-                #     chosen_cluster = []
-                #     attacker_cluster = list_idx
-                # else: 
-                #     chosen_cluster = list_idx
-                #     attacker_cluster = []
-                # # if Avg_acc_before_train_cluster_0 - Avg_acc_before_train_cluster_1 >= 0.03:
-                # #     # self.model = aggregate_model_cluster_0
-                # #     chosen_cluster = cluster_0
-                # #     attacker_cluster = cluster_1
-                # # else: 
-                # #     chosen_cluster = list_idx
-                # #     attacker_cluster = []
-        else:
-            # if Avg_acc_before_train_cluster_1 - Avg_acc_before_train_cluster_0 > 0.02:
-            #     # self.model = aggregate_model_cluster_1
-            #     chosen_cluster = cluster_1
-            #     attacker_cluster = cluster_0
-            # else:
-            #     # self.model = self.agg_fuction(models)
-            #     if Avg_acc_before_train_cluster_0 > 0.1 and Avg_acc_before_train_cluster_1 > 0.1:
-            #     # self.model = self.agg_fuction(models)
-            #         chosen_cluster = list_idx
-            #         attacker_cluster = []
-            #     else: 
-            #         chosen_cluster = []
-            #         attacker_cluster = list_idx
+    #         # if Avg_acc_before_train_cluster_0 - Avg_acc_before_train_cluster_1 > 0.02:
+    #         #     # self.model = aggregate_model_cluster_0
+    #         #     chosen_cluster = cluster_0
+    #         #     attacker_cluster = cluster_1
+    #         # else: 
+    #         #     if Avg_acc_before_train_cluster_0 > 0.1 and Avg_acc_before_train_cluster_1 > 0.1:
+    #         #     # self.model = self.agg_fuction(models)
+    #         #         chosen_cluster = list_idx
+    #         #         attacker_cluster = []
+    #         #     else: 
+    #         #         chosen_cluster = []
+    #         #         attacker_cluster = list_idx
+    #         if Avg_acc_before_train_cluster_0 - Avg_acc_before_train_cluster_1 >= 0.02:
+    #                 # self.model = aggregate_model_cluster_0
+    #                 chosen_cluster = cluster_0
+    #                 min_avg_cs_clean_cluster = min(acc_before_train_cluster_0)
+    #                 attacker_cluster = cluster_1
+    #                 self.cs_clean_recently[cluster_client_id].pop(0)
+    #                 self.cs_clean_recently[cluster_client_id].append(min_avg_cs_clean_cluster)
+    #         else: 
+    #             # if iter == 0:
+    #             #     return [], [], 1.0
+    #             # else:
+    #                 if Avg_acc_before_train_cluster_0 < self.min_avg_cs_clean_threshold[cluster_client_id]:
+    #                     chosen_cluster = []
+    #                     min_avg_cs_clean_cluster = 2
+    #                     attacker_cluster = list_idx
+    #                 else:
+    #                     chosen_cluster = list_idx
+    #                     min_avg_cs_clean_cluster = 2
+    #                     attacker_cluster = []
+    #                     self.cs_clean_recently[cluster_client_id].pop(0)
+    #                     self.cs_clean_recently[cluster_client_id].append(min(acc_before_train_cluster_1))
+    #             # if Avg_acc_before_train_cluster_0 < attack_threshold:
+    #             #     chosen_cluster = []
+    #             #     attacker_cluster = list_idx
+    #             # else: 
+    #             #     chosen_cluster = list_idx
+    #             #     attacker_cluster = []
+    #             # # if Avg_acc_before_train_cluster_0 - Avg_acc_before_train_cluster_1 >= 0.03:
+    #             # #     # self.model = aggregate_model_cluster_0
+    #             # #     chosen_cluster = cluster_0
+    #             # #     attacker_cluster = cluster_1
+    #             # # else: 
+    #             # #     chosen_cluster = list_idx
+    #             # #     attacker_cluster = []
+    #     else:
+    #         # if Avg_acc_before_train_cluster_1 - Avg_acc_before_train_cluster_0 > 0.02:
+    #         #     # self.model = aggregate_model_cluster_1
+    #         #     chosen_cluster = cluster_1
+    #         #     attacker_cluster = cluster_0
+    #         # else:
+    #         #     # self.model = self.agg_fuction(models)
+    #         #     if Avg_acc_before_train_cluster_0 > 0.1 and Avg_acc_before_train_cluster_1 > 0.1:
+    #         #     # self.model = self.agg_fuction(models)
+    #         #         chosen_cluster = list_idx
+    #         #         attacker_cluster = []
+    #         #     else: 
+    #         #         chosen_cluster = []
+    #         #         attacker_cluster = list_idx
             
-                if Avg_acc_before_train_cluster_1 - Avg_acc_before_train_cluster_0 >= 0.02:
-                    # self.model = aggregate_model_cluster_1
-                    chosen_cluster = cluster_1
-                    min_avg_cs_clean_cluster = min(acc_before_train_cluster_1)
-                    attacker_cluster = cluster_0
-                    self.cs_clean_recently[cluster_client_id].pop(0)
-                    self.cs_clean_recently[cluster_client_id].append(min_avg_cs_clean_cluster)
+    #             if Avg_acc_before_train_cluster_1 - Avg_acc_before_train_cluster_0 >= 0.02:
+    #                 # self.model = aggregate_model_cluster_1
+    #                 chosen_cluster = cluster_1
+    #                 min_avg_cs_clean_cluster = min(acc_before_train_cluster_1)
+    #                 attacker_cluster = cluster_0
+    #                 self.cs_clean_recently[cluster_client_id].pop(0)
+    #                 self.cs_clean_recently[cluster_client_id].append(min_avg_cs_clean_cluster)
             
-                else: 
-                    # if iter == 0:
-                    #     return [], [], 1.0
-                    # else:
-                        if Avg_acc_before_train_cluster_1 < self.min_avg_cs_clean_threshold[cluster_client_id]:
-                            chosen_cluster = []
-                            min_avg_cs_clean_cluster = 2
-                            attacker_cluster = list_idx
-                        else:
-                            chosen_cluster = list_idx
-                            min_avg_cs_clean_cluster = 2
-                            attacker_cluster = []
-                            self.cs_clean_recently[cluster_client_id].pop(0)
-                            self.cs_clean_recently[cluster_client_id].append(min(acc_before_train_cluster_0))
+    #             else: 
+    #                 # if iter == 0:
+    #                 #     return [], [], 1.0
+    #                 # else:
+    #                     if Avg_acc_before_train_cluster_1 < self.min_avg_cs_clean_threshold[cluster_client_id]:
+    #                         chosen_cluster = []
+    #                         min_avg_cs_clean_cluster = 2
+    #                         attacker_cluster = list_idx
+    #                     else:
+    #                         chosen_cluster = list_idx
+    #                         min_avg_cs_clean_cluster = 2
+    #                         attacker_cluster = []
+    #                         self.cs_clean_recently[cluster_client_id].pop(0)
+    #                         self.cs_clean_recently[cluster_client_id].append(min(acc_before_train_cluster_0))
             
-                    # if Avg_acc_before_train_cluster_1 < attack_threshold:
-                    #     chosen_cluster = []
-                    #     attacker_cluster = list_idx
-                    # else:
-                    #     chosen_cluster = list_idx
-                    #     attacker_cluster = []
+    #                 # if Avg_acc_before_train_cluster_1 < attack_threshold:
+    #                 #     chosen_cluster = []
+    #                 #     attacker_cluster = list_idx
+    #                 # else:
+    #                 #     chosen_cluster = list_idx
+    #                 #     attacker_cluster = []
             
         
-        true_pred = list(set(attacker_idx) & set(attacker_cluster))
-        print("True prediction attackers: {}/{}".format(len(true_pred),len(attacker_idx)))
-        print('\n')
+    #     true_pred = list(set(attacker_idx) & set(attacker_cluster))
+    #     print("True prediction attackers: {}/{}".format(len(true_pred),len(attacker_idx)))
+    #     print('\n')
         
-        dictionary = {
-        "attacker_idx": attacker_idx,
-        "cluster 0": cluster_0,
-        "cluster 1": cluster_1,
-        "Avg_acc_before_train_cluster_0": Avg_acc_before_train_cluster_0,
-        "Avg_acc_before_train_cluster_1": Avg_acc_before_train_cluster_1,
-        "Chosen cluster": chosen_cluster,
-        "attacker_cluster": attacker_cluster,
-        "true prediction attacker": [int(i) for i in true_pred],
-        }
-        return chosen_cluster, dictionary, min_avg_cs_clean_cluster
+    #     dictionary = {
+    #     "attacker_idx": attacker_idx,
+    #     "cluster 0": cluster_0,
+    #     "cluster 1": cluster_1,
+    #     "Avg_acc_before_train_cluster_0": Avg_acc_before_train_cluster_0,
+    #     "Avg_acc_before_train_cluster_1": Avg_acc_before_train_cluster_1,
+    #     "Chosen cluster": chosen_cluster,
+    #     "attacker_cluster": attacker_cluster,
+    #     "true prediction attacker": [int(i) for i in true_pred],
+    #     }
+    #     return chosen_cluster, dictionary, min_avg_cs_clean_cluster
 
     def iterate(self, round, pool):
         """
@@ -403,7 +405,8 @@ class MPBasicServer(BasicServer):
         # training
         # models, train_losses = self.communicate(self.selected_clients, pool)
         # models, packages_received_from_clients = self.communicate(self.selected_clients, pool)
-        models, peer_grads, acc_before_trains, loss_before_trains,confidence_score_dict = self.communicate(self.selected_clients, pool)
+        # models, peer_grads, acc_before_trains, loss_before_trains, confidence_score_dict = self.communicate(self.selected_clients, pool)
+        models, acc_before_trains, loss_before_trains, confidence_score_dict = self.communicate(self.selected_clients, pool)
         
         self.confidence_score[round] = {}
         # for client in self.clients:
@@ -411,8 +414,11 @@ class MPBasicServer(BasicServer):
             self.confidence_score[round][int(client)] = confidence_score_dict[idx]
             
         peers_types = [self.clients[id].train_data.client_type for id in self.selected_clients]
-        plot_updates_components(copy.deepcopy(self.model), peer_grads, peers_types, peers_id=self.selected_clients, epoch=round, proportion = self.option['proportion'], attacked_class = self.option['attacked_class'],dirty_rate=self.option['dirty_rate'][0],num_malicious=self.option['num_malicious'], agg_algorithm=self.option['agg_algorithm'], algorithm= self.option['algorithm'], type_noise=self.option['outside_noise'])
-        path_js = self.option['algorithm'] + '/' + self.option['agg_algorithm'] + '/' + 'attacked_class_{}/dirty_rate_{}/type_noise_{}/proportion_{}/num_malicious_{}/'.format( len(self.option['attacked_class']), self.option['dirty_rate'][0],self.option['outside_noise'], self.option['proportion']*50, self.option['num_malicious'])
+        # plot_updates_components(copy.deepcopy(self.model), peer_grads, peers_types, peers_id=self.selected_clients, epoch=round, proportion = self.option['proportion'], attacked_class = self.option['attacked_class'],dirty_rate=self.option['dirty_rate'][0],num_malicious=self.option['num_malicious'], agg_algorithm=self.option['agg_algorithm'], algorithm= self.option['algorithm'], type_noise=self.option['outside_noise'])
+        # path_js = self.option['algorithm'] + '/' + self.option['agg_algorithm'] + '/' + 'attacked_class_{}/dirty_rate_{}/type_noise_{}/proportion_{}/num_malicious_{}/'.format( len(self.option['attacked_class']), self.option['dirty_rate'][0],self.option['outside_noise'], self.option['proportion']*50, self.option['num_malicious'])
+        path_js = self.log_folder + '/' + self.option['task'] + '/' + self.option['noise_type'] + '/' + 'num_malicious_{}/dirty_rate_{}/attacked_class_{}/'.format( self.option['num_malicious'], self.option['dirty_rate'][0], len(self.option['attacked_class'])) + self.option['agg_algorithm'] + '/'
+        if not os.path.exists(path_js):
+            os.makedirs(path_js)
         with open(path_js + 'confidence_score.json', 'w') as json_file:
             json.dump(self.confidence_score, json_file, indent=4)
             
@@ -424,7 +430,7 @@ class MPBasicServer(BasicServer):
         # self.model = self.aggregate(models, p = [1.0 * self.client_vols[cid]/self.data_vol for cid in self.selected_clients])
         # if self.current_round != -1:
         if self.agg_option == 'mean':
-            if self.option['agg_algorithm'] == "Kmean_acc_0.02_aggregate_attacker_by_cs_(csi+0.1)*ni/N":
+            if self.option['agg_algorithm'] == "Kmean_acc_0.02_aggregate_attacker_by_cs_(csi+0.1)":
                 path_ = self.option['algorithm'] + '/' + self.option['agg_algorithm'] + '/' + 'attacked_class_{}/dirty_rate_{}/type_noise_{}/proportion_{}/num_malicious_{}/csv/{}'.format( len(self.option['attacked_class']), self.option['dirty_rate'][0],self.option['outside_noise'], self.option['proportion']*50, self.option['num_malicious'], 0)
                 file = f"epoch{round}.csv"
                 path_csv = os.path.join(path_, file)
@@ -511,7 +517,7 @@ class MPBasicServer(BasicServer):
                         max_cs = max(acc_before_trains)
                         min_cs = min(acc_before_trains)
                         csi = (acc_before_trains[idx] - min_cs)/(max_cs-min_cs)
-                        # if self.option['agg_algorithm'] == "pareto_peak_or_cs_choose_normal_aggregate_attacker_by_cs_(csi+0.1)*ni/N":
+                        # if self.option['agg_algorithm'] == "peak_or_cs_choose_normal_aggregate_attacker_by_cs_(csi+0.1)":
                         p_.append((csi+0.1) * self.client_vols[client]/sum_sample)
                         # else:
                         #     p_.append(csi * self.client_vols[client]/sum_sample)
@@ -542,7 +548,7 @@ class MPBasicServer(BasicServer):
                 with open(path_ + 'log.json', 'w') as json_file:
                     json.dump(listObj, json_file, indent=4)
                     
-            elif self.option['agg_algorithm'] != "pareto_fedavg":  
+            elif self.option['agg_algorithm'] != "fedavg":  
                 list_peak = []
                 list_confidence_score = []
                 
@@ -581,7 +587,7 @@ class MPBasicServer(BasicServer):
                 normal_models = []
                 list_acc_attacker = []
                 for idx, client in enumerate(self.selected_clients):
-                    if self.option['agg_algorithm'] == "pareto_peak_or_cs_choose_normal":
+                    if self.option['agg_algorithm'] == "peak_or_cs_choose_normal":
                         if list_confidence_score[idx] > mean_cs_global or list_peak[idx] < peak_global:
                             predicted_normal.append(client)
                             list_peak_normal.append(list_peak[idx])
@@ -590,7 +596,7 @@ class MPBasicServer(BasicServer):
                             predicted_attacker.append(client)
                             list_peak_attacker.append(list_peak[idx])
                             list_cs_attacker.append(list_confidence_score[idx])
-                    elif self.option['agg_algorithm'] == "pareto_peak_or_cs_remove_attacker": 
+                    elif self.option['agg_algorithm'] == "peak_or_cs_remove_attacker": 
                         if list_confidence_score[idx] < mean_cs_global or list_peak[idx] > peak_global:
                             predicted_attacker.append(client)
                             list_peak_attacker.append(list_peak[idx])
@@ -599,7 +605,7 @@ class MPBasicServer(BasicServer):
                             predicted_normal.append(client)
                             list_peak_normal.append(list_peak[idx])
                             list_cs_normal.append(list_confidence_score[idx])
-                    elif self.option['agg_algorithm'] == "pareto_peak_and_cs_choose_normal": 
+                    elif self.option['agg_algorithm'] == "peak_and_cs_choose_normal": 
                         if list_confidence_score[idx] > mean_cs_global and list_peak[idx] < peak_global:
                             predicted_normal.append(client)
                             list_peak_normal.append(list_peak[idx])
@@ -608,7 +614,7 @@ class MPBasicServer(BasicServer):
                             predicted_attacker.append(client)
                             list_peak_attacker.append(list_peak[idx])
                             list_cs_attacker.append(list_confidence_score[idx])
-                    elif self.option['agg_algorithm'] == "pareto_peak_and_cs_remove_attacker": 
+                    elif self.option['agg_algorithm'] == "peak_and_cs_remove_attacker": 
                         if list_confidence_score[idx] < mean_cs_global and list_peak[idx] > peak_global:
                             predicted_attacker.append(client)
                             list_peak_attacker.append(list_peak[idx])
@@ -617,7 +623,7 @@ class MPBasicServer(BasicServer):
                             predicted_normal.append(client)
                             list_peak_normal.append(list_peak[idx])
                             list_cs_normal.append(list_confidence_score[idx])
-                    elif self.option['agg_algorithm'] == "pareto_peak_compare_avg_peak": 
+                    elif self.option['agg_algorithm'] == "peak_compare_avg_peak": 
                         if list_peak[idx] > peak_global:
                             predicted_attacker.append(client)
                             list_peak_attacker.append(list_peak[idx])
@@ -626,7 +632,7 @@ class MPBasicServer(BasicServer):
                             predicted_normal.append(client)
                             list_peak_normal.append(list_peak[idx])
                             list_cs_normal.append(list_confidence_score[idx])
-                    elif self.option['agg_algorithm'] == "pareto_cs_compare_avg_cs":
+                    elif self.option['agg_algorithm'] == "cs_compare_avg_cs":
                         if list_confidence_score[idx] < mean_cs_global:
                             predicted_attacker.append(client)
                             list_peak_attacker.append(list_peak[idx])
@@ -635,7 +641,7 @@ class MPBasicServer(BasicServer):
                             predicted_normal.append(client)
                             list_peak_normal.append(list_peak[idx])
                             list_cs_normal.append(list_confidence_score[idx])
-                    elif self.option['agg_algorithm'] == "pareto_remove_all_attacker_agg_all_clean":
+                    elif self.option['agg_algorithm'] == "remove_all_attacker_agg_all_clean":
                         if self.clients[client].train_data.client_type == "attacker":
                             predicted_attacker.append(client)
                             list_peak_attacker.append(list_peak[idx])
@@ -644,7 +650,7 @@ class MPBasicServer(BasicServer):
                             predicted_normal.append(client)
                             list_peak_normal.append(list_peak[idx])
                             list_cs_normal.append(list_confidence_score[idx])
-                    elif self.option['agg_algorithm'] == "pareto_aggregate_attacker_by_noise_rate_(1-pi)ni/N":
+                    elif self.option['agg_algorithm'] == "aggregate_attacker_by_noise_rate_(1-pi)":
                         if self.clients[client].train_data.client_type == "attacker":
                             predicted_attacker.append(client)
                             list_peak_attacker.append(list_peak[idx])
@@ -653,7 +659,7 @@ class MPBasicServer(BasicServer):
                             predicted_normal.append(client)
                             list_peak_normal.append(list_peak[idx])
                             list_cs_normal.append(list_confidence_score[idx])
-                    elif self.option['agg_algorithm'] == "pareto_aggregate_attacker_exactly_by_csi*ni/N":
+                    elif self.option['agg_algorithm'] == "aggregate_attacker_exactly_by_csi":
                         if self.clients[client].train_data.client_type == "attacker":
                             predicted_attacker.append(client)
                             list_peak_attacker.append(list_peak[idx])
@@ -662,19 +668,19 @@ class MPBasicServer(BasicServer):
                             predicted_normal.append(client)
                             list_peak_normal.append(list_peak[idx])
                             list_cs_normal.append(list_confidence_score[idx])
-                    elif self.option['agg_algorithm'] in ["pareto_aggregate_attacker_exactly_by_(csi+0.05)*ni/N",
-                                                          "pareto_aggregate_attacker_exactly_by_csi*ni/N",
-                                                          "pareto_aggregate_attacker_exactly_by_(csi/max_cs)*ni/N",
-                                                          "pareto_aggregate_attacker_exactly_by_(acci+0.05)*ni/N",
-                                                          "pareto_aggregate_attacker_exactly_by_(acci/(maxacc+0.05))*ni/N",
-                                                          "pareto_aggregate_attacker_exactly_by_(acc_before_trains[id] - 0.1)*ni/N",
-                                                          "pareto_aggregate_attacker_exactly_by_((csi+0.05)^2)*ni/N",
-                                                          "pareto_aggregate_attacker_exactly_by_((csi+0.05)^(1/2))*ni/N",
-                                                          "pareto_aggregate_attacker_exactly_by_((csi+0.05)^3)*ni/N",
-                                                          "pareto_aggregate_attacker_exactly_by_((csi+0.05)^(1/3))*ni/N",
-                                                          "pareto_aggregate_attacker_exactly_by_(tanh3(csi+0.05))*ni/N",
-                                                          "pareto_aggregate_attacker_exactly_by_(tanhe(csi+0.05))*ni/N",
-                                                          "pareto_aggregate_attacker_exactly_by_(tanhe(csi+0.05*mincs/maxcs))*ni/N"
+                    elif self.option['agg_algorithm'] in ["aggregate_attacker_exactly_by_(csi+0.05)",
+                                                          "aggregate_attacker_exactly_by_csi",
+                                                          "aggregate_attacker_exactly_by_(csi/max_cs)",
+                                                          "aggregate_attacker_exactly_by_(acci+0.05)",
+                                                          "aggregate_attacker_exactly_by_(acci/(maxacc+0.05))",
+                                                          "aggregate_attacker_exactly_by_(acc_before_trains[id] - 0.1)",
+                                                          "aggregate_attacker_exactly_by_((csi+0.05)^2)",
+                                                          "aggregate_attacker_exactly_by_((csi+0.05)^(1/2))",
+                                                          "aggregate_attacker_exactly_by_((csi+0.05)^3)",
+                                                          "aggregate_attacker_exactly_by_((csi+0.05)^(1/3))",
+                                                          "aggregate_attacker_exactly_by_(tanh3(csi+0.05))",
+                                                          "aggregate_attacker_exactly_by_(tanhe(csi+0.05))",
+                                                          "aggregate_attacker_exactly_by_(tanhe(csi+0.05*mincs/maxcs))"
                                                           ]:
                         if self.clients[client].train_data.client_type == "attacker":
                             predicted_attacker.append(client)
@@ -685,7 +691,9 @@ class MPBasicServer(BasicServer):
                             list_peak_normal.append(list_peak[idx])
                             list_cs_normal.append(list_confidence_score[idx])
                    
-                    elif self.option['agg_algorithm'] == "pareto_peak_and_cs_choose_attacker_aggregate_attacker_by_cs_csi*ni/N":
+                    elif self.option['agg_algorithm'] in ["peak_and_cs_choose_attacker_aggregate_attacker_by_cs_csi",
+                                                          "peak_and_cs_choose_attacker_aggregate_attacker_by_(tanhe(csi+0.05*mincs/maxcs))",
+                                                          "peak_and_cs_choose_attacker_aggregate_attacker_by_(csi+0.05*mincs/maxcs)"]:
                         if list_confidence_score[idx] < mean_cs_global and list_peak[idx] > peak_global:
                             predicted_attacker.append(client)
                             list_peak_attacker.append(list_peak[idx])
@@ -694,10 +702,10 @@ class MPBasicServer(BasicServer):
                             predicted_normal.append(client)
                             list_peak_normal.append(list_peak[idx])
                             list_cs_normal.append(list_confidence_score[idx])
-                    elif self.option['agg_algorithm'] in ["pareto_peak_or_cs_choose_normal_aggregate_attacker_by_cs_csi*ni/N",
-                                                          "pareto_peak_or_cs_choose_normal_aggregate_attacker_by_cs_(csi+0.05)*ni/N",
-                                                          "pareto_peak_or_cs_choose_normal_aggregate_attacker_by_(tanhe(csi+0.05*mincs/maxcs))*ni/N",
-                                                          "pareto_peak_or_cs_choose_normal_aggregate_attacker_by_cs_(csi+0.05*mincs/maxcs)*ni/N"] :
+                    elif self.option['agg_algorithm'] in ["peak_or_cs_choose_normal_aggregate_attacker_by_cs_csi",
+                                                          "peak_or_cs_choose_normal_aggregate_attacker_by_cs_(csi+0.05)",
+                                                          "peak_or_cs_choose_normal_aggregate_attacker_by_(tanhe(csi+0.05*mincs/maxcs))",
+                                                          "peak_or_cs_choose_normal_aggregate_attacker_by_cs_(csi+0.05*mincs/maxcs)"] :
                         if list_confidence_score[idx] > mean_cs_global or list_peak[idx] < peak_global:
                             predicted_normal.append(client)
                             list_peak_normal.append(list_peak[idx])
@@ -706,7 +714,7 @@ class MPBasicServer(BasicServer):
                             predicted_attacker.append(client)
                             list_peak_attacker.append(list_peak[idx])
                             list_cs_attacker.append(list_confidence_score[idx])
-                    elif self.option['agg_algorithm'] == "pareto_peak_choose_attacker_aggregate_attacker_by_cs_csi*ni/N":
+                    elif self.option['agg_algorithm'] == "peak_choose_attacker_aggregate_attacker_by_cs_csi":
                         if list_peak[idx] > peak_global:
                             predicted_attacker.append(client)
                             list_peak_attacker.append(list_peak[idx])
@@ -715,7 +723,7 @@ class MPBasicServer(BasicServer):
                             predicted_normal.append(client)
                             list_peak_normal.append(list_peak[idx])
                             list_cs_normal.append(list_confidence_score[idx])
-                    elif self.option['agg_algorithm'] == "pareto_cs_choose_attacker_aggregate_attacker_by_cs_csi*ni/N":
+                    elif self.option['agg_algorithm'] == "cs_choose_attacker_aggregate_attacker_by_cs_csi":
                         if list_confidence_score[idx] < mean_cs_global:
                             predicted_attacker.append(client)
                             list_peak_attacker.append(list_peak[idx])
@@ -724,7 +732,7 @@ class MPBasicServer(BasicServer):
                             predicted_normal.append(client)
                             list_peak_normal.append(list_peak[idx])
                             list_cs_normal.append(list_confidence_score[idx])
-                    elif self.option['agg_algorithm'] == "pareto_aggregate_attacker_by_noise_rate_(1-pi+ni/N)":
+                    elif self.option['agg_algorithm'] == "aggregate_attacker_by_noise_rate_(1-pi+)":
                         if self.clients[client].train_data.client_type == "attacker":
                             predicted_attacker.append(client)
                             list_peak_attacker.append(list_peak[idx])
@@ -733,7 +741,7 @@ class MPBasicServer(BasicServer):
                             predicted_normal.append(client)
                             list_peak_normal.append(list_peak[idx])
                             list_cs_normal.append(list_confidence_score[idx])
-                    elif self.option['agg_algorithm'] == "pareto_remove_attacker_have_classes_of_clean":
+                    elif self.option['agg_algorithm'] == "remove_attacker_have_classes_of_clean":
                         client_classes = [[5, 6, 9], [0, 2, 6], [2, 3, 9], [2, 5, 6], [2, 7],
                                           [1, 3, 8], [0, 2, 7], [0, 5, 7], [6, 7, 8], [1, 3, 4],
                                           [7, 9], [0, 4, 5], [2, 8], [2, 8], [6, 8], [0, 1, 3],
@@ -760,7 +768,7 @@ class MPBasicServer(BasicServer):
                             list_cs_normal.append(list_confidence_score[idx])
                 
                 
-                if self.option['agg_algorithm'] == "pareto_remove_attacker_have_classes_of_clean":
+                if self.option['agg_algorithm'] == "remove_attacker_have_classes_of_clean":
                     print(f"Predicted normal: {predicted_normal}")
                     print(f"Predicted attacker: {predicted_attacker}")
                     normal_classes = []
@@ -783,23 +791,24 @@ class MPBasicServer(BasicServer):
                         p_.append(1.0 * self.client_vols[client]/sum_sample)
                     else:
                         p_.append(0)
-                if self.option['agg_algorithm'] == "pareto_aggregate_attacker_by_noise_rate_(1-pi)ni/N":
+                if self.option['agg_algorithm'] == "aggregate_attacker_by_noise_rate_(1-pi)":
                     p_ = []
                     sum_sample = sum([self.client_vols[cid] for cid in self.selected_clients])
                     for client in self.selected_clients:
                         p_.append((1-self.clients[client].train_data.dirty_rate)*self.client_vols[client]/sum_sample)
-                if self.option['agg_algorithm'] == "pareto_aggregate_attacker_by_noise_rate_(1-pi+ni/N)":
+                if self.option['agg_algorithm'] == "aggregate_attacker_by_noise_rate_(1-pi+)":
                     p_ = []
                     sum_sample = sum([self.client_vols[cid] for cid in self.selected_clients])
                     for client in self.selected_clients:
                         p_.append(1-self.clients[client].train_data.dirty_rate + self.client_vols[client]/sum_sample)
-                if self.option['agg_algorithm'] in ["pareto_peak_and_cs_choose_attacker_aggregate_attacker_by_cs_csi*ni/N", 
-                                                    "pareto_peak_or_cs_choose_normal_aggregate_attacker_by_cs_csi*ni/N",
-                                                    "pareto_peak_choose_attacker_aggregate_attacker_by_cs_csi*ni/N",
-                                                    "pareto_cs_choose_attacker_aggregate_attacker_by_cs_csi*ni/N",
-                                                    "pareto_aggregate_attacker_exactly_by_csi*ni/N",
-                                                    "pareto_peak_or_cs_choose_normal_aggregate_attacker_by_cs_(csi+0.05)*ni/N",
-                                                    "pareto_peak_or_cs_choose_normal_aggregate_attacker_by_cs_(csi+0.05*mincs/maxcs)*ni/N"]:
+                if self.option['agg_algorithm'] in ["peak_and_cs_choose_attacker_aggregate_attacker_by_cs_csi", 
+                                                    "peak_or_cs_choose_normal_aggregate_attacker_by_cs_csi",
+                                                    "peak_choose_attacker_aggregate_attacker_by_cs_csi",
+                                                    "cs_choose_attacker_aggregate_attacker_by_cs_csi",
+                                                    "aggregate_attacker_exactly_by_csi",
+                                                    "peak_or_cs_choose_normal_aggregate_attacker_by_cs_(csi+0.05)",
+                                                    "peak_or_cs_choose_normal_aggregate_attacker_by_cs_(csi+0.05*mincs/maxcs)",
+                                                    "peak_and_cs_choose_attacker_aggregate_attacker_by_(csi+0.05*mincs/maxcs)"]:
                     p_ = []
                     sum_sample = sum([self.client_vols[cid] for cid in self.selected_clients])
                     id_attacker = 0
@@ -810,15 +819,16 @@ class MPBasicServer(BasicServer):
                             max_cs = max(list_confidence_score)
                             min_cs = min(list_confidence_score)
                             csi = (list_cs_attacker[id_attacker] - min_cs)/(max_cs-min_cs)
-                            if self.option['agg_algorithm'] == "pareto_peak_or_cs_choose_normal_aggregate_attacker_by_cs_(csi+0.05)*ni/N":
+                            if self.option['agg_algorithm'] == "peak_or_cs_choose_normal_aggregate_attacker_by_cs_(csi+0.05)":
                                 p_.append((csi+0.05) * self.client_vols[client]/sum_sample)
-                            elif self.option['agg_algorithm'] == "pareto_peak_or_cs_choose_normal_aggregate_attacker_by_cs_(csi+0.05*mincs/maxcs)*ni/N":
+                            elif self.option['agg_algorithm'] in ["peak_or_cs_choose_normal_aggregate_attacker_by_cs_(csi+0.05*mincs/maxcs)",
+                                                                  "peak_and_cs_choose_attacker_aggregate_attacker_by_(csi+0.05*mincs/maxcs)"]:
                                 p_.append((csi+0.05*min_cs/max_cs) * self.client_vols[client]/sum_sample)
                             else:
                                 p_.append(csi * self.client_vols[client]/sum_sample)
 
                             id_attacker +=1
-                if self.option['agg_algorithm'] == "pareto_aggregate_attacker_exactly_by_(csi+0.05)*ni/N":
+                if self.option['agg_algorithm'] == "aggregate_attacker_exactly_by_(csi+0.05)":
                     p_ = []
                     sum_sample = sum([self.client_vols[cid] for cid in self.selected_clients])
                     id_attacker = 0
@@ -831,7 +841,7 @@ class MPBasicServer(BasicServer):
                             csi = (list_cs_attacker[id_attacker] - min_cs)/(max_cs-min_cs)
                             p_.append((csi+0.05) * self.client_vols[client]/sum_sample)
                             id_attacker +=1
-                if self.option['agg_algorithm'] == "pareto_aggregate_attacker_exactly_by_((csi+0.05)^2)*ni/N":
+                if self.option['agg_algorithm'] == "aggregate_attacker_exactly_by_((csi+0.05)^2)":
                     p_ = []
                     sum_sample = sum([self.client_vols[cid] for cid in self.selected_clients])
                     id_attacker = 0
@@ -844,7 +854,7 @@ class MPBasicServer(BasicServer):
                             csi = (list_cs_attacker[id_attacker] - min_cs)/(max_cs-min_cs)
                             p_.append(((csi+0.05)**2) * self.client_vols[client]/sum_sample)
                             id_attacker +=1
-                if self.option['agg_algorithm'] == "pareto_aggregate_attacker_exactly_by_((csi+0.05)^(1/2))*ni/N":
+                if self.option['agg_algorithm'] == "aggregate_attacker_exactly_by_((csi+0.05)^(1/2))":
                     p_ = []
                     sum_sample = sum([self.client_vols[cid] for cid in self.selected_clients])
                     id_attacker = 0
@@ -857,7 +867,7 @@ class MPBasicServer(BasicServer):
                             csi = (list_cs_attacker[id_attacker] - min_cs)/(max_cs-min_cs)
                             p_.append(((csi+0.05)**(1/2.0)) * self.client_vols[client]/sum_sample)
                             id_attacker +=1 
-                if self.option['agg_algorithm'] == "pareto_aggregate_attacker_exactly_by_((csi+0.05)^3)*ni/N":
+                if self.option['agg_algorithm'] == "aggregate_attacker_exactly_by_((csi+0.05)^3)":
                     p_ = []
                     sum_sample = sum([self.client_vols[cid] for cid in self.selected_clients])
                     id_attacker = 0
@@ -870,7 +880,7 @@ class MPBasicServer(BasicServer):
                             csi = (list_cs_attacker[id_attacker] - min_cs)/(max_cs-min_cs)
                             p_.append(((csi+0.05)**(3)) * self.client_vols[client]/sum_sample)
                             id_attacker +=1
-                if self.option['agg_algorithm'] == "pareto_aggregate_attacker_exactly_by_((csi+0.05)^(1/3))*ni/N":
+                if self.option['agg_algorithm'] == "aggregate_attacker_exactly_by_((csi+0.05)^(1/3))":
                     p_ = []
                     sum_sample = sum([self.client_vols[cid] for cid in self.selected_clients])
                     id_attacker = 0
@@ -883,7 +893,7 @@ class MPBasicServer(BasicServer):
                             csi = (list_cs_attacker[id_attacker] - min_cs)/(max_cs-min_cs)
                             p_.append(((csi+0.05)**(1/3.0)) * self.client_vols[client]/sum_sample)
                             id_attacker +=1
-                if self.option['agg_algorithm'] == "pareto_aggregate_attacker_exactly_by_(tanh3(csi+0.05))*ni/N":
+                if self.option['agg_algorithm'] == "aggregate_attacker_exactly_by_(tanh3(csi+0.05))":
                     p_ = []
                     sum_sample = sum([self.client_vols[cid] for cid in self.selected_clients])
                     id_attacker = 0
@@ -896,7 +906,7 @@ class MPBasicServer(BasicServer):
                             csi = (list_cs_attacker[id_attacker] - min_cs)/(max_cs-min_cs)
                             p_.append((np.tanh(3*(csi+0.05))) * self.client_vols[client]/sum_sample)
                             id_attacker +=1
-                if self.option['agg_algorithm'] == "pareto_aggregate_attacker_exactly_by_(tanhe(csi+0.05))*ni/N":
+                if self.option['agg_algorithm'] == "aggregate_attacker_exactly_by_(tanhe(csi+0.05))":
                     p_ = []
                     sum_sample = sum([self.client_vols[cid] for cid in self.selected_clients])
                     id_attacker = 0
@@ -909,8 +919,9 @@ class MPBasicServer(BasicServer):
                             csi = (list_cs_attacker[id_attacker] - min_cs)/(max_cs-min_cs)
                             p_.append((np.tanh(np.exp(1)*(csi+0.05)) * self.client_vols[client]/sum_sample))
                             id_attacker +=1
-                if self.option['agg_algorithm'] in ["pareto_aggregate_attacker_exactly_by_(tanhe(csi+0.05*mincs/maxcs))*ni/N",
-                                                    "pareto_peak_or_cs_choose_normal_aggregate_attacker_by_(tanhe(csi+0.05*mincs/maxcs))*ni/N"]:
+                if self.option['agg_algorithm'] in ["aggregate_attacker_exactly_by_(tanhe(csi+0.05*mincs/maxcs))",
+                                                    "peak_or_cs_choose_normal_aggregate_attacker_by_(tanhe(csi+0.05*mincs/maxcs))",
+                                                    "peak_and_cs_choose_attacker_aggregate_attacker_by_(tanhe(csi+0.05*mincs/maxcs))"]:
                     p_ = []
                     sum_sample = sum([self.client_vols[cid] for cid in self.selected_clients])
                     id_attacker = 0
@@ -923,7 +934,7 @@ class MPBasicServer(BasicServer):
                             csi = (list_cs_attacker[id_attacker] - min_cs)/(max_cs-min_cs)
                             p_.append((np.tanh(np.exp(1)*(csi+0.05*min_cs/max_cs)) * self.client_vols[client]/sum_sample))
                             id_attacker +=1
-                if self.option['agg_algorithm'] == "pareto_aggregate_attacker_exactly_by_(csi/max_cs)*ni/N":
+                if self.option['agg_algorithm'] == "aggregate_attacker_exactly_by_(csi/max_cs)":
                     p_ = []
                     sum_sample = sum([self.client_vols[cid] for cid in self.selected_clients])
                     id_attacker = 0
@@ -937,7 +948,7 @@ class MPBasicServer(BasicServer):
                             p_.append((csi) * self.client_vols[client]/sum_sample)
                             id_attacker +=1
 
-                if self.option['agg_algorithm'] == "pareto_aggregate_attacker_exactly_by_(acci+0.05)*ni/N":
+                if self.option['agg_algorithm'] == "aggregate_attacker_exactly_by_(acci+0.05)":
                     p_ = []
                     sum_sample = sum([self.client_vols[cid] for cid in self.selected_clients])
                     for id,client in enumerate(self.selected_clients):
@@ -948,7 +959,7 @@ class MPBasicServer(BasicServer):
                             min_cs = min(acc_before_trains)
                             csi = (acc_before_trains[id] - min_cs)/(max_cs-min_cs)
                             p_.append((csi+0.05) * self.client_vols[client]/sum_sample)
-                if self.option['agg_algorithm'] == "pareto_aggregate_attacker_exactly_by_(acc_before_trains[id] - 0.1)*ni/N":
+                if self.option['agg_algorithm'] == "aggregate_attacker_exactly_by_(acc_before_trains[id] - 0.1)":
                     p_ = []
                     sum_sample = sum([self.client_vols[cid] for cid in self.selected_clients])
                     for id,client in enumerate(self.selected_clients):
@@ -959,7 +970,7 @@ class MPBasicServer(BasicServer):
                             # min_cs = min(acc_before_trains)
                             # csi = (acc_before_trains[id] - min_cs)/(max_cs-min_cs)
                             p_.append(abs(acc_before_trains[id] - 0.1) * self.client_vols[client]/sum_sample)
-                if self.option['agg_algorithm'] == "pareto_aggregate_attacker_exactly_by_(acci/(maxacc+0.05))*ni/N":
+                if self.option['agg_algorithm'] == "aggregate_attacker_exactly_by_(acci/(maxacc+0.05))":
                     p_ = []
                     sum_sample = sum([self.client_vols[cid] for cid in self.selected_clients])
                     for id,client in enumerate(self.selected_clients):
@@ -981,16 +992,17 @@ class MPBasicServer(BasicServer):
                     # self.model = self.aggregate(models, p = [1.0 * self.client_vols[cid]/sum_sample for cid in predicted_normal])
                     self.model = self.aggregate(models, p = p_)
                 
-                path_ = self.option['algorithm'] + '/' + self.option['agg_algorithm'] + '/' + 'attacked_class_{}/dirty_rate_{}/type_noise_{}/proportion_{}/num_malicious_{}/csv/{}'.format( len(self.option['attacked_class']), self.option['dirty_rate'][0],self.option['outside_noise'], self.option['proportion']*50, self.option['num_malicious'], 0)
-                file = f"epoch{round}.csv"
-                path_csv = os.path.join(path_, file)
-                df = pd.read_csv(path_csv, index_col=0)
+                # path_ = self.option['algorithm'] + '/' + self.option['agg_algorithm'] + '/' + 'attacked_class_{}/dirty_rate_{}/type_noise_{}/proportion_{}/num_malicious_{}/csv/{}'.format( len(self.option['attacked_class']), self.option['dirty_rate'][0],self.option['outside_noise'], self.option['proportion']*50, self.option['num_malicious'], 0)
+                # file = f"epoch{round}.csv"
+                # path_csv = os.path.join(path_, file)
+                # df = pd.read_csv(path_csv, index_col=0)
                 
-                Y = df.loc[:,["target"]].to_numpy()
+                # Y = df.loc[:,["target"]].to_numpy()
                 attacker_idx = []
-                for y, idx in enumerate(self.selected_clients):
-                    if Y[y] == "attacker":
-                        attacker_idx.append(idx)
+                for idx, client in enumerate(self.selected_clients):
+                    # if Y[y] == "attacker":
+                    if self.clients[client].train_data.client_type == "attacker":
+                        attacker_idx.append(client)
                 # attacker_idx = np.nonzero(Y_)[0]        
                 print(f"Attacker idx: {attacker_idx}")
                 print(f"Predicted attacker: {predicted_attacker}")
@@ -1024,7 +1036,7 @@ class MPBasicServer(BasicServer):
                 "wrong prediction attacker": [int(i) for i in wrong_pred_attacker],
                 "wrong prediction normal": [int(i) for i in wrong_pred_normal],
                 }
-                path_ = self.option['algorithm'] + '/' + self.option['agg_algorithm'] + '/' + 'attacked_class_{}/dirty_rate_{}/type_noise_{}/proportion_{}/num_malicious_{}/'.format( len(self.option['attacked_class']), self.option['dirty_rate'][0],self.option['outside_noise'], self.option['proportion']*50, self.option['num_malicious'])
+                path_ = self.log_folder + '/' + self.option['task'] + '/' + self.option['noise_type'] + '/' + 'num_malicious_{}/dirty_rate_{}/attacked_class_{}/'.format( self.option['num_malicious'], self.option['dirty_rate'][0], len(self.option['attacked_class'])) + self.option['agg_algorithm'] + '/'
                 listObj = []
                 if round != 1:
                     with open(path_ + 'log.json') as fp:
@@ -1261,7 +1273,7 @@ class MPBasicServer(BasicServer):
                 for id,client in enumerate(self.selected_clients):
                     all_client[int(client)] = [float(self.clients[client].train_data.dirty_rate), float(loss_before_trains[id]), float(acc_before_trains[id]), float(avg_confidence_score_list[id])]
                 print("client_rate", all_client)
-                path_ = self.option['algorithm'] + '/' + self.option['agg_algorithm'] + '/' + 'attacked_class_{}/dirty_rate_{}/type_noise_{}/proportion_{}/num_malicious_{}/'.format( len(self.option['attacked_class']), self.option['dirty_rate'][0],self.option['outside_noise'], self.option['proportion']*50, self.option['num_malicious'])
+                path_ = self.log_folder + '/' + self.option['task'] + '/' + self.option['noise_type'] + '/' + 'num_malicious_{}/dirty_rate_{}/attacked_class_{}/'.format( self.option['num_malicious'], self.option['dirty_rate'][0], len(self.option['attacked_class'])) + self.option['agg_algorithm'] + '/'
                 listObj = []
                 if round != 1:
                     with open(path_ + 'log.json') as fp:
@@ -1470,10 +1482,10 @@ class MPBasicClient(BasicClient):
             print(len(self.train_data.idxs))
             data_loader = self.calculator.get_data_loader(self.train_data, batch_size=self.batch_size)
             optimizer = self.calculator.get_optimizer(self.optimizer_name, model, lr = self.learning_rate, weight_decay=self.weight_decay, momentum=self.momentum)
-            peer_grad = []
-            # confidence_score_dict = {}
-            # for idx in self.train_data.idxs:
-            #     confidence_score_dict[idx] = 0
+            # peer_grad = []
+            # # confidence_score_dict = {}
+            # # for idx in self.train_data.idxs:
+            # #     confidence_score_dict[idx] = 0
             for iter in range(self.epochs):
                 for batch_id, batch_data in enumerate(data_loader):
                     model.zero_grad()
@@ -1490,12 +1502,12 @@ class MPBasicClient(BasicClient):
                     #     print('idx_list', idx_list)
                     
                     # Get gradient
-                    for i, (name, params) in enumerate(model.named_parameters()):
-                        if params.requires_grad:
-                            if iter == 0 and batch_id == 0:
-                                peer_grad.append(params.grad.clone())
-                            else:
-                                peer_grad[i]+= params.grad.clone()
+                    # for i, (name, params) in enumerate(model.named_parameters()):
+                    #     if params.requires_grad:
+                    #         if iter == 0 and batch_id == 0:
+                    #             peer_grad.append(params.grad.clone())
+                    #         else:
+                    #             peer_grad[i]+= params.grad.clone()
                     optimizer.step()
                     # for i,idx in enumerate(idx_list):
                     #     confidence_score_dict[idx]+=confidence_score_list[i]
@@ -1507,7 +1519,7 @@ class MPBasicClient(BasicClient):
             # train function at clients
             # if self.option['percent_noise_remove'] != 0:
             #     self.train_data.reverse_idx()
-            return peer_grad#, confidence_score_dict
+            # return peer_grad#, confidence_score_dict
         else:
             model.train()
             
@@ -1624,9 +1636,11 @@ class MPBasicClient(BasicClient):
         # acc_local, loss_local = self.test(model)
         # cpkg = self.pack(model, data_idxs, Acc_global, acc_local, uncertainty)
         acc_before_train, loss_before_train,confidence_score_dict = self.test(model, device)
-        peer_grad = self.train(model, device, round)
+        self.train(model, device, round)
+        # peer_grad = self.train(model, device, round)
         # acc_before_train, loss_before_train,confidence_score_dict = self.test(model, device)
-        cpkg = self.pack(model, peer_grad, acc_before_train, loss_before_train, confidence_score_dict)
+        # cpkg = self.pack(model, peer_grad, acc_before_train, loss_before_train, confidence_score_dict)
+        cpkg = self.pack(model, acc_before_train, loss_before_train, confidence_score_dict)
         
         return cpkg
 

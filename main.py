@@ -88,8 +88,8 @@ def main():
         wandb.init(
             project="dirtyFL", 
             entity="aiotlab",
-            group=f"{option['task']}_{option['noise_type']}_num_malicious_{option['num_malicious']}_proportion_{option['proportion']}_dirty_rate_{option['dirty_rate'][0]}",
-            name=f"{option['aggregate']}_{option['agg_algorithm']}",
+            group=f"{option['task']}_{option['noise_type']}",
+            name=f"num_malicious_{option['num_malicious']}_dirty_rate_{option['dirty_rate'][0]}_attacked_class_{len(option['attacked_class'])}_{option['agg_algorithm']}",
             config=option
         )
         

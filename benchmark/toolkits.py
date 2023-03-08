@@ -641,7 +641,7 @@ class CustomDataset(Dataset):
 import matplotlib.pyplot as plt
 import torchvision.transforms as T
 
-def imshow(img, dir = "pics", name="img.png"):
+def imshow(img, dir = "{self.option['log_folder']}/pics", name="img.png"):
     if not Path(name).exists():
         os.system(f"mkdir -p {dir}")
     # breakpoint()
@@ -719,7 +719,7 @@ class DirtyDataset(Dataset):
         # random.seed(self.seed) # apply this seed to img transforms
         image, label = self.dataset[self.idxs[item]]
         if self.client_type == "attacker":
-            # if label in self.option['attacked_class']:
+            if label in self.option['attacked_class']:
                 # torch.manual_seed(self.idxs[item])
                 # rand = torch.randn(1)
                 # if rand <= self.dirty_rate:
@@ -727,22 +727,22 @@ class DirtyDataset(Dataset):
                     # self.type_image_idx['noise'].add(self.idxs[item])
                     if self.noise_type == 'gaussian':
                         if DirtyDataset.count < 2:
-                            imshow(image, f"pics_noise_grad_{self.noise_type}", f"{self.idxs[item]}_before.png")
+                            imshow(image, f"{self.option['log_folder']}/pics/{self.noise_type}", f"{self.idxs[item]}_before.png")
                         torch.manual_seed(self.idxs[item])
-                        noise_image = torch.randn(image.size())
+                        noise_image = torch.randn(image.size()) + self.magnitude
                         # noise_image = self.blurrer(self.addgaussiannoise(self.rotater(noise_image)))
                         if self.option['outside_noise'] == 'inside':
                             noise_image += image
                         noise_image = (noise_image - torch.min(noise_image))/(torch.max(noise_image) - torch.min(noise_image))
                         if DirtyDataset.count < 2:
-                            imshow(noise_image, f"pics_noise_grad_{self.noise_type}", f"{self.idxs[item]}_after.png")
+                            imshow(noise_image, f"{self.option['log_folder']}/pics/{self.noise_type}", f"{self.idxs[item]}_after.png")
                             DirtyDataset.count += 1
                         return noise_image, label, self.idxs[item]
                     
                     #salt&peppernoise
                     elif self.noise_type == 'salt_pepper':
                         if DirtyDataset.count < 2:
-                            imshow(image, f"pics_noise_grad_{self.noise_type}", f"{self.idxs[item]}_before.png")
+                            imshow(image, f"{self.option['log_folder']}/pics/{self.noise_type}", f"{self.idxs[item]}_before.png")
                         torch.manual_seed(self.idxs[item])
                         noisy_mask = torch.randint(low=0, high=int(1/self.magnitude)+1, size=image.size())
                 
@@ -755,9 +755,37 @@ class DirtyDataset(Dataset):
                         noise_image[one_pixel] = 1.0
                     
                         if DirtyDataset.count < 2:
-                            imshow(noise_image, f"pics_noise_grad_{self.noise_type}", f"{self.idxs[item]}_after.png")
+                            imshow(noise_image, f"{self.option['log_folder']}/pics/{self.noise_type}", f"{self.idxs[item]}_after.png")
                             DirtyDataset.count += 1
                         return noise_image, label, self.idxs[item]
+                    
+                    #speckle noise
+                    elif self.noise_type == 'speckle':
+                        if DirtyDataset.count < 2:
+                            imshow(image, f"{self.option['log_folder']}/pics/{self.noise_type}", f"{self.idxs[item]}_before.png")
+                        torch.manual_seed(self.idxs[item])
+                        noisy_mask = torch.randn(image.size()) + self.magnitude
+                        
+                        noise_image = image * noisy_mask
+                        noise_image = (noise_image - torch.min(noise_image))/(torch.max(noise_image) - torch.min(noise_image))
+                        if DirtyDataset.count < 2:
+                            imshow(noise_image, f"{self.option['log_folder']}/pics/{self.noise_type}", f"{self.idxs[item]}_after.png")
+                            DirtyDataset.count += 1
+                        return noise_image, label, self.idxs[item]
+                    
+                    # poisson noise
+                    elif self.noise_type == 'poisson':
+                        if DirtyDataset.count < 2:
+                            imshow(image, f"{self.option['log_folder']}/pics/{self.noise_type}", f"{self.idxs[item]}_before.png")
+                        torch.manual_seed(self.idxs[item])
+                        noise_mask = torch.poisson(torch.rand(image.size())*self.magnitude)
+                        noise_image = image + noise_mask
+                        noise_image = (noise_image - torch.min(noise_image))/(torch.max(noise_image) - torch.min(noise_image))
+                        if DirtyDataset.count < 2:
+                            imshow(noise_image, f"{self.option['log_folder']}/pics/{self.noise_type}", f"{self.idxs[item]}_after.png")
+                            DirtyDataset.count += 1
+                        return noise_image, label, self.idxs[item]
+                    
         #         else:
         #             self.type_image_idx['clean'].add(self.idxs[item])
         #     else:
@@ -767,7 +795,7 @@ class DirtyDataset(Dataset):
         return image, label, self.idxs[item]
         # if self.idxs[item] in self.dirty_dataidx:
         #     if DirtyDataset.count < 2:
-        #         imshow(image, f"pics_noise_{self.noise_type}", f"{self.idxs[item]}_before.png")
+        #         imshow(image, f"{self.option['log_folder']}/pics/noise_{self.noise_type}", f"{self.idxs[item]}_before.png")
         #     # # image = image + self.noise
             
         #     #gaussian noise
@@ -811,7 +839,7 @@ class DirtyDataset(Dataset):
         #         pass
         #     # self.dirty_dataidx.remove(self.idxs[item])
         #     if DirtyDataset.count < 2:
-        #         imshow(noise_image, f"pics_noise_{self.noise_type}", f"{self.idxs[item]}_after.png")
+        #         imshow(noise_image, f"{self.option['log_folder']}/pics/noise_{self.noise_type}", f"{self.idxs[item]}_after.png")
         #         DirtyDataset.count += 1
             
         #     return noise_image, label
