@@ -24,7 +24,8 @@ wandb/
 benchmark/pilldataset/data/pill3*
 invest/
 pics*
-results/checkpoints
+results/checkpoints/*
+!results/checkpoints/.gitkeep
 grad
 grad0
 grad5

@@ -33,11 +33,17 @@ class Client(MPBasicClient):
                     # original_loss = self.calculator.get_loss(model, batch_data, device)
                     original_loss = self.calculator.get_loss_not_uncertainty(model, batch_data, device)
                     # proximal term
+<<<<<<< HEAD
                     loss_proximal = 0.0
                     for pm, ps in zip(model.parameters(), src_model.parameters()):
                         loss_proximal += torch.sum(torch.pow(pm.data-ps.data,2))
                     print(original_loss)
                     print(loss_proximal)
+=======
+                    loss_proximal = 0
+                    for pm, ps in zip(model.parameters(), src_model.parameters()):
+                        loss_proximal += torch.sum(torch.pow(pm-ps,2))
+>>>>>>> 2ae7212873d8c88e4f67d0903edd91ac963e0479
                     loss = original_loss + 0.5 * self.mu * loss_proximal                #
                     loss.backward()
                     for i, (name, params) in enumerate(model.named_parameters()):
