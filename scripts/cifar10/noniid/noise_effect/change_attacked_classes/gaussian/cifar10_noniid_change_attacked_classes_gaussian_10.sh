@@ -2,7 +2,7 @@
 #$ -cwd
 #$ -l rt_G.small=1
 #$ -l h_rt=36:00:00
-#$ -o /home/aaa10078nj/Federated_Learning/Hung_perFL/logs/cifar10/$JOB_NAME_$JOB_ID.log
+#$ -o /home/aaa10078nj/Federated_Learning/Cuong_AttackFL/logs/cifar10/$JOB_NAME_$JOB_ID.log
 #$ -j y
 
 source /etc/profile.d/modules.sh
@@ -35,7 +35,7 @@ ATTACKED_CLASS=(0 1 2 3 4 5 6 7 8 9)
 AGG_ALGORITHM="fedavg"
 OUTSIDE_NOISE="inside"
 WANDB=1
-ROUND=300
+ROUND=1000
 EPOCH_PER_ROUND=5
 BATCH=64
 PROPOTION=0.2
