@@ -119,7 +119,7 @@ def initialize(option):
     if bmk_name == "pilldataset":
         task_reader = getattr(importlib.import_module(bmk_core_path), 'TaskReader')(taskpath=option['dataidx_filename'], data_folder=option['data_folder'],dataidx_path=option['dataidx_path'])
     elif bmk_name == "dirtymnist":
-        task_reader = getattr(importlib.import_module(bmk_core_path), 'TaskReader')(taskpath=option['dataidx_filename'], noise_magnitude=option['noise_magnitude'], dirty_rate=option['dirty_rate'], data_folder=option['data_folder'])
+        task_reader = getattr(importlib.import_module(bmk_core_path), 'TaskReader')(taskpath=option['dataidx_filename'], noise_magnitude=option['noise_magnitude'], dirty_rate=option['dirty_rate'], data_folder=option['data_folder'], noise_type=option['noise_type'],option=option)
     elif bmk_name == "dirtycifar10":
         task_reader = getattr(importlib.import_module(bmk_core_path), 'TaskReader')(taskpath=option['dataidx_filename'], noise_magnitude=option['noise_magnitude'], dirty_rate=option['dirty_rate'], data_folder=option['data_folder'], noise_type=option['noise_type'],option=option)
     else:

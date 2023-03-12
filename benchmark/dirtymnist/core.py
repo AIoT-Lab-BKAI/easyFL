@@ -27,10 +27,10 @@ class TaskGen(DefaultTaskGen):
 
 
 class TaskReader(DirtyTaskReader):
-    def __init__(self, taskpath, train_dataset=None, test_dataset=None, noise_magnitude=1, dirty_rate=None, data_folder="./benchmark/mnist/data"):
-        train_dataset = datasets.MNIST(data_folder, train=True, download=True, transform=transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))]))
-        test_dataset = datasets.MNIST(data_folder, train=False, download=True, transform=transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))]))
-        super().__init__(taskpath, train_dataset, test_dataset, noise_magnitude, dirty_rate)
+    def __init__(self, taskpath, train_dataset=None, test_dataset=None, noise_magnitude=1, dirty_rate=None, data_folder="./benchmark/mnist/data", noise_type='', option=None):
+        train_dataset = datasets.MNIST(data_folder, train=True, download=True, transform=transforms.Compose([transforms.ToTensor()]))
+        test_dataset = datasets.MNIST(data_folder, train=False, download=True, transform=transforms.Compose([transforms.ToTensor()]))
+        super().__init__(taskpath, train_dataset, test_dataset, noise_magnitude, dirty_rate, noise_type, option)
 
 class TaskCalculator(ClassifyCalculator):
     def __init__(self, device):
