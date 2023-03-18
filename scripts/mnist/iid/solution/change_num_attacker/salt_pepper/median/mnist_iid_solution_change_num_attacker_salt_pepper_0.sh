@@ -25,7 +25,7 @@ cp -r ./easyFL/benchmark/mnist/data ${DATA_DIR}
 #DATA_DIR='benchmark/mnist/data'
 GROUP="dirtymnist_iid_solution_change_num_attacker_salt_pepper"
 ALG="mp_fedavg"
-MODEL="resnet18"
+MODEL="cnn"
 DIRTY_RATE=(0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0)
 NOISE_MAGNITUDE=0.1
 AGGREGATE='median'

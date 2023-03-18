@@ -25,7 +25,7 @@ cp -r ./easyFL/benchmark/mnist/data ${DATA_DIR}
 #DATA_DIR='benchmark/mnist/data'
 GROUP="dirtymnist_dirichlet05_solution_change_noise_rate_poisson"
 ALG="mp_fedavg"
-MODEL="resnet18"
+MODEL="cnn"
 DIRTY_RATE=(1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0)
 NOISE_MAGNITUDE=1.0
 AGGREGATE='trmean'
