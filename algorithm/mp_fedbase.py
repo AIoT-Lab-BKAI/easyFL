@@ -151,8 +151,8 @@ class MPBasicServer(BasicServer):
             
             #         json.dump(self.result, f)
             # path_save_model = './results/checkpoints/{}_{}_{}.pt'.format(self.option['model'], self.option['noise_type'], self.option['aggregate'])
-            path_save_model = self.log_folder + '/' + self.option['task'] + '/' + self.option['noise_type'] + '/' + 'num_malicious_{}/dirty_rate_{}/attacked_class_{}/'.format( self.option['num_malicious'], self.option['dirty_rate'][0], len(self.option['attacked_class'])) + self.option['agg_algorithm'] + '/model.pt' 
-            torch.save(self.model.state_dict(), path_save_model)
+            # path_save_model = self.log_folder + '/' + self.option['task'] + '/' + self.option['noise_type'] + '/' + 'num_malicious_{}/dirty_rate_{}/attacked_class_{}/'.format( self.option['num_malicious'], self.option['dirty_rate'][0], len(self.option['attacked_class'])) + self.option['agg_algorithm'] + '/model.pt' 
+            # torch.save(self.model.state_dict(), path_save_model)
             # if self.option['percent_noise_remove'] == 0:
             #     if round >= 5:
             #         if (self.check_converge(round) == True):
@@ -416,11 +416,11 @@ class MPBasicServer(BasicServer):
         peers_types = [self.clients[id].train_data.client_type for id in self.selected_clients]
         # plot_updates_components(copy.deepcopy(self.model), peer_grads, peers_types, peers_id=self.selected_clients, epoch=round, proportion = self.option['proportion'], attacked_class = self.option['attacked_class'],dirty_rate=self.option['dirty_rate'][0],num_malicious=self.option['num_malicious'], agg_algorithm=self.option['agg_algorithm'], algorithm= self.option['algorithm'], type_noise=self.option['outside_noise'])
         # path_js = self.option['algorithm'] + '/' + self.option['agg_algorithm'] + '/' + 'attacked_class_{}/dirty_rate_{}/type_noise_{}/proportion_{}/num_malicious_{}/'.format( len(self.option['attacked_class']), self.option['dirty_rate'][0],self.option['outside_noise'], self.option['proportion']*50, self.option['num_malicious'])
-        path_js = self.log_folder + '/' + self.option['task'] + '/' + self.option['noise_type'] + '/' + 'num_malicious_{}/dirty_rate_{}/attacked_class_{}/'.format( self.option['num_malicious'], self.option['dirty_rate'][0], len(self.option['attacked_class'])) + self.option['agg_algorithm'] + '/'
-        if not os.path.exists(path_js):
-            os.makedirs(path_js)
-        with open(path_js + 'confidence_score.json', 'w') as json_file:
-            json.dump(self.confidence_score, json_file, indent=4)
+        # path_js = self.log_folder + '/' + self.option['task'] + '/' + self.option['noise_type'] + '/' + 'num_malicious_{}/dirty_rate_{}/attacked_class_{}/'.format( self.option['num_malicious'], self.option['dirty_rate'][0], len(self.option['attacked_class'])) + self.option['agg_algorithm'] + '/'
+        # if not os.path.exists(path_js):
+        #     os.makedirs(path_js)
+        # with open(path_js + 'confidence_score.json', 'w') as json_file:
+        #     json.dump(self.confidence_score, json_file, indent=4)
             
         # check whether all the clients have dropped out, because the dropped clients will be deleted from self.selected_clients
         if not self.selected_clients: return
