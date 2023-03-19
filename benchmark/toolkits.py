@@ -748,7 +748,10 @@ class DirtyDataset(Dataset):
                 
                         zeros_pixel = np.where(noisy_mask == 0)
                         one_pixel = np.where(noisy_mask == int(1/self.magnitude))
-                        noise_image = self.gray_transform(image)
+                        if self.option['task'].split('_')[0] != 'dirtymnist':
+                            noise_image = self.gray_transform(image)
+                        else:
+                            noise_image = image
                         # print(torch.max(image))
                         # print(torch.min(image))
                         noise_image[zeros_pixel] = 0.0
