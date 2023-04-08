@@ -226,11 +226,13 @@ class BasicServer():
         acc_before_trains = [cp["acc_before_train"] for cp in packages_received_from_clients]
         loss_before_trains = [cp["loss_before_train"] for cp in packages_received_from_clients]
         confidence_score_dicts = [cp["confidence_score_dict"] for cp in packages_received_from_clients]
+        calculate_cs_time = [cp["calculate_cs_time"] for cp in packages_received_from_clients]
+        train_time = [cp["train_time"] for cp in packages_received_from_clients]
         # train_losses = [cp["train_loss"] for cp in packages_received_from_clients]
         # return models, train_losses
         # return models, packages_received_from_clients
         # return models, peer_grads, acc_before_trains, loss_before_trains, confidence_score_dicts
-        return models, acc_before_trains, loss_before_trains, confidence_score_dicts
+        return models, acc_before_trains, loss_before_trains, confidence_score_dicts, calculate_cs_time, train_time
 
     def global_lr_scheduler(self, current_round):
         """
@@ -523,7 +525,7 @@ class BasicClient():
         
 
     # def pack(self, model, peer_grad, acc_before_train,loss_before_train,confidence_score_dict):
-    def pack(self, model, acc_before_train,loss_before_train,confidence_score_dict):
+    def pack(self, model, acc_before_train,loss_before_train,confidence_score_dict, calculate_cs_time, train_time):
         """
         Packing the package to be send to the server. The operations of compression
         of encryption of the package should be done here.
@@ -538,7 +540,9 @@ class BasicClient():
             # "peer_grad": peer_grad,
             "acc_before_train": acc_before_train,
             "loss_before_train": loss_before_train,
-            "confidence_score_dict": confidence_score_dict
+            "confidence_score_dict": confidence_score_dict,
+            "calculate_cs_time": calculate_cs_time,
+            "train_time": train_time
             # "data_idxs": data_idxs,
             # "Acc_global": Acc_global,
             # "acc_local": acc_local,

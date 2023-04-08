@@ -88,6 +88,8 @@ def read_option():
     parser.add_argument('--agg_algorithm', help='aggregation algorithm', type=str)
     parser.add_argument('--client_id', help='', type=int, required=False)
     parser.add_argument('--outside_noise', help='', type=str)
+    parser.add_argument('--ours_beta', help='beta parameter in our algorithm', type=float, default=0.05)
+    parser.add_argument('--log_time', help='whether to log computation time', type=int, default=0)
     # parser.add_argument('--path_to_log', help='path to log results', type=str)
     
 

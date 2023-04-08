@@ -89,7 +89,7 @@ def main():
             project="dirtyFL", 
             entity="aiotlab",
             group=f"{option['task']}_{option['noise_type']}",
-            name=f"num_malicious_{option['num_malicious']}_dirty_rate_{option['dirty_rate'][0]}_attacked_class_{len(option['attacked_class'])}_{option['agg_algorithm']}",
+            name=f"num_malicious_{option['num_malicious']}_dirty_rate_{option['dirty_rate'][0]}_attacked_class_{len(option['attacked_class'])}_{option['agg_algorithm']}_beta_{option['ours_beta']}",
             config=option
         )
         
