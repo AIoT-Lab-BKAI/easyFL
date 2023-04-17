@@ -42,5 +42,5 @@ mp_feddyn
 mp_fedprox
 pca_tsne
 predict_unclean_idx
-algorithm/log_a_nguyen/
 log_result/
+log_a_nguyen

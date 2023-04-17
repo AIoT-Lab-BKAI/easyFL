@@ -6,7 +6,7 @@ import time
 from heapq import nsmallest
 from optparse import Option
 from pathlib import Path
-from turtle import mode
+# from turtle import mode
 
 import numpy as np
 import seaborn as sns
