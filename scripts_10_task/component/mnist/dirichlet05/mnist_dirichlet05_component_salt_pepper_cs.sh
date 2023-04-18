@@ -2,7 +2,7 @@
 #$ -cwd
 #$ -l rt_G.small=1
 #$ -l h_rt=36:00:00
-#$ -o /home/aaa10078nj/Federated_Learning/Cuong_AttackFL/logs/cifar10/$JOB_NAME_$JOB_ID.log
+#$ -o /home/aaa10078nj/Federated_Learning/Cuong_AttackFL/logs/mnist/$JOB_NAME_$JOB_ID.log
 #$ -j y
 
 source /etc/profile.d/modules.sh
@@ -24,16 +24,16 @@ PATH=/apps/centos7/python/3.10.4/bin:${PATH}
 
 source ~/venv/pytorch1.11+horovod/bin/activate
 
-LOG_DIR="/home/aaa10078nj/Federated_Learning/Cuong_AttackFL/logs/cifar10/$JOB_NAME_$JOB_ID"
+LOG_DIR="/home/aaa10078nj/Federated_Learning/Cuong_AttackFL/logs/mnist/$JOB_NAME_$JOB_ID"
 rm -r ${LOG_DIR}
 mkdir ${LOG_DIR}
 
 # #Dataset
 DATA_DIR="$SGE_LOCALDIR/$JOB_ID/"
-cp -r ./easyFL/benchmark/cifar10/data ${DATA_DIR}
+cp -r ./easyFL/benchmark/mnist/data ${DATA_DIR}
 #LOG_DIR='log_result'
-#DATA_DIR='benchmark/cifar10/data'
-GROUP="dirtycifar10_iid_solution_change_noise_rate_salt_pepper"
+#DATA_DIR='benchmark/mnist/data'
+GROUP="dirtymnist_iid_solution_change_noise_rate_salt_pepper"
 ALG="mp_fedavg"
 MODEL="resnet18"
 DIRTY_RATE=(1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0)
