@@ -632,24 +632,24 @@ class MPBasicServer(BasicServer):
                     #         predicted_normal.append(client)
                     #         list_peak_normal.append(list_peak[idx])
                     #         list_cs_normal.append(list_confidence_score[idx])
-                    # elif self.option['agg_algorithm'] == "peak_compare_avg_peak": 
-                    #     if list_peak[idx] > peak_global:
-                    #         predicted_attacker.append(client)
-                    #         list_peak_attacker.append(list_peak[idx])
-                    #         list_cs_attacker.append(list_confidence_score[idx])
-                    #     else:
-                    #         predicted_normal.append(client)
-                    #         list_peak_normal.append(list_peak[idx])
-                    #         list_cs_normal.append(list_confidence_score[idx])
-                    # elif self.option['agg_algorithm'] == "cs_compare_avg_cs":
-                    #     if list_confidence_score[idx] < mean_cs_global:
-                    #         predicted_attacker.append(client)
-                    #         list_peak_attacker.append(list_peak[idx])
-                    #         list_cs_attacker.append(list_confidence_score[idx])
-                    #     else:
-                    #         predicted_normal.append(client)
-                    #         list_peak_normal.append(list_peak[idx])
-                    #         list_cs_normal.append(list_confidence_score[idx])
+                    if self.option['agg_algorithm'] == "peak_choose_attacker": 
+                        if list_peak[idx] > peak_global:
+                            predicted_attacker.append(client)
+                            list_peak_attacker.append(list_peak[idx])
+                            list_cs_attacker.append(list_confidence_score[idx])
+                        else:
+                            predicted_normal.append(client)
+                            list_peak_normal.append(list_peak[idx])
+                            list_cs_normal.append(list_confidence_score[idx])
+                    elif self.option['agg_algorithm'] == "cs_choose_attacker":
+                        if list_confidence_score[idx] < mean_cs_global:
+                            predicted_attacker.append(client)
+                            list_peak_attacker.append(list_peak[idx])
+                            list_cs_attacker.append(list_confidence_score[idx])
+                        else:
+                            predicted_normal.append(client)
+                            list_peak_normal.append(list_peak[idx])
+                            list_cs_normal.append(list_confidence_score[idx])
                     # elif self.option['agg_algorithm'] == "remove_all_attacker_agg_all_clean":
                     #     if self.clients[client].train_data.client_type == "attacker":
                     #         predicted_attacker.append(client)
@@ -818,7 +818,9 @@ class MPBasicServer(BasicServer):
                                                     # "peak_or_cs_choose_normal_aggregate_attacker_by_cs_(csi+0.05)",
                                                     # "peak_or_cs_choose_normal_aggregate_attacker_by_cs_(csi+0.05*mincs/maxcs)",
                                                     # "peak_and_cs_choose_attacker_aggregate_attacker_by_(csi+0.05*mincs/maxcs)"]:
-                if self.option['agg_algorithm'] == "peak_and_cs_choose_attacker_aggregate_attacker_by_(csi+0.05*mincs/maxcs)":
+                if self.option['agg_algorithm'] in ["peak_and_cs_choose_attacker_aggregate_attacker_by_(csi+0.05*mincs/maxcs)",
+                                                    "peak_choose_attacker",
+                                                    "cs_choose_attacker"]:
                     p_ = []
                     sum_sample = sum([self.client_vols[cid] for cid in self.selected_clients])
                     id_attacker = 0
@@ -1049,15 +1051,15 @@ class MPBasicServer(BasicServer):
                 "wrong prediction normal": [int(i) for i in wrong_pred_normal],
                 }
                 path_ = self.log_folder + '/' + self.option['task'] + '/' + self.option['noise_type'] + '/' + 'num_malicious_{}/dirty_rate_{}/attacked_class_{}/'.format( self.option['num_malicious'], self.option['dirty_rate'][0], len(self.option['attacked_class'])) + self.option['agg_algorithm'] + '/'
-                # listObj = []
-                # if round != 1:
-                #     with open(path_ + 'log.json') as fp:
-                #         listObj = json.load(fp)
+                listObj = []
+                if round != 1:
+                    with open(path_ + 'log.json') as fp:
+                        listObj = json.load(fp)
                 
-                # listObj.append(dictionary)
+                listObj.append(dictionary)
                 
-                # with open(path_ + 'log.json', 'w') as json_file:
-                #     json.dump(listObj, json_file, indent=4)
+                with open(path_ + 'log.json', 'w') as json_file:
+                    json.dump(listObj, json_file, indent=4)
                 if self.option['log_time'] == 1:
                     with open(path_ + 'log_time.json', 'w') as f:
                         json.dump(self.computation_time, f, indent=4)
