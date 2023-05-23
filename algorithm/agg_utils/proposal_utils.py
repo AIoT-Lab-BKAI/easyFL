@@ -92,6 +92,7 @@ class ActorCritic(nn.Module):
         return
         
     def forward(self, x):
+        x = x.reshape(1, -1)
         value = self.critic(x)
         mu    = self.actor(x)
         std   = self.log_std.exp().expand_as(mu)
@@ -112,8 +113,8 @@ class ActorCritic(nn.Module):
         return action
     
     def record(self, reward, done=0):
-        self.rewards.append(torch.FloatTensor(reward).unsqueeze(1))
-        self.masks.append(torch.FloatTensor(1 - done).unsqueeze(1))
+        self.rewards.append(torch.FloatTensor([reward]).unsqueeze(1))
+        self.masks.append(torch.FloatTensor([1 - done]).unsqueeze(1))
         return
     
     def update(self, next_state, optimizer, ppo_epochs=4, mini_batch_size=5):

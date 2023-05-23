@@ -104,7 +104,7 @@ class Server(MPBasicServer):
         if t > 0:
             reward = - np.mean(train_losses)
             self.agent.record(reward)
-        impact_factors = self.agent.get_action(state)
+        impact_factors = copy.deepcopy(self.agent).get_action(state).reshape(-1)
         
         device0 = torch.device(f"cuda:{self.server_gpu_id}")
         models = [i.to(device0) for i in models]
