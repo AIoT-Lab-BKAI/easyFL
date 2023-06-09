@@ -9,6 +9,7 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 from torch.distributions import Normal
+import pdb
 
 
 def init_weights(m):
@@ -32,6 +33,7 @@ def ppo_iter(mini_batch_size, states, actions, log_probs, returns, advantage):
     batch_size = states.size(0)
     for _ in range(batch_size // mini_batch_size):
         rand_ids = np.random.randint(0, batch_size, mini_batch_size)
+        # pdb.set_trace()
         yield states[rand_ids, :], actions[rand_ids, :], log_probs[rand_ids, :], returns[rand_ids, :], advantage[rand_ids, :]
          
 
@@ -104,13 +106,14 @@ class ActorCritic(nn.Module):
         action = dist.sample()
         
         log_prob = dist.log_prob(action)
-        self.entropy += dist.entropy().mean()
+        self.entropy += dist.entropy().mean().detach()
         
-        self.log_probs.append(log_prob)
-        self.values.append(value)
-        self.states.append(state)
+        self.log_probs.append(log_prob.detach())
+        self.values.append(value.detach())
+        self.states.append(state.detach())
         self.actions.append(action)
-        return action
+        # pdb.set_trace()
+        return torch.softmax(action.reshape(-1), dim=0)
     
     def record(self, reward, done=0):
         self.rewards.append(torch.FloatTensor([reward]).unsqueeze(1))
@@ -120,6 +123,7 @@ class ActorCritic(nn.Module):
     def update(self, next_state, optimizer, ppo_epochs=4, mini_batch_size=5):
         next_state = torch.FloatTensor(next_state)
         _, next_value = self(next_state)
+        # pdb.set_trace()
         returns = compute_gae(next_value, self.rewards, self.masks, self.values)
 
         returns   = torch.cat(returns).detach()

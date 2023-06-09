@@ -87,6 +87,7 @@ class Server(MPBasicServer):
         super(Server, self).__init__(option, model, clients, test_data)
         classifier_length = get_classifier(model).flatten().shape[0]
         self.agent = ActorCritic(num_inputs=self.clients_per_round * classifier_length, num_outputs=self.clients_per_round, hidden_size=512)
+        self.optimizer = torch.optim.Adam(self.agent.parameters(), lr=0.001)
         return
     
     def iterate(self, t, pool):
@@ -99,12 +100,17 @@ class Server(MPBasicServer):
         # Get classifiers
         classifiers = [get_classifier(model).cpu().flatten() for model in models]
         state = torch.vstack(classifiers)         # <-- Change to matrix K x d
-        
+        state = torch.unsqueeze(state, dim=0)               # <-- Change to matrix K x d
+
         # Processing
         if t > 0:
             reward = - np.mean(train_losses)
             self.agent.record(reward)
-        impact_factors = copy.deepcopy(self.agent).get_action(state).reshape(-1)
+            self.agent.update(state, self.optimizer)
+        # impact_factors = copy.deepcopy(self.agent).get_action(state)
+        impact_factors = self.agent.get_action(state)
+        print(impact_factors)
+        print(torch.sum(impact_factors))
         
         device0 = torch.device(f"cuda:{self.server_gpu_id}")
         models = [i.to(device0) for i in models]
