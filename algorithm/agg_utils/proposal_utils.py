@@ -5,6 +5,7 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 from torch.distributions import Normal
+import pdb
 
 
 def init_weights(m):
@@ -88,7 +89,7 @@ class ActorCritic(nn.Module):
         return
         
     def forward(self, x):
-        x = x.reshape(1, -1)
+        x = x.reshape(x.shape[0], -1)
         value = self.critic(x)
         mu    = self.actor(x)
         std   = self.log_std.exp().expand_as(mu)
@@ -100,13 +101,13 @@ class ActorCritic(nn.Module):
         action = dist.sample()
         
         log_prob = dist.log_prob(action)
-        self.entropy += dist.entropy().mean()
+        self.entropy += dist.entropy().mean().detach()
         
-        self.log_probs.append(log_prob)
-        self.values.append(value)
-        self.states.append(state)
+        self.log_probs.append(log_prob.detach())
+        self.values.append(value.detach())
+        self.states.append(state.detach())
         self.actions.append(action)
-        return action
+        return torch.softmax(action.reshape(-1)/2, dim=0)
     
     def record(self, reward, done=0):
         self.rewards.append(torch.FloatTensor([reward]).unsqueeze(1))
