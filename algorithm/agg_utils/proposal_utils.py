@@ -29,7 +29,6 @@ def ppo_iter(mini_batch_size, states, actions, log_probs, returns, advantage):
     batch_size = states.size(0)
     for _ in range(batch_size // mini_batch_size):
         rand_ids = np.random.randint(0, batch_size, mini_batch_size)
-        # pdb.set_trace()
         yield states[rand_ids, :], actions[rand_ids, :], log_probs[rand_ids, :], returns[rand_ids, :], advantage[rand_ids, :]
          
 
@@ -90,7 +89,7 @@ class ActorCritic(nn.Module):
         return
         
     def forward(self, x):
-        x = x.reshape(1, -1)
+        x = x.reshape(x.shape[0], -1)
         value = self.critic(x)
         mu    = self.actor(x)
         std   = self.log_std.exp().expand_as(mu)
@@ -108,8 +107,7 @@ class ActorCritic(nn.Module):
         self.values.append(value.detach())
         self.states.append(state.detach())
         self.actions.append(action)
-        # pdb.set_trace()
-        return torch.softmax(action.reshape(-1), dim=0)
+        return torch.softmax(action.reshape(-1)/2, dim=0)
     
     def record(self, reward, done=0):
         self.rewards.append(torch.FloatTensor([reward]).unsqueeze(1))
@@ -119,7 +117,6 @@ class ActorCritic(nn.Module):
     def update(self, next_state, optimizer, ppo_epochs=4, mini_batch_size=5):
         next_state = torch.FloatTensor(next_state)
         _, next_value = self(next_state)
-        # pdb.set_trace()
         returns = compute_gae(next_value, self.rewards, self.masks, self.values)
 
         returns   = torch.cat(returns).detach()
