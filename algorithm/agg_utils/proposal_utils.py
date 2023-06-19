@@ -54,30 +54,56 @@ def ppo_update(model, optimizer, ppo_epochs, mini_batch_size, states, actions, l
 
 
 class ActorCritic(nn.Module):
-    def __init__(self, num_inputs, num_outputs, hidden_size, std=0.0):
+    def __init__(self, num_input0, num_input1, num_outputs, hidden_size, kernel_size=3, std=0.0):
         super(ActorCritic, self).__init__()
         
-        self.critic = nn.Sequential(
-            nn.Linear(num_inputs, hidden_size),
-            nn.ReLU(),
-            nn.Linear(hidden_size, hidden_size),
-            nn.ReLU(),
+        # self.critic = nn.Sequential(
+        #     nn.Linear(num_inputs, hidden_size),
+        #     nn.ReLU(),
+        #     nn.Linear(hidden_size, hidden_size),
+        #     nn.ReLU(),
+        #     nn.Linear(hidden_size, 1)
+        # )
+        
+        # self.actor = nn.Sequential(
+        #     nn.Linear(num_inputs, hidden_size),
+        #     nn.ReLU(),
+        #     nn.Linear(hidden_size, hidden_size),
+        #     nn.ReLU(),
+        #     nn.Linear(hidden_size, num_outputs),
+        # )
+        axis_0 = (num_input0 - kernel_size + 1) // 2
+        axis_0 = (axis_0 - kernel_size + 1) // 2
+
+        axis_1 = (num_input1 - kernel_size + 1) // 2
+        axis_1 = (axis_1 - kernel_size + 1) // 2
+
+        self.encoder = nn.Sequential(
+            nn.Conv2d(num_outputs, 32, kernel_size),
+            nn.MaxPool2d(2),
+            nn.Conv2d(32, 64, kernel_size),
+            nn.MaxPool2d(2),
+        )
+
+        self.critic_decoder = nn.Sequential(
+            nn.Linear(64*axis_0*axis_1, hidden_size),
+            nn.LeakyReLU(0.1),
             nn.Linear(hidden_size, 1)
         )
         
-        self.actor = nn.Sequential(
-            nn.Linear(num_inputs, hidden_size),
-            nn.ReLU(),
-            nn.Linear(hidden_size, hidden_size),
-            nn.ReLU(),
+        self.actor_decoder = nn.Sequential(
+            nn.Linear(64*axis_0*axis_1, hidden_size),
+            nn.LeakyReLU(0.1),
             nn.Linear(hidden_size, num_outputs),
         )
+
         self.log_std = nn.Parameter(torch.ones(1, num_outputs) * std)
         
         self.apply(init_weights)
         self.init_rl()
         return
     
+
     def init_rl(self):
         self.log_probs = []
         self.values    = []
@@ -87,9 +113,20 @@ class ActorCritic(nn.Module):
         self.masks     = []
         self.entropy   = 0
         return
-        
+
+    def critic(self, x):
+        # pdb.set_trace()
+        x = self.encoder(x)
+        x = x.view(x.shape[0], -1)
+        return self.critic_decoder(x)
+
+    def actor(self, x):
+        x = self.encoder(x)
+        x = x.view(x.shape[0], -1)
+        return self.actor_decoder(x)
+
     def forward(self, x):
-        x = x.reshape(x.shape[0], -1)
+        # x = x.reshape(x.shape[0], -1)
         value = self.critic(x)
         mu    = self.actor(x)
         std   = self.log_std.exp().expand_as(mu)
@@ -107,7 +144,7 @@ class ActorCritic(nn.Module):
         self.values.append(value.detach())
         self.states.append(state.detach())
         self.actions.append(action)
-        return torch.softmax(action.reshape(-1)/2, dim=0)
+        return torch.softmax(action.reshape(-1), dim=0)
     
     def record(self, reward, done=0):
         self.rewards.append(torch.FloatTensor([reward]).unsqueeze(1))
@@ -127,5 +164,6 @@ class ActorCritic(nn.Module):
         advantage = returns - values
         
         ppo_update(self, optimizer, ppo_epochs, mini_batch_size, states, actions, log_probs, returns, advantage)
-        self.init_rl()
+        if (len(states) > 50): 
+            self.init_rl()
         return

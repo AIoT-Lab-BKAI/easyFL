@@ -85,10 +85,10 @@ def compute_similarity(a, b):
 class Server(MPBasicServer):
     def __init__(self, option, model, clients, test_data=None):
         super(Server, self).__init__(option, model, clients, test_data)
-        classifier_length = get_classifier(model).flatten().shape[0]
-        self.agent = ActorCritic(num_inputs=self.clients_per_round * classifier_length, num_outputs=self.clients_per_round, hidden_size=512)
-        self.agent_optimizer = torch.optim.Adam(self.agent.parameters(), lr=5e-5) # example
-        self.steps = 10 # example
+        classifier = get_classifier(model)
+        self.agent = ActorCritic(num_input0=classifier.shape[0], num_input1=classifier.shape[1], num_outputs=self.clients_per_round, hidden_size=512)
+        self.agent_optimizer = torch.optim.Adam(self.agent.parameters(), lr=1e-5) # example
+        self.steps = 5 # example
         return
     
     def iterate(self, t, pool):
@@ -99,8 +99,8 @@ class Server(MPBasicServer):
             return
         
         # Get classifiers
-        classifiers = [get_classifier(model).cpu().flatten() for model in models]
-        state = torch.vstack(classifiers)         # <-- Change to matrix K x d
+        classifiers = [get_classifier(model).cpu() for model in models]
+        state = torch.stack(classifiers)         # <-- Change to matrix K x d
         state = torch.unsqueeze(state, dim=0)               # <-- Change to matrix 1 x K x d
         
         # Processing
