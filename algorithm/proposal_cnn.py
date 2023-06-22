@@ -87,8 +87,9 @@ class Server(MPBasicServer):
         super(Server, self).__init__(option, model, clients, test_data)
         classifier = get_classifier(model)
         self.agent = ActorCritic(num_input0=classifier.shape[0], num_input1=classifier.shape[1], num_outputs=self.clients_per_round, hidden_size=512)
-        self.agent_optimizer = torch.optim.Adam(self.agent.parameters(), lr=1e-5) # example
-        self.steps = 5 # example
+        self.agent_optimizer = torch.optim.Adam(self.agent.parameters(), lr=2e-6) # example
+        self.steps = 10 # example
+        self.device = torch.device("cuda")
         return
     
     def iterate(self, t, pool):
@@ -99,7 +100,7 @@ class Server(MPBasicServer):
             return
         
         # Get classifiers
-        classifiers = [get_classifier(model).cpu() for model in models]
+        classifiers = [get_classifier(model.to(self.device) - self.model).cpu() for model in models]
         state = torch.stack(classifiers)         # <-- Change to matrix K x d
         state = torch.unsqueeze(state, dim=0)               # <-- Change to matrix 1 x K x d
         
@@ -108,10 +109,11 @@ class Server(MPBasicServer):
             reward = - np.mean(train_losses)
             self.agent.record(reward)
             if t%self.steps == 0:
-                self.agent.update(state, self.agent_optimizer, ppo_epochs=5, mini_batch_size=2) # example
+                self.agent.update(state, self.agent_optimizer) # example
         impact_factors = self.agent.get_action(state)
         print(impact_factors)
-
+        data_vols = [self.client_vols[cid] for cid in self.selected_clients]
+        print(data_vols)
         
         device0 = torch.device(f"cuda:{self.server_gpu_id}")
         models = [i.to(device0) for i in models]

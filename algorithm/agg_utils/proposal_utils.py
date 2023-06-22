@@ -78,7 +78,7 @@ class ActorCritic(nn.Module):
         axis_1 = (num_input1 - kernel_size + 1) // 2
         axis_1 = (axis_1 - kernel_size + 1) // 2
 
-        self.encoder = nn.Sequential(
+        self.critic_encoder = nn.Sequential(
             nn.Conv2d(num_outputs, 32, kernel_size),
             nn.MaxPool2d(2),
             nn.Conv2d(32, 64, kernel_size),
@@ -87,13 +87,20 @@ class ActorCritic(nn.Module):
 
         self.critic_decoder = nn.Sequential(
             nn.Linear(64*axis_0*axis_1, hidden_size),
-            nn.LeakyReLU(0.1),
+            nn.ReLU(),
             nn.Linear(hidden_size, 1)
+        )
+        
+        self.actor_encoder = nn.Sequential(
+            nn.Conv2d(num_outputs, 32, kernel_size),
+            nn.MaxPool2d(2),
+            nn.Conv2d(32, 64, kernel_size),
+            nn.MaxPool2d(2),
         )
         
         self.actor_decoder = nn.Sequential(
             nn.Linear(64*axis_0*axis_1, hidden_size),
-            nn.LeakyReLU(0.1),
+            nn.ReLU(),
             nn.Linear(hidden_size, num_outputs),
         )
 
@@ -113,15 +120,23 @@ class ActorCritic(nn.Module):
         self.masks     = []
         self.entropy   = 0
         return
+    
+    def reinit_rl(self):
+        del self.log_probs[0]
+        del self.values[0]
+        del self.states[0]
+        del self.actions[0]
+        del self.rewards[0]
+        del self.masks[0]
+        return
 
     def critic(self, x):
-        # pdb.set_trace()
-        x = self.encoder(x)
+        x = self.critic_encoder(x)
         x = x.view(x.shape[0], -1)
         return self.critic_decoder(x)
 
     def actor(self, x):
-        x = self.encoder(x)
+        x = self.actor_encoder(x)
         x = x.view(x.shape[0], -1)
         return self.actor_decoder(x)
 
@@ -164,6 +179,6 @@ class ActorCritic(nn.Module):
         advantage = returns - values
         
         ppo_update(self, optimizer, ppo_epochs, mini_batch_size, states, actions, log_probs, returns, advantage)
-        if (len(states) > 50): 
-            self.init_rl()
+        while (len(self.states) >= 50): 
+            self.reinit_rl()
         return
