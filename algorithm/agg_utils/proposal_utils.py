@@ -166,7 +166,7 @@ class ActorCritic(nn.Module):
         self.masks.append(torch.FloatTensor([1 - done]).unsqueeze(1))
         return
     
-    def update(self, next_state, optimizer, ppo_epochs=4, mini_batch_size=5):
+    def update(self, next_state, optimizer, ppo_epochs=20, mini_batch_size=5):
         next_state = torch.FloatTensor(next_state)
         _, next_value = self(next_state)
         returns = compute_gae(next_value, self.rewards, self.masks, self.values)
@@ -179,6 +179,7 @@ class ActorCritic(nn.Module):
         advantage = returns - values
         
         ppo_update(self, optimizer, ppo_epochs, mini_batch_size, states, actions, log_probs, returns, advantage)
-        while (len(self.states) >= 50): 
-            self.reinit_rl()
+        # while (len(self.states) >= 50): 
+        #     self.reinit_rl()
+        self.init_rl()
         return

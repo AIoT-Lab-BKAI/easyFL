@@ -86,8 +86,8 @@ class Server(MPBasicServer):
     def __init__(self, option, model, clients, test_data=None):
         super(Server, self).__init__(option, model, clients, test_data)
         classifier = get_classifier(model)
-        self.agent = ActorCritic(num_input0=classifier.shape[0], num_input1=classifier.shape[1], num_outputs=self.clients_per_round, hidden_size=512)
-        self.agent_optimizer = torch.optim.Adam(self.agent.parameters(), lr=2e-6) # example
+        self.agent = ActorCritic(num_input0=classifier.shape[0], num_input1=classifier.shape[1], num_outputs=1, hidden_size=512)
+        self.agent_optimizer = torch.optim.Adam(self.agent.parameters(), lr=2e-5) # example
         self.steps = 10 # example
         self.device = torch.device("cuda")
         return
@@ -102,7 +102,7 @@ class Server(MPBasicServer):
         # Get classifiers
         classifiers = [get_classifier(model.to(self.device) - self.model).cpu() for model in models]
         state = torch.stack(classifiers)         # <-- Change to matrix K x d
-        state = torch.unsqueeze(state, dim=0)               # <-- Change to matrix 1 x K x d
+        state = torch.unsqueeze(state, dim=1)               # <-- Change to matrix K x 1 x d
         
         # Processing
         if t > 0:
