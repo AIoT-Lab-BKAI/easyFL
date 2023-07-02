@@ -87,6 +87,7 @@ class Server(MPBasicServer):
     def __init__(self, option, model, clients, test_data=None):
         super(Server, self).__init__(option, model, clients, test_data)
         classifier_length = get_classifier(model).flatten().shape[0]
+        
         self.agent = ActorCritic(num_inputs=self.clients_per_round * classifier_length, num_outputs=self.clients_per_round, hidden_size=512)
         self.agent_optimizer = torch.optim.Adam(self.agent.parameters(), lr=0.001) # example
         

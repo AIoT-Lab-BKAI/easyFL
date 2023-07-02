@@ -5,6 +5,10 @@ import os
 import multiprocessing
 import wandb
 
+# import sys
+# sys.path.append('/mnt/disk2/vuvietbach/easyFL')
+# print("WARNING: using module specific path, which is /mnt/disk2/vuvietbach/easyFL. Please change to your absolute path")
+
 class MyLogger(flw.Logger):
     def __init__(self):
         super().__init__()

@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 from torch.distributions import Normal
-
+from algorithm.agg_utils.transformer import TransformerEncoder
 
 def init_weights(m):
     if isinstance(m, nn.Linear):
@@ -58,29 +58,12 @@ def build_dnn(input_size, num_layer):
         module_list += [
             nn.Linear(input_size, output_size//2),
             nn.LayerNorm(output_size),
-            nn.Relu()
+            nn.ReLU()
         ]
         input_size = output_size
     return module_list, input_size
 
-class TransformerEncoder(nn.Module):
-    
-    def __init__(self, num_layers, **block_args):
-        super().__init__()
-        self.layers = nn.ModuleList([EncoderBlock(**block_args) for _ in range(num_layers)])
 
-    def forward(self, x, mask=None):
-        for l in self.layers:
-            x = l(x, mask=mask)
-        return x
-
-    def get_attention_maps(self, x, mask=None):
-        attention_maps = []
-        for l in self.layers:
-            _, attn_map = l.self_attn(x, mask=mask, return_attention=True)
-            attention_maps.append(attn_map)
-            x = l(x)
-        return attention_maps
 
 class ActorCritic(nn.Module):
     def __init__(self, num_inputs, num_outputs, hidden_size, std=0.0):
