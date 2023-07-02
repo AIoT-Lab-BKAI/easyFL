@@ -82,12 +82,14 @@ def compute_similarity(a, b):
     return torch.mean(torch.tensor(sim)), sim[-1]
 
 
+
 class Server(MPBasicServer):
     def __init__(self, option, model, clients, test_data=None):
         super(Server, self).__init__(option, model, clients, test_data)
         classifier_length = get_classifier(model).flatten().shape[0]
         self.agent = ActorCritic(num_inputs=self.clients_per_round * classifier_length, num_outputs=self.clients_per_round, hidden_size=512)
-        self.agent_optimizer = torch.optim.Adam(self.agent.get_parameter(), lr=0.001) # example
+        self.agent_optimizer = torch.optim.Adam(self.agent.parameters(), lr=0.001) # example
+        
         self.steps = 10 # example
         return
     
@@ -99,18 +101,19 @@ class Server(MPBasicServer):
             return
         
         # Get classifiers
-        classifiers = [get_classifier(model).cpu().flatten() for model in models]
+        classifiers = [get_classifier(model).detach().cpu().flatten() for model in models]
         state = torch.vstack(classifiers)         # <-- Change to matrix K x d
-        
-        if t%10 == 0 and t > 0:
-            self.agent.update(state, self.agent_optimizer) # example
-            
-        # Processing
+        import pdb; pdb.set_trace()
         if t > 0:
             reward = - np.mean(train_losses)
             self.agent.record(reward)
+       
+        if t%10 == 0 and t > 0:
+            self.agent.update(state, self.agent_optimizer) # example
+        
         impact_factors = self.agent.get_action(state).reshape(-1)
         
+
         device0 = torch.device(f"cuda:{self.server_gpu_id}")
         models = [i.to(device0) for i in models]
         self.model = self.aggregate(models, p = impact_factors)

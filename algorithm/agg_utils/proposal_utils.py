@@ -51,26 +51,60 @@ def ppo_update(model, optimizer, ppo_epochs, mini_batch_size, states, actions, l
             loss.backward()
             optimizer.step()
 
+def build_dnn(input_size, num_layer):
+    module_list = []
+    for i in range(num_layer):
+        output_size = input_size // 2
+        module_list += [
+            nn.Linear(input_size, output_size//2),
+            nn.LayerNorm(output_size),
+            nn.Relu()
+        ]
+        input_size = output_size
+    return module_list, input_size
+
+class TransformerEncoder(nn.Module):
+    
+    def __init__(self, num_layers, **block_args):
+        super().__init__()
+        self.layers = nn.ModuleList([EncoderBlock(**block_args) for _ in range(num_layers)])
+
+    def forward(self, x, mask=None):
+        for l in self.layers:
+            x = l(x, mask=mask)
+        return x
+
+    def get_attention_maps(self, x, mask=None):
+        attention_maps = []
+        for l in self.layers:
+            _, attn_map = l.self_attn(x, mask=mask, return_attention=True)
+            attention_maps.append(attn_map)
+            x = l(x)
+        return attention_maps
 
 class ActorCritic(nn.Module):
     def __init__(self, num_inputs, num_outputs, hidden_size, std=0.0):
         super(ActorCritic, self).__init__()
         
-        self.critic = nn.Sequential(
-            nn.Linear(num_inputs, hidden_size),
-            nn.ReLU(),
-            nn.Linear(hidden_size, hidden_size),
-            nn.ReLU(),
-            nn.Linear(hidden_size, 1)
-        )
+        # compress the client last classifer layer to lower dimension
+        module_list, output_size = build_dnn(num_inputs, 3)
+        module_list += [nn.Linear(output_size, hidden_size)]
+        self.encoder1 = nn.Sequential(*module_list)
+
+        # encode the whole client layer to a vector
+        self.encoder2 = TransformerEncoder(num_layers=3,
+                                            input_dim=hidden_size,
+                                            dim_feedforward=2*hidden_size,
+                                            num_heads=1)
+
+        module_list, output_size = build_dnn(hidden_size, 2)
+        module_list += [nn.Linear(output_size, 1)]
+        self.critic = nn.Sequential(*module_list)
         
-        self.actor = nn.Sequential(
-            nn.Linear(num_inputs, hidden_size),
-            nn.ReLU(),
-            nn.Linear(hidden_size, hidden_size),
-            nn.ReLU(),
-            nn.Linear(hidden_size, num_outputs),
-        )
+        module_list, output_size = build_dnn(hidden_size, 2)
+        module_list += [nn.Linear(output_size, num_outputs)]
+        self.actor = nn.Sequential(*module_list)
+        
         self.log_std = nn.Parameter(torch.ones(1, num_outputs) * std)
         
         self.apply(init_weights)
@@ -88,7 +122,11 @@ class ActorCritic(nn.Module):
         return
         
     def forward(self, x):
-        x = x.reshape(1, -1)
+        # x: [num_clients, classifier_size]
+        x = self.encoder1(x)
+        x = self.encoder2(x)
+        x = torch.sum(x, dim=1, keepdims=True)
+        
         value = self.critic(x)
         mu    = self.actor(x)
         std   = self.log_std.exp().expand_as(mu)
@@ -96,7 +134,9 @@ class ActorCritic(nn.Module):
         return dist, value
     
     def get_action(self, state):
-        dist, value = self(state)
+        with torch.no_grad():
+            dist, value = self(state)
+        
         action = dist.sample()
         
         log_prob = dist.log_prob(action)
