@@ -70,22 +70,39 @@ class ActorCritic(nn.Module):
         super(ActorCritic, self).__init__()
         
         # compress the client last classifer layer to lower dimension
-        module_list, output_size = build_dnn(num_inputs, 3)
-        module_list += [nn.Linear(output_size, hidden_size)]
-        self.encoder1 = nn.Sequential(*module_list)
+        encoder1_layerdims = [num_inputs, 2560, 1280, hidden_size]
+        encoder1 = []
+        for i in range(len(encoder1_layerdims)-1):
+            encoder1 += [
+                nn.Linear(encoder1_layerdims[i], encoder1_layerdims[i+1]),
+                nn.LayerNorm(encoder1_layerdims[i+1]),
+                nn.ReLU()
+            ]
+        self.encoder1 = nn.Sequential(*encoder1)
 
         # encode the whole client layer to a vector
-        self.encoder2 = TransformerEncoder(num_layers=3,
-                                            input_dim=hidden_size,
-                                            dim_feedforward=2*hidden_size,
-                                            num_heads=1)
+        self.encoder2 = TransformerEncoder(num_layers=3, input_dim=hidden_size, dim_feedforward=2*hidden_size, num_heads=16)
 
-        module_list, output_size = build_dnn(hidden_size, 2)
-        module_list += [nn.Linear(output_size, 1)]
+        layerdims = [hidden_size, 256, 128, 64, 32]
+        module_list = []
+        for i in range(len(layerdims)-1):
+            module_list += [
+                nn.Linear(layerdims[i], layerdims[i+1]),
+                nn.LayerNorm(layerdims[i+1]),
+                nn.ReLU()
+            ]
+        module_list += [nn.Linear(layerdims[-1], 1)]
         self.critic = nn.Sequential(*module_list)
         
-        module_list, output_size = build_dnn(hidden_size, 2)
-        module_list += [nn.Linear(output_size, num_outputs)]
+        layerdims = [hidden_size, 256]
+        module_list = []
+        for i in range(len(layerdims)-1):
+            module_list += [
+                nn.Linear(layerdims[i], layerdims[i+1]),
+                nn.LayerNorm(layerdims[i+1]),
+                nn.ReLU()
+            ]
+        module_list += [nn.Linear(layerdims[-1], num_outputs)]
         self.actor = nn.Sequential(*module_list)
         
         self.log_std = nn.Parameter(torch.ones(1, num_outputs) * std)

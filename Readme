@@ -1,0 +1,3 @@
+This branch implement aggregate function as transformer architecture
+See algorithm/proposal.py section Server for implementation of server
+    The server assume classifier size to be of dimension 5120, and hidden_size to be 512 please change the
