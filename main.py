@@ -92,7 +92,7 @@ def main():
     
     if option['wandb']:
         wandb.init(
-            project="easyFL", 
+            project="journal_ha", 
             entity="aiotlab",
             group=option['task'],
             name=runname[:-1],

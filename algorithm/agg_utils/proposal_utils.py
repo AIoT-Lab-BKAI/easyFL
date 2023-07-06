@@ -47,61 +47,45 @@ def ppo_update(model, optimizer, ppo_epochs, mini_batch_size, states, actions, l
             critic_loss = (return_ - value).pow(2).mean()
 
             loss = 0.5 * critic_loss + actor_loss - 0.001 * entropy
-
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
 
-
 class ActorCritic(nn.Module):
-    def __init__(self, num_input0, num_input1, num_outputs, hidden_size, kernel_size=3, std=0.0):
+    def __init__(self, num_inputs, num_outputs, hidden_size, kernel_size=3, std=0.0):
         super(ActorCritic, self).__init__()
         
-        # self.critic = nn.Sequential(
-        #     nn.Linear(num_inputs, hidden_size),
-        #     nn.ReLU(),
-        #     nn.Linear(hidden_size, hidden_size),
-        #     nn.ReLU(),
-        #     nn.Linear(hidden_size, 1)
-        # )
-        
-        # self.actor = nn.Sequential(
-        #     nn.Linear(num_inputs, hidden_size),
-        #     nn.ReLU(),
-        #     nn.Linear(hidden_size, hidden_size),
-        #     nn.ReLU(),
-        #     nn.Linear(hidden_size, num_outputs),
-        # )
-        axis_0 = (num_input0 - kernel_size + 1) // 2
-        axis_0 = (axis_0 - kernel_size + 1) // 2
-
-        axis_1 = (num_input1 - kernel_size + 1) // 2
-        axis_1 = (axis_1 - kernel_size + 1) // 2
-
-        self.critic_encoder = nn.Sequential(
-            nn.Conv2d(num_outputs, 32, kernel_size),
-            nn.MaxPool2d(2),
-            nn.Conv2d(32, 64, kernel_size),
-            nn.MaxPool2d(2),
-        )
-
-        self.critic_decoder = nn.Sequential(
-            nn.Linear(64*axis_0*axis_1, hidden_size),
+        self.conv = nn.Sequential(
+            nn.Conv2d(num_outputs, 32, kernel_size=(1,5), stride=1),
             nn.ReLU(),
-            nn.Linear(hidden_size, 1)
-        )
-        
-        self.actor_encoder = nn.Sequential(
-            nn.Conv2d(num_outputs, 32, kernel_size),
-            nn.MaxPool2d(2),
-            nn.Conv2d(32, 64, kernel_size),
-            nn.MaxPool2d(2),
-        )
-        
-        self.actor_decoder = nn.Sequential(
-            nn.Linear(64*axis_0*axis_1, hidden_size),
+            nn.MaxPool2d((1, 4)),
+            nn.Conv2d(32, 64, kernel_size=(1,5), stride=1),
             nn.ReLU(),
-            nn.Linear(hidden_size, num_outputs),
+            nn.MaxPool2d((1, 4)),
+            nn.Conv2d(64, 128, kernel_size=(1,5), stride=1),
+            nn.ReLU(),
+            nn.MaxPool2d((1, 4)),
+            nn.Conv2d(128, 128, kernel_size=(1,3), stride=1),
+            nn.ReLU(),
+            nn.MaxPool2d((1, 3)),
+        )
+
+        
+        conv_out_size = self._get_conv_out(num_inputs, num_outputs)
+        self.policy = nn.Sequential(
+            nn.Linear(conv_out_size, hidden_size),
+            nn.ReLU(),
+            nn.Linear(hidden_size, 512),
+            nn.ReLU(),
+            nn.Linear(512, num_outputs)
+        )
+
+        self.value = nn.Sequential(
+            nn.Linear(conv_out_size, hidden_size),
+            nn.ReLU(),
+            nn.Linear(hidden_size, 512),
+            nn.ReLU(),
+            nn.Linear(512, 1)
         )
 
         self.log_std = nn.Parameter(torch.ones(1, num_outputs) * std)
@@ -110,7 +94,11 @@ class ActorCritic(nn.Module):
         self.init_rl()
         return
     
-
+    def _get_conv_out(self, shape, num_channel):
+        o = self.conv(torch.zeros(1, num_channel , *shape))
+        print(o.size())
+        return int(np.prod(o.size()))
+    
     def init_rl(self):
         self.log_probs = []
         self.values    = []
@@ -131,14 +119,14 @@ class ActorCritic(nn.Module):
         return
 
     def critic(self, x):
-        x = self.critic_encoder(x)
+        x = self.conv(x)
         x = x.view(x.shape[0], -1)
-        return self.critic_decoder(x)
+        return self.value(x)
 
     def actor(self, x):
-        x = self.actor_encoder(x)
+        x = self.conv(x)
         x = x.view(x.shape[0], -1)
-        return self.actor_decoder(x)
+        return self.policy(x)
 
     def forward(self, x):
         # x = x.reshape(x.shape[0], -1)
@@ -166,7 +154,7 @@ class ActorCritic(nn.Module):
         self.masks.append(torch.FloatTensor([1 - done]).unsqueeze(1))
         return
     
-    def update(self, next_state, optimizer, ppo_epochs=20, mini_batch_size=5):
+    def update(self, next_state, optimizer, ppo_epochs=50, mini_batch_size=10):
         next_state = torch.FloatTensor(next_state)
         _, next_value = self(next_state)
         returns = compute_gae(next_value, self.rewards, self.masks, self.values)
@@ -177,9 +165,31 @@ class ActorCritic(nn.Module):
         states    = torch.cat(self.states)
         actions   = torch.cat(self.actions)
         advantage = returns - values
-        
+        # print(returns)
+        # print(values)
+        while (len(self.states) > 40): 
+            self.reinit_rl()
         ppo_update(self, optimizer, ppo_epochs, mini_batch_size, states, actions, log_probs, returns, advantage)
-        # while (len(self.states) >= 50): 
-        #     self.reinit_rl()
-        self.init_rl()
+        # self.init_rl()
         return
+
+    def begin_iter(self, states, actions, mini_batch_size = 5):
+        batch_size = states.shape[0]
+        for _ in range(batch_size // mini_batch_size):
+            rand_ids = np.random.randint(0, batch_size, mini_batch_size)
+            yield states[rand_ids, :], actions[rand_ids, :]
+        
+    def reinit_weight(self, optimizer, num_epochs, states, actions):
+        states = torch.cat(states)
+        actions = torch.cat(actions).requires_grad_()
+        get_loss = nn.MSELoss()
+        for _ in range(num_epochs):
+            for state, action in self.begin_iter(states, actions):
+                dist, value = self(state)
+                action_predict = dist.sample()
+                # pdb.set_trace()    
+                loss = get_loss(action, action_predict)
+                optimizer.zero_grad()
+                loss.backward()
+                print(loss)
+                optimizer.step()
