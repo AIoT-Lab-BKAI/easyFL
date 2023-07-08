@@ -1,6 +1,6 @@
 from .mp_fedbase import MPBasicServer, MPBasicClient
 from algorithm.cfmtx.cfmtx import cfmtx_test
-from algorithm.agg_utils.proposal_utils import ActorCritic
+from algorithm.agg_utils.proposal_utils_v1 import ActorCritic
 
 import torch.nn as nn
 import numpy as np
@@ -88,7 +88,7 @@ class Server(MPBasicServer):
         classifier = get_classifier(model)
         self.agent = ActorCritic(num_inputs=classifier.shape, num_outputs=self.clients_per_round, hidden_size=512)
         self.agent_optimizer = torch.optim.Adam(self.agent.parameters(), lr=1e-4) # example
-        self.steps = 15 # example
+        self.steps = 10 # example
         self.device = torch.device("cuda")
         self.init_states = []
         self.init_actions = []
@@ -109,11 +109,11 @@ class Server(MPBasicServer):
             # Processing
         if t > 0:
             # reward = - (np.mean(train_losses) - self.old_reward)
-            reward = - (np.mean(train_losses))
+            reward = - np.power(np.mean(train_losses),2)
             # print(np.mean(train_losses), np.max(train_losses), np.min(train_losses), reward)
             self.agent.record(reward)
             if t%self.steps == 0:
-                self.agent.update(state, self.agent_optimizer) # example
+                self.agent.update(state, self.agent_optimizer, mini_batch_size=10) # example
         
         impact_factors = self.agent.get_action(state)
         data_vols = [self.client_vols[cid] for cid in self.selected_clients]
