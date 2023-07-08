@@ -86,13 +86,12 @@ class Server(MPBasicServer):
     def __init__(self, option, model, clients, test_data=None):
         super(Server, self).__init__(option, model, clients, test_data)
         classifier = get_classifier(model)
-        self.agent = ActorCritic(num_inputs=classifier.shape, num_outputs=self.clients_per_round, hidden_size=512)
-        self.agent_optimizer = torch.optim.Adam(self.agent.parameters(), lr=1e-4) # example
+        self.agent = ActorCritic(num_inputs=classifier.shape, num_outputs=self.clients_per_round + 1, hidden_size=512)
+        self.agent_optimizer = torch.optim.Adam(self.agent.parameters(), lr=3e-4) # example
         self.steps = 15 # example
         self.device = torch.device("cuda")
         self.init_states = []
         self.init_actions = []
-        self.old_reward = 0
         return
     
     def iterate(self, t, pool):
@@ -101,30 +100,12 @@ class Server(MPBasicServer):
         
         if not self.selected_clients: 
             return
-        # Get classifiers
-        classifiers = [get_classifier(model.to(self.device) - self.model).cpu() for model in models]
-        state = torch.stack(classifiers)         # <-- Change to matrix K x d
-        state = torch.unsqueeze(state, dim=1)               # <-- Change to matrix K x 1 x d
-        # Processing
-            # Processing
-        if t > 0:
-            # reward = - (np.mean(train_losses) - self.old_reward)
-            reward = - (np.mean(train_losses))
-            # print(np.mean(train_losses), np.max(train_losses), np.min(train_losses), reward)
-            self.agent.record(reward)
-            if t%self.steps == 0:
-                self.agent.update(state, self.agent_optimizer) # example
-        
-        impact_factors = self.agent.get_action(state)
-        data_vols = [self.client_vols[cid] for cid in self.selected_clients]
-        
-        print(impact_factors)
-        print(data_vols)
-        
+       
         device0 = torch.device(f"cuda:{self.server_gpu_id}")
         models = [i.to(device0) for i in models]
         
-        self.model = self.aggregate(models, p = impact_factors)
+        self.model = self.aggregate(models, p = [1.0 * self.client_vols[cid]/self.data_vol for cid in self.selected_clients])    
+        return
 
 class Client(MPBasicClient):
     def __init__(self, option, name='', train_data=None, valid_data=None):

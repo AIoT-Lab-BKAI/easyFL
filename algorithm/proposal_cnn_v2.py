@@ -87,12 +87,11 @@ class Server(MPBasicServer):
         super(Server, self).__init__(option, model, clients, test_data)
         classifier = get_classifier(model)
         self.agent = ActorCritic(num_inputs=classifier.shape, num_outputs=self.clients_per_round, hidden_size=512)
-        self.agent_optimizer = torch.optim.Adam(self.agent.parameters(), lr=1e-4) # example
-        self.steps = 15 # example
+        self.agent_optimizer = torch.optim.Adam(self.agent.parameters(), lr=1e-6) # example
+        self.steps = 50 # example
         self.device = torch.device("cuda")
         self.init_states = []
         self.init_actions = []
-        self.old_reward = 0
         return
     
     def iterate(self, t, pool):
@@ -104,12 +103,16 @@ class Server(MPBasicServer):
         # Get classifiers
         classifiers = [get_classifier(model.to(self.device) - self.model).cpu() for model in models]
         state = torch.stack(classifiers)         # <-- Change to matrix K x d
-        state = torch.unsqueeze(state, dim=1)               # <-- Change to matrix K x 1 x d
+        state = torch.unsqueeze(state, dim=0)               # <-- Change to matrix 1 x K x d
         # Processing
-            # Processing
+        # if t >= 20: 
+        #     if t == 20:
+        #         self.agent.reinit_weight(self.agent_optimizer, num_epochs=200, states = self.init_states, actions = self.init_actions) 
+        
+        # Processing
         if t > 0:
             # reward = - (np.mean(train_losses) - self.old_reward)
-            reward = - (np.mean(train_losses))
+            reward = - (np.mean(train_losses) + np.max(train_losses) - np.min(train_losses))
             # print(np.mean(train_losses), np.max(train_losses), np.min(train_losses), reward)
             self.agent.record(reward)
             if t%self.steps == 0:
@@ -125,6 +128,16 @@ class Server(MPBasicServer):
         models = [i.to(device0) for i in models]
         
         self.model = self.aggregate(models, p = impact_factors)
+        # else:
+        #     device0 = torch.device(f"cuda:{self.server_gpu_id}")
+        #     models = [i.to(device0) for i in models]
+            
+        #     self.init_states.append(state.transpose(0,1).detach())
+        #     impact = [1.0 * self.client_vols[cid]/self.data_vol for cid in self.selected_clients]
+        #     self.init_actions.append(torch.FloatTensor(impact).reshape(1, -1))
+            
+        #     self.model = self.aggregate(models, p = impact)    
+        return
 
 class Client(MPBasicClient):
     def __init__(self, option, name='', train_data=None, valid_data=None):
