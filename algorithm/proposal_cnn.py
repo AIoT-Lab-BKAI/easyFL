@@ -87,7 +87,7 @@ class Server(MPBasicServer):
         super(Server, self).__init__(option, model, clients, test_data)
         classifier = get_classifier(model)
         self.agent = ActorCritic(num_inputs=classifier.shape, num_outputs=self.clients_per_round, hidden_size=512)
-        self.agent_optimizer = torch.optim.Adam(self.agent.parameters(), lr=1e-4) # example
+        self.agent_optimizer = torch.optim.Adam(self.agent.parameters(), lr=1e-8) # example
         self.steps = 10 # example
         self.device = torch.device("cuda")
         self.init_states = []
@@ -113,7 +113,7 @@ class Server(MPBasicServer):
             # print(np.mean(train_losses), np.max(train_losses), np.min(train_losses), reward)
             self.agent.record(reward)
             if t%self.steps == 0:
-                self.agent.update(state, self.agent_optimizer, mini_batch_size=10) # example
+                self.agent.update(state, self.agent_optimizer) # example
         
         impact_factors = self.agent.get_action(state)
         data_vols = [self.client_vols[cid] for cid in self.selected_clients]

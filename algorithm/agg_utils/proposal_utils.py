@@ -89,20 +89,20 @@ class ActorCritic(nn.Module):
         
         conv_out_size = self._get_conv_out(num_inputs, 1, num_outputs)
         self.policy = nn.Sequential(
-            nn.Linear(hidden_size*num_outputs, 512),
+            nn.Linear(conv_out_size, 1024),
+            nn.ReLU(),
+            nn.Linear(1024, 512),
             nn.ReLU(),
             nn.Linear(512, num_outputs),
         )
 
         self.value = nn.Sequential(
-            nn.Linear(hidden_size*num_outputs, 512),
+            nn.Linear(conv_out_size, 1024),
+            nn.ReLU(),
+            nn.Linear(1024, 512),
             nn.ReLU(),
             nn.Linear(512, 1),
         )
-
-        self.fc1 = nn.Linear(conv_out_size, hidden_size)
-        self.leakyRelu = nn.LeakyReLU(0.01)
-        self.attention = nn.MultiheadAttention(embed_dim = hidden_size, num_heads = 1)
 
         self.log_std = nn.Parameter(torch.ones(1, num_outputs) * std)
         
@@ -113,7 +113,7 @@ class ActorCritic(nn.Module):
     def _get_conv_out(self, shape, num_channel, num_out):
         o = self.conv(torch.zeros(1, num_channel , *shape))
         # print(o.size())
-        return int(np.prod(o.size()))
+        return int(np.prod(o.size()) * num_out)
     
     def init_rl(self):
         self.log_probs = []
@@ -137,30 +137,13 @@ class ActorCritic(nn.Module):
     def critic(self, _x):
         x = _x.view(-1, 1, _x.shape[2], _x.shape[3])
         x = self.conv(x)
-        x = x.view(_x.shape[0], _x.shape[1], -1)
-
-        q = self.leakyRelu(self.fc1(x))
-        k = self.leakyRelu(self.fc1(x))
-        v = self.leakyRelu(self.fc1(x))
-        attn_output, attn_output_weights = self.attention(q,k,v)
-
-        ## x: (batch_size, out_seq_len, hidden_size)
-        x = attn_output.view(_x.shape[0], -1)
+        x = x.view(_x.shape[0],  -1)
         return self.value(x)
 
     def actor(self, _x):
         x = _x.view(-1, 1, _x.shape[2], _x.shape[3])
         x = self.conv(x)
-        # x = x.view(x.shape[0], -1)
-        x = x.view(_x.shape[0], _x.shape[1], -1)
-
-        q = self.leakyRelu(self.fc1(x))
-        k = self.leakyRelu(self.fc1(x))
-        v = self.leakyRelu(self.fc1(x))
-        attn_output, attn_output_weights = self.attention(q,k,v)
-
-        ## x: (batch_size, out_seq_len, hidden_size)
-        x = attn_output.view(_x.shape[0], -1)
+        x = x.view(_x.shape[0], -1)
         return self.policy(x)
 
     def forward(self, x):
@@ -189,7 +172,7 @@ class ActorCritic(nn.Module):
         self.masks.append(torch.FloatTensor([1 - done]).unsqueeze(1))
         return
     
-    def update(self, next_state, optimizer, ppo_epochs=50, mini_batch_size=5):
+    def update(self, next_state, optimizer, ppo_epochs=200, mini_batch_size=10):
         next_state = torch.FloatTensor(next_state)
         _, next_value = self(next_state)
         returns = compute_gae(next_value, self.rewards, self.masks, self.values)

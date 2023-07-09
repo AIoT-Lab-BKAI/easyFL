@@ -32,7 +32,7 @@ def ppo_iter(mini_batch_size, states, actions, log_probs, returns, advantage):
         yield states[rand_ids, :], actions[rand_ids, :], log_probs[rand_ids, :], returns[rand_ids, :], advantage[rand_ids, :]
          
 
-def ppo_update(model, optimizer, ppo_epochs, mini_batch_size, states, actions, log_probs, returns, advantages, clip_param=0.2):
+def ppo_update(model, optimizer, ppo_epochs, mini_batch_size, states, actions, log_probs, returns, advantages, clip_param=0.05):
     for _ in range(ppo_epochs):
         for state, action, old_log_probs, return_, advantage in ppo_iter(mini_batch_size, states, actions, log_probs, returns, advantages):
             state = state.transpose(0,1)
@@ -50,9 +50,10 @@ def ppo_update(model, optimizer, ppo_epochs, mini_batch_size, states, actions, l
             surr2 = torch.clamp(ratio, 1.0 - clip_param, 1.0 + clip_param) * advantage
 
             actor_loss  = - torch.min(surr1, surr2).mean()
-            critic_loss = (return_ - value).mean()
+            critic_loss = (return_ - value).pow(2).mean()
 
             loss = 0.5 * critic_loss + actor_loss - 0.001 * entropy
+            print(loss)
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
@@ -118,7 +119,7 @@ class ActorCritic(nn.Module):
             o = self.conv_value(torch.zeros(1, num_channel , *shape))
         else:
             o = self.conv_policy(torch.zeros(1, num_channel , *shape))
-        # print(o.size())
+        print(o.size())
         return int(np.prod(o.size()))
     
     def init_rl(self):
@@ -180,7 +181,7 @@ class ActorCritic(nn.Module):
         self.masks.append(torch.FloatTensor([1 - done]).unsqueeze(1))
         return
     
-    def update(self, next_state, optimizer, ppo_epochs=50, mini_batch_size=15):
+    def update(self, next_state, optimizer, ppo_epochs=200, mini_batch_size=15):
         next_state = torch.FloatTensor(next_state)
         _, next_value = self(next_state)
         returns = compute_gae(next_value, self.rewards, self.masks, self.values)
@@ -192,8 +193,10 @@ class ActorCritic(nn.Module):
         actions   = torch.cat(self.actions)
         advantage = returns - values
         
-        while (len(self.states) > 50): 
+        while (len(self.states) > 60): 
             self.reinit_rl()
+
+        mini_batch_size = len(self.states)//4
         ppo_update(self, optimizer, ppo_epochs, mini_batch_size, states, actions, log_probs, returns, advantage)
         # self.init_rl()
         return
