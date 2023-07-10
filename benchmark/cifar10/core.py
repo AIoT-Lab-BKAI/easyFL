@@ -1,5 +1,6 @@
 from torchvision import datasets, transforms
 from benchmark.toolkits import ClassifyCalculator, DefaultTaskGen, XYTaskReader, CusTomTaskReader
+import os
 
 class TaskGen(DefaultTaskGen):
     def __init__(self, dist_id, num_clients = 1, skewness = 0.5):
@@ -33,7 +34,7 @@ class TaskReader(CusTomTaskReader):
     def __init__(self, taskpath='', data_folder="./benchmark/mnist/data"):
         train_dataset = datasets.CIFAR10(data_folder, train=True, download=True, transform=transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))]))
         test_dataset = datasets.CIFAR10(data_folder, train=False, download=True, transform=transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))]))
-        super(TaskReader, self).__init__(taskpath,train_dataset,test_dataset)
+        super(TaskReader, self).__init__(os.path.join(taskpath, 'train.json'),train_dataset,test_dataset)
         
 
 class TaskCalculator(ClassifyCalculator):
