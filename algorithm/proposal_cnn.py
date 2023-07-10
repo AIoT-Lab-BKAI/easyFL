@@ -6,6 +6,7 @@ import torch.nn as nn
 import numpy as np
 import torch
 import copy
+from main import logger
 
 
 def get_module_from_model(model, res = None):
@@ -87,7 +88,7 @@ class Server(MPBasicServer):
         super(Server, self).__init__(option, model, clients, test_data)
         classifier = get_classifier(model)
         self.agent = ActorCritic(num_inputs=classifier.shape, num_outputs=self.clients_per_round, hidden_size=512)
-        self.agent_optimizer = torch.optim.Adam(self.agent.parameters(), lr=1e-8) # example
+        self.agent_optimizer = torch.optim.Adam(self.agent.parameters(), lr=1e-4) # example
         self.steps = 10 # example
         self.device = torch.device("cuda")
         self.init_states = []
@@ -102,29 +103,32 @@ class Server(MPBasicServer):
         if not self.selected_clients: 
             return
         # Get classifiers
-        classifiers = [get_classifier(model.to(self.device) - self.model).cpu() for model in models]
+        device0 = torch.device(f"cuda:{self.server_gpu_id}")
+        logger.time_start('Cuda|Compute Delta w')
+        self.agent = self.agent.to(device0)
+        models = [model.to(device0) - self.model.to(device0) for model in models]
+        logger.time_end('Cuda|Compute Delta w')
+        
+        classifiers = [get_classifier(submodel) for submodel in models]
         state = torch.stack(classifiers)         # <-- Change to matrix K x d
-        state = torch.unsqueeze(state, dim=1)               # <-- Change to matrix K x 1 x d
+        state = torch.unsqueeze(state, dim=1)    # <-- Change to matrix K x 1 x d
+        
         # Processing
-            # Processing
         if t > 0:
             # reward = - (np.mean(train_losses) - self.old_reward)
             reward = - np.power(np.mean(train_losses),2)
             # print(np.mean(train_losses), np.max(train_losses), np.min(train_losses), reward)
-            self.agent.record(reward)
-            if t%self.steps == 0:
+            self.agent.record(reward, device=device0)
+            if (t+1)%self.steps == 0:
                 self.agent.update(state, self.agent_optimizer) # example
         
         impact_factors = self.agent.get_action(state)
-        data_vols = [self.client_vols[cid] for cid in self.selected_clients]
-        
-        print(impact_factors)
-        print(data_vols)
-        
-        device0 = torch.device(f"cuda:{self.server_gpu_id}")
-        models = [i.to(device0) for i in models]
-        
-        self.model = self.aggregate(models, p = impact_factors)
+        # print(impact_factors)
+        logger.time_start('Aggregation')
+        self.model = self.model + self.aggregate(models, p = impact_factors)
+        logger.time_end('Aggregation')
+        return
+    
 
 class Client(MPBasicClient):
     def __init__(self, option, name='', train_data=None, valid_data=None):

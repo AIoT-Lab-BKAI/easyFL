@@ -26,8 +26,8 @@ class Server(BasicServer):
         super().run()
         json.dump(time_records, open(f"./measures/{self.option['algorithm']}.json", "w"))
         
-        acc, cfmtx = cfmtx_test(self.model, self.test_data, "cuda")
-        json.dump(cfmtx, open(f"./measures/{self.option['algorithm']}_cfmtx.json", "w"))
+        # acc, cfmtx = cfmtx_test(self.model, self.test_data, "cuda")
+        # json.dump(cfmtx, open(f"./measures/{self.option['algorithm']}_cfmtx.json", "w"))
         return
     
 class Client(BasicClient):

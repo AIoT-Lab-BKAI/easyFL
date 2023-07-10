@@ -49,10 +49,10 @@ class MyLogger(flw.Logger):
         print(self.temp.format("Training Loss:", self.output['train_losses'][-1]))
         print(self.temp.format("Testing Loss:", self.output['test_losses'][-1]))
         print(self.temp.format("Testing Accuracy:", self.output['test_accs'][-1]))
-        print(self.temp.format("Validating Accuracy:", self.output['mean_valid_accs'][-1]))
-        print(self.temp.format("Mean of Client Accuracy:", self.output['mean_curve'][-1]))
-        print(self.temp.format("Std of Client Accuracy:", self.output['var_curve'][-1]))
-        print(self.temp.format("Mean of Inference Time:", self.output['inference_time'][-1]))
+        # print(self.temp.format("Validating Accuracy:", self.output['mean_valid_accs'][-1]))
+        # print(self.temp.format("Mean of Client Accuracy:", self.output['mean_curve'][-1]))
+        # print(self.temp.format("Std of Client Accuracy:", self.output['var_curve'][-1]))
+        # print(self.temp.format("Mean of Inference Time:", self.output['inference_time'][-1]))
         
         self.max_acc = max(self.max_acc, test_metric)
 

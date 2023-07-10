@@ -33,11 +33,12 @@ def ppo_iter(mini_batch_size, states, actions, log_probs, returns, advantage):
          
 
 def ppo_update(model, optimizer, ppo_epochs, mini_batch_size, states, actions, log_probs, returns, advantages, clip_param=0.05):
+    losses = []
     for _ in range(ppo_epochs):
+        epochs_loss = []
         for state, action, old_log_probs, return_, advantage in ppo_iter(mini_batch_size, states, actions, log_probs, returns, advantages):
             state = state.transpose(0,1)
             action = action.view(-1, 1)
-            # pdb.set_trace()
             
             dist, value = model(state)
             entropy = dist.entropy().mean()
@@ -53,10 +54,14 @@ def ppo_update(model, optimizer, ppo_epochs, mini_batch_size, states, actions, l
             critic_loss = (return_ - value).pow(2).mean()
 
             loss = 0.5 * critic_loss + actor_loss - 0.001 * entropy
-            print(loss)
+            epochs_loss.append(loss.detach().cpu().item())
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+            
+        losses.append(np.mean(epochs_loss))
+        epochs_loss = []
+    return losses
 
 class ActorCritic(nn.Module):
     def __init__(self, num_inputs, num_outputs, hidden_size, kernel_size=3, std=0.0):
@@ -100,6 +105,7 @@ class ActorCritic(nn.Module):
         )
         
         conv_policy_out_size = self._get_conv_out(num_inputs, num_channel=1, type=2)
+        
         self.policy = nn.Sequential(
             nn.Linear(conv_policy_out_size, hidden_size),
             nn.ReLU(),
@@ -119,7 +125,7 @@ class ActorCritic(nn.Module):
             o = self.conv_value(torch.zeros(1, num_channel , *shape))
         else:
             o = self.conv_policy(torch.zeros(1, num_channel , *shape))
-        print(o.size())
+        # print(o.size())
         return int(np.prod(o.size()))
     
     def init_rl(self):
@@ -176,13 +182,13 @@ class ActorCritic(nn.Module):
         # pdb.set_trace()
         return torch.softmax(action.reshape(-1), dim=0)
     
-    def record(self, reward, done=0):
-        self.rewards.append(torch.FloatTensor([reward]).unsqueeze(1))
-        self.masks.append(torch.FloatTensor([1 - done]).unsqueeze(1))
+    def record(self, reward, done=0, device=None):
+        self.rewards.append(torch.FloatTensor([reward]).unsqueeze(1).to(device))
+        self.masks.append(torch.FloatTensor([1 - done]).unsqueeze(1).to(device))
         return
     
-    def update(self, next_state, optimizer, ppo_epochs=200, mini_batch_size=15):
-        next_state = torch.FloatTensor(next_state)
+    def update(self, next_state, optimizer, ppo_epochs=10, mini_batch_size=15):
+        # next_state = torch.FloatTensor(next_state)
         _, next_value = self(next_state)
         returns = compute_gae(next_value, self.rewards, self.masks, self.values)
 
@@ -192,34 +198,9 @@ class ActorCritic(nn.Module):
         states    = torch.cat(self.states)
         actions   = torch.cat(self.actions)
         advantage = returns - values
-        
-        while (len(self.states) > 60): 
-            self.reinit_rl()
 
         mini_batch_size = len(self.states)//4
-        ppo_update(self, optimizer, ppo_epochs, mini_batch_size, states, actions, log_probs, returns, advantage)
-        # self.init_rl()
+        losses = ppo_update(self, optimizer, ppo_epochs, mini_batch_size, states, actions, log_probs, returns, advantage)
+        print("Update losses:", losses)
+        self.init_rl()
         return
-
-    def begin_iter(self, states, actions, mini_batch_size = 5):
-        batch_size = states.shape[0]
-        for _ in range(batch_size // mini_batch_size):
-            rand_ids = np.random.randint(0, batch_size, mini_batch_size)
-            yield states[rand_ids, :], actions[rand_ids, :]
-        
-    def reinit_weight(self, optimizer, num_epochs, states, actions):
-        states = torch.cat(states)
-        actions = torch.cat(actions).requires_grad_()
-        get_loss = nn.Entro()
-        for _ in range(num_epochs):
-            for state, action in self.begin_iter(states, actions):
-                state = state.transpose(0, 1)
-                action = action.view(-1, 1)
-                
-                dist, value = self(state)
-                action_predict = dist.sample()   
-                loss = get_loss(action, action_predict)
-                print(loss)
-                optimizer.zero_grad()
-                loss.backward()
-                optimizer.step()
