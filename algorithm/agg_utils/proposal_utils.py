@@ -81,7 +81,7 @@ class ActorCritic(nn.Module):
         self.encoder1 = nn.Sequential(*encoder1)
 
         # encode the whole client layer to a vector
-        self.encoder2 = TransformerEncoder(num_layers=3, input_dim=hidden_size, dim_feedforward=2*hidden_size, num_heads=16)
+        self.encoder2 = TransformerEncoder(num_layers=3, input_dim=hidden_size, num_heads=16,  dim_feedforward=2*hidden_size)
 
         layerdims = [hidden_size, 256, 128, 64, 32]
         module_list = []
@@ -120,13 +120,22 @@ class ActorCritic(nn.Module):
         self.masks     = []
         self.entropy   = 0
         return
-        
+    
+    def reset_rl(self):
+        del self.log_probs[0]
+        del self.values[0]
+        del self.states[0]
+        del self.actions[0]
+        del self.rewards[0]
+        del self.masks[0]
+        return 
+    
     def forward(self, x):
         # x: [num_clients, classifier_size]
         x = self.encoder1(x)
         x = self.encoder2(x)
-        x = torch.sum(x, dim=1, keepdims=True)
-        
+
+        x = torch.sum(x, dim=(1))
         value = self.critic(x)
         mu    = self.actor(x)
         std   = self.log_std.exp().expand_as(mu)
@@ -138,10 +147,11 @@ class ActorCritic(nn.Module):
             dist, value = self(state)
         
         action = dist.sample()
+        action = torch.softmax(action, dim=-1)
         
         log_prob = dist.log_prob(action)
         self.entropy += dist.entropy().mean()
-        
+
         self.log_probs.append(log_prob)
         self.values.append(value)
         self.states.append(state)
@@ -166,5 +176,8 @@ class ActorCritic(nn.Module):
         advantage = returns - values
         
         ppo_update(self, optimizer, ppo_epochs, mini_batch_size, states, actions, log_probs, returns, advantage)
-        self.init_rl()
+        
+        while(len(self.states) > 50):
+            self.reset_rl()
+        
         return

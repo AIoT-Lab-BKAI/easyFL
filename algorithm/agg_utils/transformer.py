@@ -97,6 +97,7 @@ class EncoderBlock(nn.Module):
 
     def forward(self, x, mask=None):
         # Attention part
+
         attn_out = self.self_attn(x, mask=mask)
         x = x + self.dropout(attn_out)
         x = self.norm1(x)

@@ -103,17 +103,17 @@ class Server(MPBasicServer):
         
         # Get classifiers
         classifiers = [get_classifier(model).detach().cpu().flatten() for model in models]
-        state = torch.vstack(classifiers)         # <-- Change to matrix K x d
-        import pdb; pdb.set_trace()
+        state = torch.vstack(classifiers).unsqueeze(0)  # <-- Change to matrix 1 x K x d
+        
         if t > 0:
             reward = - np.mean(train_losses)
             self.agent.record(reward)
        
-        if t%10 == 0 and t > 0:
+        if t%self.steps == 0 and t > 0:
             self.agent.update(state, self.agent_optimizer) # example
         
         impact_factors = self.agent.get_action(state).reshape(-1)
-        
+        print(impact_factors)
 
         device0 = torch.device(f"cuda:{self.server_gpu_id}")
         models = [i.to(device0) for i in models]
