@@ -1,6 +1,6 @@
 from .mp_fedbase import MPBasicServer, MPBasicClient
 from algorithm.cfmtx.cfmtx import cfmtx_test
-from algorithm.agg_utils.proposal_utils_v1 import ActorCritic
+from algorithm.agg_utils.proposal_utils_cnn import ActorCritic
 
 import torch.nn as nn
 import numpy as np
@@ -116,14 +116,14 @@ class Server(MPBasicServer):
         # Processing
         if t > 0:
             # reward = - (np.mean(train_losses) - self.old_reward)
-            reward = - np.power(np.mean(train_losses),2)
+            reward = - np.mean(train_losses) - (np.max(train_losses) - np.min(train_losses))
             # print(np.mean(train_losses), np.max(train_losses), np.min(train_losses), reward)
             self.agent.record(reward, device=device0)
             if (t+1)%self.steps == 0:
                 self.agent.update(state, self.agent_optimizer) # example
         
         impact_factors = self.agent.get_action(state)
-        # print(impact_factors)
+        print("IMPACT FACTOR", impact_factors)
         logger.time_start('Aggregation')
         self.model = self.model + self.aggregate(models, p = impact_factors)
         logger.time_end('Aggregation')

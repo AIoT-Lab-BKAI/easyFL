@@ -32,7 +32,7 @@ def ppo_iter(mini_batch_size, states, actions, log_probs, returns, advantage):
         yield states[rand_ids, :], actions[rand_ids, :], log_probs[rand_ids, :], returns[rand_ids, :], advantage[rand_ids, :]
          
 
-def ppo_update(model, optimizer, ppo_epochs, mini_batch_size, states, actions, log_probs, returns, advantages, clip_param=0.05):
+def ppo_update(model, optimizer, ppo_epochs, mini_batch_size, states, actions, log_probs, returns, advantages, clip_param=0.5):
     losses = []
     for _ in range(ppo_epochs):
         epochs_loss = []
@@ -53,7 +53,9 @@ def ppo_update(model, optimizer, ppo_epochs, mini_batch_size, states, actions, l
             actor_loss  = - torch.min(surr1, surr2).mean()
             critic_loss = (return_ - value).pow(2).mean()
 
-            loss = 0.5 * critic_loss + actor_loss - 0.001 * entropy
+            print(critic_loss, actor_loss, entropy)
+
+            loss = 0.1 * critic_loss + actor_loss - 0.001 * entropy
             epochs_loss.append(loss.detach().cpu().item())
             optimizer.zero_grad()
             loss.backward()
@@ -187,7 +189,7 @@ class ActorCritic(nn.Module):
         self.masks.append(torch.FloatTensor([1 - done]).unsqueeze(1).to(device))
         return
     
-    def update(self, next_state, optimizer, ppo_epochs=10, mini_batch_size=15):
+    def update(self, next_state, optimizer, ppo_epochs=10, mini_batch_size=5):
         # next_state = torch.FloatTensor(next_state)
         _, next_value = self(next_state)
         returns = compute_gae(next_value, self.rewards, self.masks, self.values)
@@ -199,8 +201,12 @@ class ActorCritic(nn.Module):
         actions   = torch.cat(self.actions)
         advantage = returns - values
 
+        print("returns: ", returns)
+        print("values: ", values)
+        
         mini_batch_size = len(self.states)//4
         losses = ppo_update(self, optimizer, ppo_epochs, mini_batch_size, states, actions, log_probs, returns, advantage)
         print("Update losses:", losses)
+
         self.init_rl()
         return
