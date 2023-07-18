@@ -18,11 +18,14 @@ def compute_gae(next_value, rewards, masks, values, gamma=0.99, tau=0.95):
     values = values + [next_value]
     gae = 0
     returns = []
+    advantages = []
     for step in reversed(range(len(rewards))):
-        delta = rewards[step] + gamma * values[step + 1] * masks[step] - values[step]
+        td_target = rewards[step] + gamma * values[step + 1] * masks[step] 
+        delta = td_target - values[step]
         gae = delta + gamma * tau * masks[step] * gae
-        returns.insert(0, gae + values[step])
-    return returns
+        advantages.insert(0, gae)
+        returns.insert(0, td_target)
+    return returns, advantages
 
 
 def ppo_iter(mini_batch_size, states, actions, log_probs, returns, advantage):
@@ -32,7 +35,7 @@ def ppo_iter(mini_batch_size, states, actions, log_probs, returns, advantage):
         yield states[rand_ids, :], actions[rand_ids, :], log_probs[rand_ids, :], returns[rand_ids, :], advantage[rand_ids, :]
          
 
-def ppo_update(model, optimizer, ppo_epochs, mini_batch_size, states, actions, log_probs, returns, advantages, clip_param=0.5):
+def ppo_update(model, optimizer, ppo_epochs, mini_batch_size, states, actions, log_probs, returns, advantages, clip_param=0.2):
     losses = []
     for _ in range(ppo_epochs):
         epochs_loss = []
@@ -53,9 +56,7 @@ def ppo_update(model, optimizer, ppo_epochs, mini_batch_size, states, actions, l
             actor_loss  = - torch.min(surr1, surr2).mean()
             critic_loss = (return_ - value).pow(2).mean()
 
-            print(critic_loss, actor_loss, entropy)
-
-            loss = 0.1 * critic_loss + actor_loss - 0.001 * entropy
+            loss = 0.5 * critic_loss + actor_loss - 0.001 * entropy
             epochs_loss.append(loss.detach().cpu().item())
             optimizer.zero_grad()
             loss.backward()
@@ -192,18 +193,18 @@ class ActorCritic(nn.Module):
     def update(self, next_state, optimizer, ppo_epochs=10, mini_batch_size=5):
         # next_state = torch.FloatTensor(next_state)
         _, next_value = self(next_state)
-        returns = compute_gae(next_value, self.rewards, self.masks, self.values)
+        returns, advantages = compute_gae(next_value, self.rewards, self.masks, self.values, gamma=0.5)
 
         returns   = torch.cat(returns).detach()
         log_probs = torch.cat(self.log_probs).detach()
         values    = torch.cat(self.values).detach()
         states    = torch.cat(self.states)
         actions   = torch.cat(self.actions)
-        advantage = returns - values
+        advantage = torch.cat(advantages).detach()
 
         print("returns: ", returns)
         print("values: ", values)
-        
+
         mini_batch_size = len(self.states)//4
         losses = ppo_update(self, optimizer, ppo_epochs, mini_batch_size, states, actions, log_probs, returns, advantage)
         print("Update losses:", losses)

@@ -1,6 +1,7 @@
+import random
 from .mp_fedbase import MPBasicServer, MPBasicClient
 from algorithm.cfmtx.cfmtx import cfmtx_test
-from algorithm.agg_utils.proposal_utils_cnn import ActorCritic
+from algorithm.agg_utils.proposal_utils_v1 import ActorCritic
 
 import torch.nn as nn
 import numpy as np
@@ -88,18 +89,24 @@ class Server(MPBasicServer):
         super(Server, self).__init__(option, model, clients, test_data)
         classifier = get_classifier(model)
         self.agent = ActorCritic(num_inputs=classifier.shape, num_outputs=self.clients_per_round, hidden_size=512)
-        self.agent_optimizer = torch.optim.Adam(self.agent.parameters(), lr=1e-4) # example
+        self.agent_optimizer = torch.optim.Adam(self.agent.parameters(), lr=1e-3) # example
         self.steps = 10 # example
-        self.device = torch.device("cuda")
-        self.init_states = []
-        self.init_actions = []
-        self.old_reward = 0
+        self.device = torch.device("cuda")    
         return
     
     def iterate(self, t, pool):
         self.selected_clients = self.sample()
         models, train_losses = self.communicate(self.selected_clients, pool)
-        
+
+        # Kết hợp các phần tử từ hai danh sách thành một danh sách kết hợp
+        combined_list = list(zip(models, train_losses))
+
+        # Shuffle danh sách kết hợp
+        random.shuffle(combined_list)
+
+        # Tách các phần tử đã được shuffle thành hai danh sách mới
+        models, train_losses = zip(*combined_list)
+
         if not self.selected_clients: 
             return
         # Get classifiers
