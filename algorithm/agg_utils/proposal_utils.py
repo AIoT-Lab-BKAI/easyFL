@@ -11,10 +11,10 @@ import pdb
 def init_weights(m):
     if isinstance(m, nn.Linear):
         nn.init.normal_(m.weight, mean=0., std=0.1)
-        nn.init.constant_(m.bias, 0.1)
+        nn.init.constant_(m.bias, 0.001)
         
         
-def compute_gae(next_value, rewards, masks, values, gamma=0.99, tau=0.95):
+def compute_gae(next_value, rewards, masks, values, gamma=0.8, tau=0.95):
     values = values + [next_value]
     gae = 0
     returns = []
@@ -24,6 +24,18 @@ def compute_gae(next_value, rewards, masks, values, gamma=0.99, tau=0.95):
         returns.insert(0, gae + values[step])
     return returns
 
+# def compute_gae(next_value, rewards, masks, values, gamma=0.5, tau=0.95):
+#     values = values + [next_value]
+#     gae = 0
+#     returns = []
+#     advantages = []
+#     for step in reversed(range(len(rewards))):
+#         td_target = rewards[step] + gamma * values[step + 1] * masks[step] 
+#         delta = td_target - values[step]
+#         gae = delta + gamma * tau * masks[step] * gae
+#         advantages.insert(0, gae)
+#         returns.insert(0, td_target)
+#     return returns, advantages
 
 def ppo_iter(mini_batch_size, states, actions, log_probs, returns, advantage):
     batch_size = states.size(0)
@@ -32,10 +44,14 @@ def ppo_iter(mini_batch_size, states, actions, log_probs, returns, advantage):
         yield states[rand_ids, :], actions[rand_ids, :], log_probs[rand_ids, :], returns[rand_ids, :], advantage[rand_ids, :]
          
 
-def ppo_update(model, optimizer, ppo_epochs, mini_batch_size, states, actions, log_probs, returns, advantages, clip_param=0.05):
+def ppo_update(model, optimizer, ppo_epochs, mini_batch_size, states, actions, log_probs, returns, advantages, clip_param=0.2):
     losses = []
+    cri_losses = []
+    act_losses = []
     for _ in range(ppo_epochs):
         epochs_loss = []
+        cri_loss = []
+        act_loss = []
         for state, action, old_log_probs, return_, advantage in ppo_iter(mini_batch_size, states, actions, log_probs, returns, advantages):
             dist, value = model(state)
             entropy = dist.entropy().mean()
@@ -49,49 +65,57 @@ def ppo_update(model, optimizer, ppo_epochs, mini_batch_size, states, actions, l
             critic_loss = (return_ - value).pow(2).mean()
 
             loss = 0.5 * critic_loss + actor_loss - 0.001 * entropy
+            
             epochs_loss.append(loss.detach().cpu().item())
+            cri_loss.append(critic_loss.detach().cpu().item())
+            act_loss.append(actor_loss.detach().cpu().item())
+            
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
         losses.append(np.mean(epochs_loss))
+        cri_losses.append(np.mean(cri_loss))
+        act_losses.append(np.mean(act_loss))
+        
         epochs_loss = []
-    return losses
+        cri_loss = []
+        act_loss = []
+    return losses, cri_losses, act_losses
 
 class ActorCritic(nn.Module):
     def __init__(self, num_inputs, num_outputs, hidden_size, kernel_size=3, std=0.0):
         super(ActorCritic, self).__init__()
         
-        self.conv = nn.Sequential(
-            nn.Conv2d(1, 10, kernel_size=(1,5), stride=1),
-            nn.ReLU(),
-            nn.MaxPool2d((1, 4)),
-            nn.Conv2d(10, 32, kernel_size=(1,5), stride=1),
-            nn.ReLU(),
-            nn.MaxPool2d((1, 4)),
-            nn.Conv2d(32, 32, kernel_size=(1,5), stride=1),
-            nn.ReLU(),
-            nn.MaxPool2d((1, 2)),
-        )
-
-        # self.conv2 = nn.Sequential(
+        # self.conv = nn.Sequential(
         #     nn.Conv2d(1, 10, kernel_size=(1,5), stride=1),
         #     nn.ReLU(),
         #     nn.MaxPool2d((1, 4)),
         #     nn.Conv2d(10, 32, kernel_size=(1,5), stride=1),
         #     nn.ReLU(),
         #     nn.MaxPool2d((1, 4)),
-        #     nn.Conv2d(32, 32, kernel_size=(1,5), stride=1),
+        #     nn.Conv2d(32, 64, kernel_size=(1,3), stride=1),
         #     nn.ReLU(),
         #     nn.MaxPool2d((1, 4)),
-        #     nn.Conv2d(32, 32, kernel_size=(1,3), stride=1),
-        #     nn.ReLU(),
-        #     nn.MaxPool2d((1, 3)),
         # )
+
+        self.conv = nn.Sequential(
+            nn.Conv2d(1, 10, kernel_size=3, stride=1),
+            nn.ReLU(),
+            nn.MaxPool2d((1, 4)),
+            nn.Conv2d(10, 32, kernel_size=3, stride=1),
+            nn.ReLU(),
+            nn.MaxPool2d((1, 4)),
+            nn.Conv2d(32, 32, kernel_size=3, stride=1),
+            nn.ReLU(),
+            nn.MaxPool2d((1, 4)),
+        )
 
         
         conv_out_size = self._get_conv_out(num_inputs, 1, num_outputs)
         self.policy = nn.Sequential(
             nn.Linear(conv_out_size, 512),
+            nn.ReLU(),
+            nn.Linear(512, 512),
             nn.ReLU(),
             nn.Linear(512, 256),
             nn.ReLU(),
@@ -100,6 +124,8 @@ class ActorCritic(nn.Module):
 
         self.value = nn.Sequential(
             nn.Linear(conv_out_size, 512),
+            nn.ReLU(),
+            nn.Linear(512, 512),
             nn.ReLU(),
             nn.Linear(512, 256),
             nn.ReLU(),
@@ -138,7 +164,10 @@ class ActorCritic(nn.Module):
 
     def critic(self, _x):
         x = _x.view(-1, 1, _x.shape[2], _x.shape[3])
+        # print("\nINIT", x[0, 0, 0:10, 0:5])
         x = self.conv(x)
+        # print(x.shape)
+        # print("OUTPUT:", x[0,0:2,:, 0:5])
         x = x.view(_x.shape[0],  -1)
         return self.value(x)
 
@@ -174,10 +203,11 @@ class ActorCritic(nn.Module):
         self.masks.append(torch.FloatTensor([1 - done]).unsqueeze(1))
         return
     
-    def update(self, next_state, optimizer, ppo_epochs=200, mini_batch_size=10):
+    def update(self, next_state, optimizer, ppo_epochs=10, mini_batch_size=10):
         next_state = torch.FloatTensor(next_state)
         _, next_value = self(next_state)
         returns = compute_gae(next_value, self.rewards, self.masks, self.values)
+        # returns, advantages = compute_gae(next_value, self.rewards, self.masks, self.values)
 
         returns   = torch.cat(returns).detach()
         log_probs = torch.cat(self.log_probs).detach()
@@ -185,30 +215,17 @@ class ActorCritic(nn.Module):
         states    = torch.cat(self.states)
         actions   = torch.cat(self.actions)
         advantage = returns - values
+        # advantage = torch.cat(advantages).detach()
 
-        mini_batch_size = len(self.states)//4
-        losses = ppo_update(self, optimizer, ppo_epochs, mini_batch_size, states, actions, log_probs, returns, advantage)
+        print("returns: ", returns)
+        print("values: ", values)
+
+        mini_batch_size = len(self.states)//2
+        losses, cri_losses, act_losses = ppo_update(self, optimizer, ppo_epochs, mini_batch_size, states, actions, log_probs, returns, advantage)
         print("Update losses:", losses)
-        self.init_rl()
-        return
-
-    def begin_iter(self, states, actions, mini_batch_size = 5):
-        batch_size = states.shape[0]
-        for _ in range(batch_size // mini_batch_size):
-            rand_ids = np.random.randint(0, batch_size, mini_batch_size)
-            yield states[rand_ids, :], actions[rand_ids, :]
+        print("Update critic losses:", cri_losses)
+        print("Update actor losses:", act_losses)
         
-    def reinit_weight(self, optimizer, num_epochs, states, actions):
-        states = torch.cat(states)
-        actions = torch.cat(actions).requires_grad_()
-        get_loss = nn.MSELoss()
-        for _ in range(num_epochs):
-            for state, action in self.begin_iter(states, actions):
-                dist, value = self(state)
-                action_predict = dist.sample()
-                # pdb.set_trace()    
-                loss = get_loss(action, action_predict)
-                optimizer.zero_grad()
-                loss.backward()
-                print(loss)
-                optimizer.step()
+        while(len(self.states) > 50):
+            self.reinit_rl()
+        return

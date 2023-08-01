@@ -1,12 +1,11 @@
 from .mp_fedbase import MPBasicServer, MPBasicClient
 from algorithm.cfmtx.cfmtx import cfmtx_test
-from algorithm.agg_utils.proposal_utils import ActorCritic
+from algorithm.agg_utils.proposal_utils2 import ActorCritic
 
 import torch.nn as nn
 import numpy as np
 import torch
 import copy
-import random
 
 
 def get_module_from_model(model, res = None):
@@ -83,12 +82,15 @@ def compute_similarity(a, b):
     return torch.mean(torch.tensor(sim)), sim[-1]
 
 
+
 class Server(MPBasicServer):
     def __init__(self, option, model, clients, test_data=None):
         super(Server, self).__init__(option, model, clients, test_data)
-        classifier = get_classifier(model)
-        self.agent = ActorCritic(num_inputs=classifier.shape, num_outputs=self.clients_per_round, hidden_size=512)
-        self.agent_optimizer = torch.optim.Adam(self.agent.parameters(), lr=1e-4) # example
+        classifier_length = get_classifier(model).flatten().shape[0]
+        
+        self.agent = ActorCritic(num_inputs=classifier_length, num_outputs=self.clients_per_round, hidden_size=512)
+        self.agent_optimizer = torch.optim.Adam(self.agent.parameters(), lr=0.0001) # example
+        
         self.steps = 10 # example
         return
     
@@ -96,51 +98,35 @@ class Server(MPBasicServer):
         self.selected_clients = self.sample()
         models, train_losses = self.communicate(self.selected_clients, pool)
         
-        # # Kết hợp các phần tử từ hai danh sách thành một danh sách kết hợp
-        # combined_list = list(zip(models, train_losses))
-
-        # # Shuffle danh sách kết hợp
-        # random.shuffle(combined_list)
-
-        # # Tách các phần tử đã được shuffle thành hai danh sách mới
-        # models, train_losses = zip(*combined_list)
-
         if not self.selected_clients: 
             return
+        
         # Get classifiers
-        device0 = torch.device(f"cuda:{self.server_gpu_id}")
-        classifiers = [get_classifier(model.to(device0) - self.model.to(device0)).cpu() for model in models]
+        classifiers = [get_classifier(model).detach().cpu() for model in models]
         
         classifiers_update = []
 
         for clf in classifiers:
             norm = torch.norm(clf, dim=1).reshape(-1, 1)
-            classifiers_update.append(clf/norm)
-        # classifiers = [(clf - torch.mean(clf))/torch.std(clf) for clf in classifiers]
-
-        state = torch.stack(classifiers_update)         # <-- Change to matrix K x d
-        state = torch.unsqueeze(state, dim=0)               # <-- Change to matrix 1 x K x d
+            classifiers_update.append((clf/norm).flatten())
         
-        # Processing
+        state = torch.vstack(classifiers_update).unsqueeze(0)  # <-- Change to matrix 1 x K x d
+        
         if t > 0:
-            reward = - (np.mean(train_losses))
+            reward = - np.mean(train_losses)
             self.agent.record(reward)
-            if t%self.steps == 0:
-                self.agent.update(state, self.agent_optimizer) # example
-
-        self.old_reward = np.mean(train_losses)
+       
+        if t%self.steps == 0 and t > 0:
+            self.agent.update(state, self.agent_optimizer) # example
         
-        impact_factors = self.agent.get_action(state)
-        data_vols = [self.client_vols[cid] for cid in self.selected_clients]
-        
+        impact_factors = self.agent.get_action(state).reshape(-1)
         print(impact_factors)
-        print(data_vols)
-        
+
         device0 = torch.device(f"cuda:{self.server_gpu_id}")
         models = [i.to(device0) for i in models]
-        
         self.model = self.aggregate(models, p = impact_factors)
         return
+
 
 class Client(MPBasicClient):
     def __init__(self, option, name='', train_data=None, valid_data=None):
@@ -158,6 +144,7 @@ class Client(MPBasicClient):
     def train(self, model, device='cuda'):
         model = model.to(device)
         model.train()
+        
         src_model = copy.deepcopy(model).to(device)
         src_model.freeze_grad()
                 

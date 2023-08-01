@@ -88,24 +88,23 @@ class Server(MPBasicServer):
     def __init__(self, option, model, clients, test_data=None):
         super(Server, self).__init__(option, model, clients, test_data)
         classifier = get_classifier(model)
-        self.agent = ActorCritic(num_inputs=classifier.shape, num_outputs=self.clients_per_round, hidden_size=512)
-        self.agent_optimizer = torch.optim.Adam(self.agent.parameters(), lr=1e-3) # example
-        self.steps = 10 # example
-        self.device = torch.device("cuda")    
+        self.agent = ActorCritic(num_inputs=classifier.shape, num_outputs=self.clients_per_round, epsilon_initial = 0.9, epsilon_decay=0.9, epsilon_min=0.1, hidden_size=512)
+        self.agent_optimizer = torch.optim.Adam(self.agent.parameters(), lr=5e-3) # example
+        self.steps = 10 # example  
         return
     
     def iterate(self, t, pool):
         self.selected_clients = self.sample()
         models, train_losses = self.communicate(self.selected_clients, pool)
 
-        # Kết hợp các phần tử từ hai danh sách thành một danh sách kết hợp
-        combined_list = list(zip(models, train_losses))
+        # # Kết hợp các phần tử từ hai danh sách thành một danh sách kết hợp
+        # combined_list = list(zip(models, train_losses))
 
-        # Shuffle danh sách kết hợp
-        random.shuffle(combined_list)
+        # # Shuffle danh sách kết hợp
+        # random.shuffle(combined_list)
 
-        # Tách các phần tử đã được shuffle thành hai danh sách mới
-        models, train_losses = zip(*combined_list)
+        # # Tách các phần tử đã được shuffle thành hai danh sách mới
+        # models, train_losses = zip(*combined_list)
 
         if not self.selected_clients: 
             return
@@ -117,16 +116,23 @@ class Server(MPBasicServer):
         logger.time_end('Cuda|Compute Delta w')
         
         classifiers = [get_classifier(submodel) for submodel in models]
-        state = torch.stack(classifiers)         # <-- Change to matrix K x d
-        state = torch.unsqueeze(state, dim=1)    # <-- Change to matrix K x 1 x d
+
+        classifiers_update = []
+
+        for clf in classifiers:
+            norm = torch.norm(clf, dim=1).reshape(-1, 1)
+            classifiers_update.append(clf/norm)
+
+        state = torch.stack(classifiers_update)         # <-- Change to matrix K x d
+        state = torch.unsqueeze(state, dim=0)    # <-- Change to matrix K x 1 x d
         
         # Processing
         if t > 0:
             # reward = - (np.mean(train_losses) - self.old_reward)
-            reward = - np.mean(train_losses) - (np.max(train_losses) - np.min(train_losses))
+            reward = - np.mean(train_losses)
             # print(np.mean(train_losses), np.max(train_losses), np.min(train_losses), reward)
             self.agent.record(reward, device=device0)
-            if (t+1)%self.steps == 0:
+            if t%self.steps == 0:
                 self.agent.update(state, self.agent_optimizer) # example
         
         impact_factors = self.agent.get_action(state)
