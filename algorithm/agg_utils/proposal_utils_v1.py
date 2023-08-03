@@ -14,7 +14,7 @@ def init_weights(m):
         nn.init.constant_(m.bias, 0.001)
         
         
-def compute_gae(next_value, rewards, masks, values, gamma=0.9, tau=0.95):
+def compute_gae(next_value, rewards, masks, values, gamma=0.85, tau=0.95):
     values = values + [next_value]
     gae = 0
     returns = []
@@ -65,7 +65,7 @@ def ppo_update(model, optimizer, ppo_epochs, mini_batch_size, states, actions, l
             actor_loss  = - torch.min(surr1, surr2).mean()
             critic_loss = (return_ - value).pow(2).mean()
 
-            loss = 0.5 * critic_loss + 20 * actor_loss - 0.001 * entropy
+            loss = 0.5 * critic_loss + 40 * actor_loss - 0.001 * entropy
             
             epochs_loss.append(loss.detach().cpu().item())
             cri_loss.append(critic_loss.detach().cpu().item())
@@ -84,7 +84,7 @@ def ppo_update(model, optimizer, ppo_epochs, mini_batch_size, states, actions, l
     return losses, cri_losses, act_losses
 
 class ActorCritic(nn.Module):
-    def __init__(self, num_inputs, num_outputs, epsilon_initial, epsilon_decay, epsilon_min, hidden_size, kernel_size=3, std=0.0):
+    def __init__(self, num_inputs, num_outputs, epsilon_initial, epsilon_decay, epsilon_min, hidden_size, std=0.0):
         super(ActorCritic, self).__init__()
         
         # self.conv = nn.Sequential(
@@ -100,13 +100,13 @@ class ActorCritic(nn.Module):
         # )
 
         self.conv = nn.Sequential(
-            nn.Conv2d(10, 32, kernel_size=5, stride=1),
+            nn.Conv2d(10, 64, kernel_size=(1,5), stride=1),
             nn.ReLU(),
             nn.MaxPool2d((1, 4)),
-            nn.Conv2d(32, 64, kernel_size=3, stride=1),
+            nn.Conv2d(64, 128, kernel_size=(1,3), stride=1),
             nn.ReLU(),
             nn.MaxPool2d((1, 4)),
-            nn.Conv2d(64, 64, kernel_size=3, stride=1),
+            nn.Conv2d(128, 256, kernel_size=(1,3), stride=1),
             nn.ReLU(),
             nn.MaxPool2d((1, 4)),
         )
@@ -121,6 +121,7 @@ class ActorCritic(nn.Module):
             nn.Linear(hidden_size, 256),
             nn.ReLU(),
             nn.Linear(256, num_outputs),
+            nn.Sigmoid()
         )
 
         self.value = nn.Sequential(
@@ -136,6 +137,7 @@ class ActorCritic(nn.Module):
         self.epsilon = epsilon_initial
         self.epsilon_decay = epsilon_decay
         self.epsilon_min = epsilon_min
+        self.clip_param = 0.5
 
         self.log_std = nn.Parameter(torch.ones(1, num_outputs) * std)
         
@@ -190,19 +192,23 @@ class ActorCritic(nn.Module):
         dist  = Normal(mu, std)
         return dist, value
     
-    def epsilon_greedy_action(self, dist, epsilon):
-        action = dist.sample()
+    def epsilon_greedy_action(self, dist, fedavg_action, epsilon, device = None):
         # Hàm này trả về hành động dựa trên xác suất được cung cấp và giá trị epsilon.
         if np.random.uniform() < epsilon:
             print("+++RANDOM+++")
-            return torch.randn(action.shape[0], action.shape[1], device = action.device)
+            mu = torch.randn((1, 10), device = device, requires_grad = True)
+            # mu = torch.tensor(fedavg_action, device = device, requires_grad = True).unsqueeze(0)
+            std   = self.log_std.exp().expand_as(mu)
+            return Normal(mu, std)
+            # return torch.randn(action.shape[0], action.shape[1], device = action.device)
         else:
-            return action
+            return dist
     
-    def get_action(self, state):
+    def get_action(self, state, fedavg_action):
         dist, value = self(state)
-        action = self.epsilon_greedy_action(dist, self.epsilon)
-        
+        dist = self.epsilon_greedy_action(dist, fedavg_action, self.epsilon, device = value.device)
+        action = dist.sample()
+
         log_prob = dist.log_prob(action)
         self.entropy += dist.entropy().mean().detach()
         
@@ -216,7 +222,7 @@ class ActorCritic(nn.Module):
         self.rewards.append(torch.FloatTensor([reward]).unsqueeze(1).to(device))
         self.masks.append(torch.FloatTensor([1 - done]).unsqueeze(1).to(device))
     
-    def update(self, next_state, optimizer, ppo_epochs=50, mini_batch_size=10):
+    def update(self, next_state, optimizer, ppo_epochs=10, mini_batch_size=10):
         # next_state = torch.FloatTensor(next_state)
         _, next_value = self(next_state)
         returns = compute_gae(next_value, self.rewards, self.masks, self.values)
@@ -234,13 +240,14 @@ class ActorCritic(nn.Module):
         print("values: ", values)
 
         mini_batch_size = len(self.states)//2
-        losses, cri_losses, act_losses = ppo_update(self, optimizer, ppo_epochs, mini_batch_size, states, actions, log_probs, returns, advantage)
+        losses, cri_losses, act_losses = ppo_update(self, optimizer, ppo_epochs, mini_batch_size, states, actions, log_probs, returns, advantage, clip_param = self.clip_param)
         print("Update losses:", losses)
         print("Update critic losses:", cri_losses)
         print("Update actor losses:", act_losses)
 
-        # self.init_rl()
-        while(len(self.states) > 100):
-            self.reinit_rl()
-        self.epsilon = max(self.epsilon * self.epsilon_decay, self.epsilon_min)        
+        self.init_rl()
+        # while(len(self.states) > 100):
+        #     self.reinit_rl()
+        self.epsilon = max(self.epsilon * self.epsilon_decay, self.epsilon_min)
+        self.clip_param = max(self.clip_param * 0.95, 0.1)        
         return

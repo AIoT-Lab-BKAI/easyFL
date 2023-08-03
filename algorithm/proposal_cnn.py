@@ -88,9 +88,10 @@ class Server(MPBasicServer):
     def __init__(self, option, model, clients, test_data=None):
         super(Server, self).__init__(option, model, clients, test_data)
         classifier = get_classifier(model)
-        self.agent = ActorCritic(num_inputs=classifier.shape, num_outputs=self.clients_per_round, epsilon_initial = 0.9, epsilon_decay=0.9, epsilon_min=0.1, hidden_size=512)
-        self.agent_optimizer = torch.optim.Adam(self.agent.parameters(), lr=5e-3) # example
-        self.steps = 10 # example  
+        self.agent = ActorCritic(num_inputs=classifier.shape, num_outputs=self.clients_per_round, epsilon_initial = 0.8, epsilon_decay=0.9, epsilon_min=0.05, hidden_size=512, std=-2)
+        self.agent_optimizer = torch.optim.Adam(self.agent.parameters(), lr=1e-3) # example
+        self.steps = 15 # example
+        self.old_reward = 0  
         return
     
     def iterate(self, t, pool):
@@ -128,14 +129,15 @@ class Server(MPBasicServer):
         
         # Processing
         if t > 0:
-            # reward = - (np.mean(train_losses) - self.old_reward)
             reward = - np.mean(train_losses)
+            # reward = - np.mean(train_losses)/self.old_reward
             # print(np.mean(train_losses), np.max(train_losses), np.min(train_losses), reward)
             self.agent.record(reward, device=device0)
             if t%self.steps == 0:
                 self.agent.update(state, self.agent_optimizer) # example
         
-        impact_factors = self.agent.get_action(state)
+        self.old_reward = np.mean(train_losses)
+        impact_factors = self.agent.get_action(state, fedavg_action = [1.0 * self.client_vols[cid]/self.data_vol for cid in self.selected_clients])
         print("IMPACT FACTOR", impact_factors)
         logger.time_start('Aggregation')
         self.model = self.model + self.aggregate(models, p = impact_factors)
