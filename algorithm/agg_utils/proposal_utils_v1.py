@@ -1,10 +1,10 @@
-import numpy as np
-
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 from torch.distributions import Normal
+import numpy as np
+import random
 import pdb
 
 
@@ -14,7 +14,7 @@ def init_weights(m):
         nn.init.constant_(m.bias, 0.001)
         
         
-def compute_gae(next_value, rewards, masks, values, gamma=0.85, tau=0.95):
+def compute_gae(next_value, rewards, masks, values, gamma=0.95, tau=0.95):
     values = values + [next_value]
     gae = 0
     returns = []
@@ -42,8 +42,31 @@ def ppo_iter(mini_batch_size, states, actions, log_probs, returns, advantage):
     batch_size = states.size(0)
     for _ in range(batch_size // mini_batch_size):
         rand_ids = np.random.randint(0, batch_size, mini_batch_size)
-        yield states[rand_ids, :], actions[rand_ids, :], log_probs[rand_ids, :], returns[rand_ids, :], advantage[rand_ids, :]
-         
+        for _ in range(10):
+            numbers = list(range(0, states.shape[1]))
+            permutations = [random.sample(numbers, len(numbers)) for _ in range(50)]
+            
+            states_ = states[rand_ids, :]
+            actions_ = actions[rand_ids, :]
+            log_probs_ = log_probs[rand_ids, :]
+            returns_= returns[rand_ids, :]
+            advantage_ = advantage[rand_ids, :]
+
+            list_states = [] 
+            list_actions = []
+            list_log_probs = [] 
+            list_returns = []
+            list_advantage = []
+
+            for perm in permutations:
+                list_states.append(states_[:, perm]) 
+                list_actions.append(actions_[:, perm])
+                list_log_probs.append(log_probs_[:, perm])
+                list_returns.append(returns_)
+                list_advantage.append(advantage_)
+
+            yield torch.cat(list_states), torch.cat(list_actions), torch.cat(list_log_probs), torch.cat(list_returns), torch.cat(list_advantage)
+            
 
 def ppo_update(model, optimizer, ppo_epochs, mini_batch_size, states, actions, log_probs, returns, advantages, clip_param=0.2):
     losses = []
@@ -65,7 +88,7 @@ def ppo_update(model, optimizer, ppo_epochs, mini_batch_size, states, actions, l
             actor_loss  = - torch.min(surr1, surr2).mean()
             critic_loss = (return_ - value).pow(2).mean()
 
-            loss = 0.5 * critic_loss + 40 * actor_loss - 0.001 * entropy
+            loss = 0.5 * critic_loss + actor_loss - 0.001 * entropy
             
             epochs_loss.append(loss.detach().cpu().item())
             cri_loss.append(critic_loss.detach().cpu().item())
@@ -87,66 +110,58 @@ class ActorCritic(nn.Module):
     def __init__(self, num_inputs, num_outputs, epsilon_initial, epsilon_decay, epsilon_min, hidden_size, std=0.0):
         super(ActorCritic, self).__init__()
         
-        # self.conv = nn.Sequential(
-        #     nn.Conv2d(1, 10, kernel_size=(1,5), stride=1),
-        #     nn.ReLU(),
-        #     nn.MaxPool2d((1, 4)),
-        #     nn.Conv2d(10, 32, kernel_size=(1,5), stride=1),
-        #     nn.ReLU(),
-        #     nn.MaxPool2d((1, 4)),
-        #     nn.Conv2d(32, 64, kernel_size=(1,3), stride=1),
-        #     nn.ReLU(),
-        #     nn.MaxPool2d((1, 4)),
-        # )
-
         self.conv = nn.Sequential(
-            nn.Conv2d(10, 64, kernel_size=(1,5), stride=1),
+            nn.Linear(num_inputs[1], 256),
             nn.ReLU(),
-            nn.MaxPool2d((1, 4)),
-            nn.Conv2d(64, 128, kernel_size=(1,3), stride=1),
+            nn.Linear(256, 128),
             nn.ReLU(),
-            nn.MaxPool2d((1, 4)),
-            nn.Conv2d(128, 256, kernel_size=(1,3), stride=1),
+            nn.Linear(128, 64),
             nn.ReLU(),
-            nn.MaxPool2d((1, 4)),
+            nn.Linear(64, 1),
         )
 
+        # self.conv = nn.Sequential(
+        #     nn.Conv2d(num_inputs[1], 256, kernel_size=3, stride=1),
+        #     nn.ReLU(),
+        #     nn.MaxPool2d(2),
+        #     nn.Conv2d(256, 128, kernel_size=3, stride=1),
+        #     nn.ReLU(),
+        #     nn.MaxPool2d(2),
+        # )
+
         
-        conv_out_size = self._get_conv_out(num_inputs, 10, num_outputs)
+        conv_out_size = self._get_conv_out(num_channel= num_outputs, c1 = num_inputs[0], c2 = num_inputs[1])
         self.policy = nn.Sequential(
             nn.Linear(conv_out_size, hidden_size),
             nn.ReLU(),
-            nn.Linear(hidden_size, hidden_size),
+            nn.Linear(hidden_size, 128),
             nn.ReLU(),
-            nn.Linear(hidden_size, 256),
-            nn.ReLU(),
-            nn.Linear(256, num_outputs),
+            nn.Linear(128, num_outputs),
             nn.Sigmoid()
         )
 
         self.value = nn.Sequential(
             nn.Linear(conv_out_size, hidden_size),
             nn.ReLU(),
-            nn.Linear(hidden_size, hidden_size),
+            nn.Linear(hidden_size, 128),
             nn.ReLU(),
-            nn.Linear(hidden_size, 256),
-            nn.ReLU(),
-            nn.Linear(256, 1),
+            nn.Linear(128, 1),
         )
 
         self.epsilon = epsilon_initial
         self.epsilon_decay = epsilon_decay
         self.epsilon_min = epsilon_min
-        self.clip_param = 0.5
+        self.clip_param = 0.6
 
-        self.log_std = nn.Parameter(torch.ones(1, num_outputs) * std)
+        self.log_std = torch.ones(1, num_outputs) * std
+        self.log_std = nn.Parameter(torch.clamp(self.log_std, np.log(0.001), np.log(0.1)))
         
         self.apply(init_weights)
         self.init_rl()
         return
     
-    def _get_conv_out(self, shape, num_channel, num_out):
-        o = self.conv(torch.zeros(1, num_channel , *shape))
+    def _get_conv_out(self, num_channel, c1, c2,):
+        o = self.conv(torch.zeros(1, num_channel , c1, c2))
         # print(o.size())
         return int(np.prod(o.size()))
     
@@ -169,8 +184,8 @@ class ActorCritic(nn.Module):
         del self.masks[0]
         return
 
-    def critic(self, _x):
-        x = _x.transpose(1,2)
+    def critic(self, x):
+        # x = _x.transpose(1,3)
         # print("\nINIT", x[0, 0, 0:10, 0:5])
         x = self.conv(x)
         # print(x.shape)
@@ -178,8 +193,8 @@ class ActorCritic(nn.Module):
         x = x.view(x.shape[0], -1)
         return self.value(x)
 
-    def actor(self, _x):
-        x = _x.transpose(1,2)
+    def actor(self, x):
+        # x = _x.transpose(1,3)
         x = self.conv(x)
         x = x.view(x.shape[0], -1)
         return self.policy(x)
@@ -194,10 +209,14 @@ class ActorCritic(nn.Module):
     
     def epsilon_greedy_action(self, dist, fedavg_action, epsilon, device = None):
         # Hàm này trả về hành động dựa trên xác suất được cung cấp và giá trị epsilon.
-        if np.random.uniform() < epsilon:
-            print("+++RANDOM+++")
-            mu = torch.randn((1, 10), device = device, requires_grad = True)
-            # mu = torch.tensor(fedavg_action, device = device, requires_grad = True).unsqueeze(0)
+        val = np.random.uniform()
+        if val < 2 * epsilon:
+            if val < epsilon:
+                print("+++RANDOM+++")
+                mu = torch.randn((1, 10), device = device, requires_grad = True)
+            else:
+                print("+++FEDAVG+++")
+                mu = torch.tensor(fedavg_action, device = device, requires_grad = True).unsqueeze(0)
             std   = self.log_std.exp().expand_as(mu)
             return Normal(mu, std)
             # return torch.randn(action.shape[0], action.shape[1], device = action.device)
@@ -222,7 +241,7 @@ class ActorCritic(nn.Module):
         self.rewards.append(torch.FloatTensor([reward]).unsqueeze(1).to(device))
         self.masks.append(torch.FloatTensor([1 - done]).unsqueeze(1).to(device))
     
-    def update(self, next_state, optimizer, ppo_epochs=10, mini_batch_size=10):
+    def update(self, next_state, optimizer, ppo_epochs=20, mini_batch_size=10):
         # next_state = torch.FloatTensor(next_state)
         _, next_value = self(next_state)
         returns = compute_gae(next_value, self.rewards, self.masks, self.values)
@@ -235,7 +254,6 @@ class ActorCritic(nn.Module):
         actions   = torch.cat(self.actions)
         advantage = returns - values
         # advantage = torch.cat(advantages).detach()
-
         print("returns: ", returns)
         print("values: ", values)
 
@@ -246,8 +264,8 @@ class ActorCritic(nn.Module):
         print("Update actor losses:", act_losses)
 
         self.init_rl()
-        # while(len(self.states) > 100):
+        # while(len(self.states) > 50):
         #     self.reinit_rl()
         self.epsilon = max(self.epsilon * self.epsilon_decay, self.epsilon_min)
-        self.clip_param = max(self.clip_param * 0.95, 0.1)        
+        self.clip_param = max(self.clip_param * 0.9, 0.1)        
         return

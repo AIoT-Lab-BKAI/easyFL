@@ -88,24 +88,25 @@ class Server(MPBasicServer):
     def __init__(self, option, model, clients, test_data=None):
         super(Server, self).__init__(option, model, clients, test_data)
         classifier = get_classifier(model)
-        self.agent = ActorCritic(num_inputs=classifier.shape, num_outputs=self.clients_per_round, epsilon_initial = 0.8, epsilon_decay=0.9, epsilon_min=0.05, hidden_size=512, std=-2)
+        self.agent = ActorCritic(num_inputs=classifier.shape, num_outputs=self.clients_per_round, epsilon_initial = 0.4, epsilon_decay=0.8, epsilon_min=0.05, hidden_size=256, std=np.log(0.1))
         self.agent_optimizer = torch.optim.Adam(self.agent.parameters(), lr=1e-3) # example
-        self.steps = 15 # example
-        self.old_reward = 0  
+        self.steps = 20
+        # self.cnt = 1
+        # self.old_reward = 0  
         return
     
     def iterate(self, t, pool):
         self.selected_clients = self.sample()
         models, train_losses = self.communicate(self.selected_clients, pool)
 
-        # # Kết hợp các phần tử từ hai danh sách thành một danh sách kết hợp
-        # combined_list = list(zip(models, train_losses))
+        # Kết hợp các phần tử từ hai danh sách thành một danh sách kết hợp
+        combined_list = list(zip(models, train_losses))
 
-        # # Shuffle danh sách kết hợp
-        # random.shuffle(combined_list)
+        # Shuffle danh sách kết hợp
+        random.shuffle(combined_list)
 
-        # # Tách các phần tử đã được shuffle thành hai danh sách mới
-        # models, train_losses = zip(*combined_list)
+        # Tách các phần tử đã được shuffle thành hai danh sách mới
+        models, train_losses = zip(*combined_list)
 
         if not self.selected_clients: 
             return
@@ -114,6 +115,8 @@ class Server(MPBasicServer):
         logger.time_start('Cuda|Compute Delta w')
         self.agent = self.agent.to(device0)
         models = [model.to(device0) - self.model.to(device0) for model in models]
+        # models2 = copy.deepcopy(models)
+        # models2.append(self.model.to(device0))
         logger.time_end('Cuda|Compute Delta w')
         
         classifiers = [get_classifier(submodel) for submodel in models]
@@ -129,14 +132,15 @@ class Server(MPBasicServer):
         
         # Processing
         if t > 0:
-            reward = - np.mean(train_losses)
+            reward = - np.mean(train_losses) - (np.max(train_losses) - np.min(train_losses))
             # reward = - np.mean(train_losses)/self.old_reward
             # print(np.mean(train_losses), np.max(train_losses), np.min(train_losses), reward)
             self.agent.record(reward, device=device0)
             if t%self.steps == 0:
                 self.agent.update(state, self.agent_optimizer) # example
+                # self.cnt += 1
+                # self.steps += 2 * self.cnt
         
-        self.old_reward = np.mean(train_losses)
         impact_factors = self.agent.get_action(state, fedavg_action = [1.0 * self.client_vols[cid]/self.data_vol for cid in self.selected_clients])
         print("IMPACT FACTOR", impact_factors)
         logger.time_start('Aggregation')
