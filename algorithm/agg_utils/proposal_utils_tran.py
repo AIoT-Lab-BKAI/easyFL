@@ -1,19 +1,19 @@
-import numpy as np
-
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 from torch.distributions import Normal
 from algorithm.agg_utils.transformer import TransformerEncoder
+import numpy as np
+import random
 
 def init_weights(m):
     if isinstance(m, nn.Linear):
         nn.init.normal_(m.weight, mean=0., std=0.1)
-        nn.init.constant_(m.bias, 0.1)
+        nn.init.constant_(m.bias, 0.001)
         
         
-def compute_gae(next_value, rewards, masks, values, gamma=0.99, tau=0.95):
+def compute_gae(next_value, rewards, masks, values, gamma=0.95, tau=0.95):
     values = values + [next_value]
     gae = 0
     returns = []

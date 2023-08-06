@@ -1,7 +1,7 @@
 import random
 from .mp_fedbase import MPBasicServer, MPBasicClient
 from algorithm.cfmtx.cfmtx import cfmtx_test
-from algorithm.agg_utils.proposal_utils_v1 import ActorCritic
+from easyFL.algorithm.agg_utils.proposal_utils_fc import ActorCritic
 
 import torch.nn as nn
 import numpy as np
