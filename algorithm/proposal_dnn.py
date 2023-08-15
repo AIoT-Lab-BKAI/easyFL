@@ -1,7 +1,7 @@
 import random
 from .mp_fedbase import MPBasicServer, MPBasicClient
 from algorithm.cfmtx.cfmtx import cfmtx_test
-from easyFL.algorithm.agg_utils.proposal_utils_fc import ActorCritic
+from algorithm.agg_utils.proposal_utils_dnn import ActorCritic
 
 import torch.nn as nn
 import numpy as np
@@ -100,13 +100,14 @@ class Server(MPBasicServer):
         models, train_losses = self.communicate(self.selected_clients, pool)
 
         # Kết hợp các phần tử từ hai danh sách thành một danh sách kết hợp
-        combined_list = list(zip(models, train_losses))
+        combined_list = list(zip(self.selected_clients, models, train_losses))
 
         # Shuffle danh sách kết hợp
         random.shuffle(combined_list)
 
         # Tách các phần tử đã được shuffle thành hai danh sách mới
-        models, train_losses = zip(*combined_list)
+        self.selected_clients, models, train_losses = zip(*combined_list)
+        print ("Selected client: ",self.selected_clients)
 
         if not self.selected_clients: 
             return
@@ -124,8 +125,9 @@ class Server(MPBasicServer):
         classifiers_update = []
 
         for clf in classifiers:
-            norm = torch.norm(clf, dim=1).reshape(-1, 1)
-            classifiers_update.append(clf/norm)
+            max_value = torch.max(clf)
+            min_value = torch.min(clf)
+            classifiers_update.append((clf - min_value)/(max_value - min_value))
 
         state = torch.stack(classifiers_update)         # <-- Change to matrix K x d
         state = torch.unsqueeze(state, dim=0)    # <-- Change to matrix K x 1 x d

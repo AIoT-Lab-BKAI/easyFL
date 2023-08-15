@@ -1,12 +1,13 @@
+import random
 from .mp_fedbase import MPBasicServer, MPBasicClient
 from algorithm.cfmtx.cfmtx import cfmtx_test
-from algorithm.agg_utils.proposal_utils import ActorCritic
+from algorithm.agg_utils.proposal_utils_dnn import ActorCritic
 
 import torch.nn as nn
 import numpy as np
 import torch
 import copy
-import random
+from main import logger
 
 
 def get_module_from_model(model, res = None):
@@ -87,60 +88,63 @@ class Server(MPBasicServer):
     def __init__(self, option, model, clients, test_data=None):
         super(Server, self).__init__(option, model, clients, test_data)
         classifier = get_classifier(model)
-        self.agent = ActorCritic(num_inputs=classifier.shape, num_outputs=self.clients_per_round, hidden_size=512)
-        self.agent_optimizer = torch.optim.Adam(self.agent.parameters(), lr=1e-4) # example
-        self.steps = 10 # example
+        self.agent = ActorCritic(num_inputs=classifier.shape, num_outputs=self.clients_per_round, epsilon_initial = 0.4, epsilon_decay=0.7, epsilon_min=0.025, hidden_size=256, std=np.log(0.1))
+        self.agent_optimizer = torch.optim.Adam(self.agent.parameters(), lr=1e-3) # example
+        self.steps = 20
+        # self.cnt = 1
+        # self.old_reward = 0  
         return
     
     def iterate(self, t, pool):
         self.selected_clients = self.sample()
         models, train_losses = self.communicate(self.selected_clients, pool)
-        
-        # # Kết hợp các phần tử từ hai danh sách thành một danh sách kết hợp
-        # combined_list = list(zip(models, train_losses))
 
-        # # Shuffle danh sách kết hợp
-        # random.shuffle(combined_list)
+        # Kết hợp các phần tử từ hai danh sách thành một danh sách kết hợp
+        combined_list = list(zip(self.selected_clients, models, train_losses))
 
-        # # Tách các phần tử đã được shuffle thành hai danh sách mới
-        # models, train_losses = zip(*combined_list)
+        # Shuffle danh sách kết hợp
+        random.shuffle(combined_list)
+
+        # Tách các phần tử đã được shuffle thành hai danh sách mới
+        self.selected_clients, models, train_losses = zip(*combined_list)
+        print ("Selected client: ",self.selected_clients)
 
         if not self.selected_clients: 
             return
         # Get classifiers
         device0 = torch.device(f"cuda:{self.server_gpu_id}")
-        classifiers = [get_classifier(model.to(device0) - self.model.to(device0)).cpu() for model in models]
+        logger.time_start('Cuda|Compute Delta w')
+        self.agent = self.agent.to(device0)
+        models = [model.to(device0) for model in models]
+        logger.time_end('Cuda|Compute Delta w')
         
-        classifiers_update = []
+        classifiers = [get_classifier(submodel) for submodel in models]
+        # classifiers.insert(0, get_classifier(self.model).to(device0))
+        
+        # classifiers_update = []
 
-        for clf in classifiers:
-            norm = torch.norm(clf, dim=1).reshape(-1, 1)
-            classifiers_update.append(clf/norm)
-        # classifiers = [(clf - torch.mean(clf))/torch.std(clf) for clf in classifiers]
+        # for clf in classifiers:
+        #     max_value = torch.max(clf)
+        #     min_value = torch.min(clf)
+        #     classifiers_update.append((clf - min_value)/(max_value - min_value))
 
-        state = torch.stack(classifiers_update)         # <-- Change to matrix K x d
-        state = torch.unsqueeze(state, dim=0)               # <-- Change to matrix 1 x K x d
+        state = torch.stack(classifiers)         # <-- Change to matrix K x d
+        state = torch.unsqueeze(state, dim=0)    # <-- Change to matrix K x 1 x d
         
         # Processing
         if t > 0:
-            reward = - (np.mean(train_losses))
-            self.agent.record(reward)
+            reward = - np.mean(train_losses) - (np.max(train_losses) - np.min(train_losses))
+            self.agent.record(reward, device=device0)
             if t%self.steps == 0:
                 self.agent.update(state, self.agent_optimizer) # example
-
-        self.old_reward = np.mean(train_losses)
         
-        impact_factors = self.agent.get_action(state)
-        data_vols = [self.client_vols[cid] for cid in self.selected_clients]
-        
-        print(impact_factors)
-        print(data_vols)
-        
-        device0 = torch.device(f"cuda:{self.server_gpu_id}")
-        models = [i.to(device0) for i in models]
-        
+        impact_factors = self.agent.get_action(state, fedavg_action = [1.0 * self.client_vols[cid]/self.data_vol for cid in self.selected_clients])
+        print("IMPACT FACTOR", impact_factors)
+        logger.time_start('Aggregation')
         self.model = self.aggregate(models, p = impact_factors)
+        logger.time_end('Aggregation')
         return
+    
 
 class Client(MPBasicClient):
     def __init__(self, option, name='', train_data=None, valid_data=None):
@@ -158,6 +162,7 @@ class Client(MPBasicClient):
     def train(self, model, device='cuda'):
         model = model.to(device)
         model.train()
+        
         src_model = copy.deepcopy(model).to(device)
         src_model.freeze_grad()
                 

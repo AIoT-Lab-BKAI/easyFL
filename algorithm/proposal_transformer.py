@@ -1,6 +1,6 @@
 from .mp_fedbase import MPBasicServer, MPBasicClient
 from algorithm.cfmtx.cfmtx import cfmtx_test
-from easyFL.algorithm.agg_utils.proposal_utils_tran import ActorCritic
+from algorithm.agg_utils.proposal_utils_tran import ActorCritic
 
 import torch.nn as nn
 import numpy as np
@@ -88,8 +88,8 @@ class Server(MPBasicServer):
         super(Server, self).__init__(option, model, clients, test_data)
         classifier_length = get_classifier(model).flatten().shape[0]
         
-        self.agent = ActorCritic(num_inputs=classifier_length, num_outputs=self.clients_per_round, hidden_size=512, , epsilon_initial = 0.4, epsilon_decay=0.8, epsilon_min=0.05, hidden_size=256, std=np.log(0.1))
-        self.agent_optimizer = torch.optim.Adam(self.agent.parameters(), lr=1e-3) # example
+        self.agent = ActorCritic(num_inputs=classifier_length, num_outputs=self.clients_per_round, epsilon_initial = 0.4, epsilon_decay=0.8, epsilon_min=0.05, hidden_size=256, std=np.log(0.1))
+        self.agent_optimizer = torch.optim.Adam(self.agent.parameters(), lr=1e-4) # example
         
         self.steps = 20 # example
         return
@@ -106,7 +106,7 @@ class Server(MPBasicServer):
         models = [model.to(device0) - self.model.to(device0) for model in models]
 
         # Get classifiers
-        classifiers = [get_classifier(submodel).detach().cpu() for submodel in models]
+        classifiers = [get_classifier(submodel) for submodel in models]
         
         classifiers_update = []
 
@@ -119,16 +119,15 @@ class Server(MPBasicServer):
         if t > 0:
             reward = - np.mean(train_losses) - (np.max(train_losses) - np.min(train_losses))
             self.agent.record(reward, device=device0)
-       
-        if t%self.steps == 0 and t > 0:
-            self.agent.update(state, self.agent_optimizer) # example
+            if t%self.steps == 0:
+                self.agent.update(state, self.agent_optimizer) # example
         
         impact_factors = self.agent.get_action(state, fedavg_action = [1.0 * self.client_vols[cid]/self.data_vol for cid in self.selected_clients])
         print("IMPACT FACTOR", impact_factors)
 
         device0 = torch.device(f"cuda:{self.server_gpu_id}")
         models = [i.to(device0) for i in models]
-        self.model = self.aggregate(models, p = impact_factors)
+        self.model = self.model + self.aggregate(models, p = impact_factors)
         return
 
 

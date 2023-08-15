@@ -11,7 +11,7 @@ import pdb
 def init_weights(m):
     if isinstance(m, nn.Linear):
         nn.init.normal_(m.weight, mean=0., std=0.1)
-        nn.init.constant_(m.bias, 0.001)
+        nn.init.constant_(m.bias, 0.01)
         
         
 def compute_gae(next_value, rewards, masks, values, gamma=0.95, tau=0.95):
@@ -24,48 +24,41 @@ def compute_gae(next_value, rewards, masks, values, gamma=0.95, tau=0.95):
         returns.insert(0, gae + values[step])
     return returns
 
-# def compute_gae(next_value, rewards, masks, values, gamma=0.5, tau=0.95):
-#     values = values + [next_value]
-#     gae = 0
-#     returns = []
-#     advantages = []
-#     for step in reversed(range(len(rewards))):
-#         td_target = rewards[step] + gamma * values[step + 1] * masks[step] 
-#         delta = td_target - values[step]
-#         gae = delta + gamma * tau * masks[step] * gae
-#         advantages.insert(0, gae)
-#         returns.insert(0, td_target)
-#     return returns, advantages
-
-
 def ppo_iter(mini_batch_size, states, actions, log_probs, returns, advantage):
     batch_size = states.size(0)
     for _ in range(batch_size // mini_batch_size):
         rand_ids = np.random.randint(0, batch_size, mini_batch_size)
-        for _ in range(10):
-            numbers = list(range(0, states.shape[1]))
-            permutations = [random.sample(numbers, len(numbers)) for _ in range(50)]
+        yield states[rand_ids, :], actions[rand_ids, :], log_probs[rand_ids, :], returns[rand_ids, :], advantage[rand_ids, :]
+         
+
+# def ppo_iter(mini_batch_size, states, actions, log_probs, returns, advantage):
+#     batch_size = states.size(0)
+#     for _ in range(batch_size // mini_batch_size):
+#         rand_ids = np.random.randint(0, batch_size, mini_batch_size)
+#         for _ in range(10):
+#             numbers = list(range(0, states.shape[1]))
+#             permutations = [random.sample(numbers, len(numbers)) for _ in range(50)]
             
-            states_ = states[rand_ids, :]
-            actions_ = actions[rand_ids, :]
-            log_probs_ = log_probs[rand_ids, :]
-            returns_= returns[rand_ids, :]
-            advantage_ = advantage[rand_ids, :]
+#             states_ = states[rand_ids, :]
+#             actions_ = actions[rand_ids, :]
+#             log_probs_ = log_probs[rand_ids, :]
+#             returns_= returns[rand_ids, :]
+#             advantage_ = advantage[rand_ids, :]
 
-            list_states = [] 
-            list_actions = []
-            list_log_probs = [] 
-            list_returns = []
-            list_advantage = []
+#             list_states = [] 
+#             list_actions = []
+#             list_log_probs = [] 
+#             list_returns = []
+#             list_advantage = []
 
-            for perm in permutations:
-                list_states.append(states_[:, perm]) 
-                list_actions.append(actions_[:, perm])
-                list_log_probs.append(log_probs_[:, perm])
-                list_returns.append(returns_)
-                list_advantage.append(advantage_)
+#             for perm in permutations:
+#                 list_states.append(states_[:, perm]) 
+#                 list_actions.append(actions_[:, perm])
+#                 list_log_probs.append(log_probs_[:, perm])
+#                 list_returns.append(returns_)
+#                 list_advantage.append(advantage_)
 
-            yield torch.cat(list_states), torch.cat(list_actions), torch.cat(list_log_probs), torch.cat(list_returns), torch.cat(list_advantage)
+#             yield torch.cat(list_states), torch.cat(list_actions), torch.cat(list_log_probs), torch.cat(list_returns), torch.cat(list_advantage)
             
 
 def ppo_update(model, optimizer, ppo_epochs, mini_batch_size, states, actions, log_probs, returns, advantages, clip_param=0.2):
@@ -132,13 +125,22 @@ class ActorCritic(nn.Module):
         
         conv_out_size = self._get_conv_out(num_channel= num_outputs, c1 = num_inputs[0], c2 = num_inputs[1])
         self.policy = nn.Sequential(
-            nn.Linear(conv_out_size, hidden_size),
+            nn.Linear(num_inputs[0], hidden_size),
             nn.ReLU(),
             nn.Linear(hidden_size, 128),
             nn.ReLU(),
-            nn.Linear(128, num_outputs),
+            nn.Linear(128, 1),
             nn.Sigmoid()
         )
+
+        # self.policy = nn.Sequential(
+        #     nn.Linear(conv_out_size, hidden_size),
+        #     nn.ReLU(),
+        #     nn.Linear(hidden_size, 256),
+        #     nn.ReLU(),
+        #     nn.Linear(256, num_outputs),
+        #     nn.Sigmoid()
+        # )
 
         self.value = nn.Sequential(
             nn.Linear(conv_out_size, hidden_size),
@@ -158,6 +160,8 @@ class ActorCritic(nn.Module):
         
         self.apply(init_weights)
         self.init_rl()
+
+        self.bool = True
         return
     
     def _get_conv_out(self, num_channel, c1, c2,):
@@ -188,16 +192,20 @@ class ActorCritic(nn.Module):
         # x = _x.transpose(1,3)
         # print("\nINIT", x[0, 0, 0:10, 0:5])
         x = self.conv(x)
-        # print(x.shape)
-        # print("OUTPUT:", x[0,0:2,:, 0:5])
+        if self.bool == True:
+            print(x.shape)
+            print("OUTPUT:", x)
+            self.bool = False
         x = x.view(x.shape[0], -1)
         return self.value(x)
 
     def actor(self, x):
         # x = _x.transpose(1,3)
         x = self.conv(x)
-        x = x.view(x.shape[0], -1)
-        return self.policy(x)
+        # x = x.view(x.shape[0], -1)
+        # return self.policy(x)
+        x = x.squeeze(3)
+        return self.policy(x).squeeze(2)
 
     def forward(self, x):
         # x = x.reshape(x.shape[0], -1)
@@ -213,7 +221,7 @@ class ActorCritic(nn.Module):
         if val < 2 * epsilon:
             if val < epsilon:
                 print("+++RANDOM+++")
-                mu = torch.randn((1, 10), device = device, requires_grad = True)
+                mu = torch.rand((1, 10), device = device, requires_grad = True)
             else:
                 print("+++FEDAVG+++")
                 mu = torch.tensor(fedavg_action, device = device, requires_grad = True).unsqueeze(0)
@@ -267,5 +275,6 @@ class ActorCritic(nn.Module):
         # while(len(self.states) > 50):
         #     self.reinit_rl()
         self.epsilon = max(self.epsilon * self.epsilon_decay, self.epsilon_min)
-        self.clip_param = max(self.clip_param * 0.9, 0.1)        
+        self.clip_param = max(self.clip_param * 0.9, 0.1)
+        self.bool = True        
         return
