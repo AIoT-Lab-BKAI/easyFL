@@ -88,7 +88,7 @@ class Server(MPBasicServer):
     def __init__(self, option, model, clients, test_data=None):
         super(Server, self).__init__(option, model, clients, test_data)
         classifier = get_classifier(model)
-        self.agent = ActorCritic(num_inputs=classifier.shape, num_outputs=self.clients_per_round, epsilon_initial = 0.4, epsilon_decay=0.7, epsilon_min=0.025, hidden_size=256, std=np.log(0.1))
+        self.agent = ActorCritic(num_inputs=classifier.shape, num_outputs=self.clients_per_round, epsilon_initial = 0.4, epsilon_decay=0.7, epsilon_min=0.025, hidden_size=512, std=np.log(0.1))
         self.agent_optimizer = torch.optim.Adam(self.agent.parameters(), lr=1e-3) # example
         self.steps = 20
         # self.cnt = 1
@@ -121,14 +121,14 @@ class Server(MPBasicServer):
         classifiers = [get_classifier(submodel) for submodel in models]
         # classifiers.insert(0, get_classifier(self.model).to(device0))
         
-        # classifiers_update = []
+        classifiers_update = []
 
-        # for clf in classifiers:
-        #     max_value = torch.max(clf)
-        #     min_value = torch.min(clf)
-        #     classifiers_update.append((clf - min_value)/(max_value - min_value))
+        for clf in classifiers:
+            max_value = torch.max(clf)
+            min_value = torch.min(clf)
+            classifiers_update.append((clf - min_value)/(max_value - min_value))
 
-        state = torch.stack(classifiers)         # <-- Change to matrix K x d
+        state = torch.stack(classifiers_update)         # <-- Change to matrix K x d
         state = torch.unsqueeze(state, dim=0)    # <-- Change to matrix K x 1 x d
         
         # Processing

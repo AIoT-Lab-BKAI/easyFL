@@ -6,6 +6,8 @@ from torch.distributions import Normal
 import numpy as np
 import random
 import pdb
+import math
+
 
 
 def init_weights(m):
@@ -111,6 +113,7 @@ class ActorCritic(nn.Module):
             nn.Linear(128, 64),
             nn.ReLU(),
             nn.Linear(64, 1),
+            nn.LeakyReLU(0.01)
         )
 
         # self.conv = nn.Sequential(
@@ -127,10 +130,10 @@ class ActorCritic(nn.Module):
         self.policy = nn.Sequential(
             nn.Linear(num_inputs[0], hidden_size),
             nn.ReLU(),
-            nn.Linear(hidden_size, 128),
+            nn.Linear(hidden_size, 256),
             nn.ReLU(),
-            nn.Linear(128, 1),
-            nn.Sigmoid()
+            nn.Linear(256, 1),
+            nn.Tanh()
         )
 
         # self.policy = nn.Sequential(
@@ -145,15 +148,15 @@ class ActorCritic(nn.Module):
         self.value = nn.Sequential(
             nn.Linear(conv_out_size, hidden_size),
             nn.ReLU(),
-            nn.Linear(hidden_size, 128),
+            nn.Linear(hidden_size, 256),
             nn.ReLU(),
-            nn.Linear(128, 1),
+            nn.Linear(256, 1),
         )
 
         self.epsilon = epsilon_initial
         self.epsilon_decay = epsilon_decay
         self.epsilon_min = epsilon_min
-        self.clip_param = 0.6
+        self.clip_param = 0.8
 
         self.log_std = torch.ones(1, num_outputs) * std
         self.log_std = nn.Parameter(torch.clamp(self.log_std, np.log(0.001), np.log(0.1)))
@@ -221,9 +224,11 @@ class ActorCritic(nn.Module):
         if val < 2 * epsilon:
             if val < epsilon:
                 print("+++RANDOM+++")
-                mu = torch.rand((1, 10), device = device, requires_grad = True)
+                random_numbers = [np.random.uniform(-1, 1) for _ in range(len(fedavg_action))]
+                mu = torch.tensor(random_numbers, device = device, requires_grad = True).unsqueeze(0)
             else:
                 print("+++FEDAVG+++")
+                action = [math.log(x) for x in fedavg_action]
                 mu = torch.tensor(fedavg_action, device = device, requires_grad = True).unsqueeze(0)
             std   = self.log_std.exp().expand_as(mu)
             return Normal(mu, std)
@@ -265,7 +270,7 @@ class ActorCritic(nn.Module):
         print("returns: ", returns)
         print("values: ", values)
 
-        mini_batch_size = len(self.states)//2
+        mini_batch_size = len(self.states)//4
         losses, cri_losses, act_losses = ppo_update(self, optimizer, ppo_epochs, mini_batch_size, states, actions, log_probs, returns, advantage, clip_param = self.clip_param)
         print("Update losses:", losses)
         print("Update critic losses:", cri_losses)

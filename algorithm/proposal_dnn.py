@@ -134,15 +134,14 @@ class Server(MPBasicServer):
         
         # Processing
         if t > 0:
-            reward = - np.mean(train_losses) - (np.max(train_losses) - np.min(train_losses))
+            reward = self.old_reward - np.mean(train_losses) - (np.max(train_losses) - np.min(train_losses))
             # reward = - np.mean(train_losses)/self.old_reward
             # print(np.mean(train_losses), np.max(train_losses), np.min(train_losses), reward)
             self.agent.record(reward, device=device0)
             if t%self.steps == 0:
                 self.agent.update(state, self.agent_optimizer) # example
-                # self.cnt += 1
-                # self.steps += 2 * self.cnt
-        
+                
+        self.old_reward = np.mean(train_losses)
         impact_factors = self.agent.get_action(state, fedavg_action = [1.0 * self.client_vols[cid]/self.data_vol for cid in self.selected_clients])
         print("IMPACT FACTOR", impact_factors)
         logger.time_start('Aggregation')
