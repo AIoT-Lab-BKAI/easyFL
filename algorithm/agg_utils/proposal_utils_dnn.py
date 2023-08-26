@@ -105,7 +105,7 @@ class ActorCritic(nn.Module):
     def __init__(self, num_inputs, num_outputs, epsilon_initial, epsilon_decay, epsilon_min, hidden_size, std=0.0):
         super(ActorCritic, self).__init__()
         
-        self.conv = nn.Sequential(
+        self.dnn = nn.Sequential(
             nn.Linear(num_inputs[1], 256),
             nn.ReLU(),
             nn.Linear(256, 128),
@@ -115,18 +115,8 @@ class ActorCritic(nn.Module):
             nn.Linear(64, 1),
             nn.LeakyReLU(0.01)
         )
-
-        # self.conv = nn.Sequential(
-        #     nn.Conv2d(num_inputs[1], 256, kernel_size=3, stride=1),
-        #     nn.ReLU(),
-        #     nn.MaxPool2d(2),
-        #     nn.Conv2d(256, 128, kernel_size=3, stride=1),
-        #     nn.ReLU(),
-        #     nn.MaxPool2d(2),
-        # )
-
         
-        conv_out_size = self._get_conv_out(num_channel= num_outputs, c1 = num_inputs[0], c2 = num_inputs[1])
+        dnn_out_size = self._get_dnn_out(num_channel= num_outputs, c1 = num_inputs[0], c2 = num_inputs[1])
         self.policy = nn.Sequential(
             nn.Linear(num_inputs[0], hidden_size),
             nn.ReLU(),
@@ -136,17 +126,8 @@ class ActorCritic(nn.Module):
             nn.Tanh()
         )
 
-        # self.policy = nn.Sequential(
-        #     nn.Linear(conv_out_size, hidden_size),
-        #     nn.ReLU(),
-        #     nn.Linear(hidden_size, 256),
-        #     nn.ReLU(),
-        #     nn.Linear(256, num_outputs),
-        #     nn.Sigmoid()
-        # )
-
         self.value = nn.Sequential(
-            nn.Linear(conv_out_size, hidden_size),
+            nn.Linear(dnn_out_size, hidden_size),
             nn.ReLU(),
             nn.Linear(hidden_size, 256),
             nn.ReLU(),
@@ -167,8 +148,8 @@ class ActorCritic(nn.Module):
         self.bool = True
         return
     
-    def _get_conv_out(self, num_channel, c1, c2,):
-        o = self.conv(torch.zeros(1, num_channel , c1, c2))
+    def _get_dnn_out(self, num_channel, c1, c2,):
+        o = self.dnn(torch.zeros(1, num_channel , c1, c2))
         # print(o.size())
         return int(np.prod(o.size()))
     
@@ -181,19 +162,8 @@ class ActorCritic(nn.Module):
         self.masks     = []
         self.entropy   = 0
         return
-    
-    def reinit_rl(self):
-        del self.log_probs[0]
-        del self.values[0]
-        del self.states[0]
-        del self.actions[0]
-        del self.rewards[0]
-        del self.masks[0]
-        return
 
     def critic(self, x):
-        # x = _x.transpose(1,3)
-        # print("\nINIT", x[0, 0, 0:10, 0:5])
         x = self.conv(x)
         if self.bool == True:
             print(x.shape)
@@ -203,10 +173,7 @@ class ActorCritic(nn.Module):
         return self.value(x)
 
     def actor(self, x):
-        # x = _x.transpose(1,3)
         x = self.conv(x)
-        # x = x.view(x.shape[0], -1)
-        # return self.policy(x)
         x = x.squeeze(3)
         return self.policy(x).squeeze(2)
 
@@ -277,8 +244,6 @@ class ActorCritic(nn.Module):
         print("Update actor losses:", act_losses)
 
         self.init_rl()
-        # while(len(self.states) > 50):
-        #     self.reinit_rl()
         self.epsilon = max(self.epsilon * self.epsilon_decay, self.epsilon_min)
         self.clip_param = max(self.clip_param * 0.9, 0.1)
         self.bool = True        

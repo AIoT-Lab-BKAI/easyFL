@@ -91,8 +91,6 @@ class Server(MPBasicServer):
         self.agent = ActorCritic(num_inputs=classifier.shape, num_outputs=self.clients_per_round, epsilon_initial = 0.4, epsilon_decay=0.8, epsilon_min=0.05, hidden_size=256, std=np.log(0.1))
         self.agent_optimizer = torch.optim.Adam(self.agent.parameters(), lr=1e-3) # example
         self.steps = 20
-        # self.cnt = 1
-        # self.old_reward = 0  
         return
     
     def iterate(self, t, pool):
@@ -111,13 +109,12 @@ class Server(MPBasicServer):
 
         if not self.selected_clients: 
             return
+        
         # Get classifiers
         device0 = torch.device(f"cuda:{self.server_gpu_id}")
         logger.time_start('Cuda|Compute Delta w')
         self.agent = self.agent.to(device0)
         models = [model.to(device0) - self.model.to(device0) for model in models]
-        # models2 = copy.deepcopy(models)
-        # models2.append(self.model.to(device0))
         logger.time_end('Cuda|Compute Delta w')
         
         classifiers = [get_classifier(submodel) for submodel in models]
@@ -134,14 +131,11 @@ class Server(MPBasicServer):
         
         # Processing
         if t > 0:
-            reward = self.old_reward - np.mean(train_losses) - (np.max(train_losses) - np.min(train_losses))
-            # reward = - np.mean(train_losses)/self.old_reward
-            # print(np.mean(train_losses), np.max(train_losses), np.min(train_losses), reward)
+            reward = - np.mean(train_losses) - (np.max(train_losses) - np.min(train_losses))
             self.agent.record(reward, device=device0)
             if t%self.steps == 0:
                 self.agent.update(state, self.agent_optimizer) # example
                 
-        self.old_reward = np.mean(train_losses)
         impact_factors = self.agent.get_action(state, fedavg_action = [1.0 * self.client_vols[cid]/self.data_vol for cid in self.selected_clients])
         print("IMPACT FACTOR", impact_factors)
         logger.time_start('Aggregation')
