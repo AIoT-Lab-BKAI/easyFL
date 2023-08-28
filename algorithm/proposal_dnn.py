@@ -88,25 +88,26 @@ class Server(MPBasicServer):
     def __init__(self, option, model, clients, test_data=None):
         super(Server, self).__init__(option, model, clients, test_data)
         classifier = get_classifier(model)
-        self.agent = ActorCritic(num_inputs=classifier.shape, num_outputs=self.clients_per_round, epsilon_initial = 0.4, epsilon_decay=0.8, epsilon_min=0.05, hidden_size=256, std=np.log(0.1))
+        self.agent = ActorCritic(num_inputs=classifier.shape, num_outputs=self.clients_per_round, num_clients= self.num_clients, 
+                                 epsilon_initial = 0.4, epsilon_decay=0.8, epsilon_min=0.05, hidden_size=256, std=np.log(0.1))
         self.agent_optimizer = torch.optim.Adam(self.agent.parameters(), lr=1e-3) # example
         self.steps = 20
         return
     
     def iterate(self, t, pool):
-        self.selected_clients = self.sample()
+        self.selected_clients = sorted(self.sample())
         models, train_losses = self.communicate(self.selected_clients, pool)
 
-        # Kết hợp các phần tử từ hai danh sách thành một danh sách kết hợp
-        combined_list = list(zip(self.selected_clients, models, train_losses))
+        # # Kết hợp các phần tử từ hai danh sách thành một danh sách kết hợp
+        # combined_list = list(zip(self.selected_clients, models, train_losses))
 
-        # Shuffle danh sách kết hợp
-        random.shuffle(combined_list)
+        # # Shuffle danh sách kết hợp
+        # random.shuffle(combined_list)
 
-        # Tách các phần tử đã được shuffle thành hai danh sách mới
-        self.selected_clients, models, train_losses = zip(*combined_list)
+        # # Tách các phần tử đã được shuffle thành hai danh sách mới
+        # self.selected_clients, models, train_losses = zip(*combined_list)
         print ("Selected client: ",self.selected_clients)
-
+        
         if not self.selected_clients: 
             return
         
@@ -115,16 +116,28 @@ class Server(MPBasicServer):
         logger.time_start('Cuda|Compute Delta w')
         self.agent = self.agent.to(device0)
         models = [model.to(device0) - self.model.to(device0) for model in models]
+
+        weight_zero = self.model - self.model
+        list_model = []
+        for idx in range(self.num_clients):
+            if idx in self.selected_clients:
+                list_model.append(models[self.selected_clients.index(idx)])
+            else:
+                list_model.append((weight_zero).to(device0))
+
         logger.time_end('Cuda|Compute Delta w')
         
-        classifiers = [get_classifier(submodel) for submodel in models]
+        classifiers = [get_classifier(submodel) for submodel in list_model]
 
         classifiers_update = []
 
         for clf in classifiers:
             max_value = torch.max(clf)
             min_value = torch.min(clf)
-            classifiers_update.append((clf - min_value)/(max_value - min_value))
+            if max_value != min_value:
+                classifiers_update.append((clf - min_value)/(max_value - min_value))
+            else:
+                classifiers_update.append(clf)
 
         state = torch.stack(classifiers_update)         # <-- Change to matrix K x d
         state = torch.unsqueeze(state, dim=0)    # <-- Change to matrix K x 1 x d

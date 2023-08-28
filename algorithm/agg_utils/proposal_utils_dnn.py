@@ -102,7 +102,7 @@ def ppo_update(model, optimizer, ppo_epochs, mini_batch_size, states, actions, l
     return losses, cri_losses, act_losses
 
 class ActorCritic(nn.Module):
-    def __init__(self, num_inputs, num_outputs, epsilon_initial, epsilon_decay, epsilon_min, hidden_size, std=0.0):
+    def __init__(self, num_inputs, num_outputs, num_clients, epsilon_initial, epsilon_decay, epsilon_min, hidden_size, std=0.0):
         super(ActorCritic, self).__init__()
         
         self.dnn = nn.Sequential(
@@ -113,16 +113,15 @@ class ActorCritic(nn.Module):
             nn.Linear(128, 64),
             nn.ReLU(),
             nn.Linear(64, 1),
-            nn.LeakyReLU(0.01)
         )
         
-        dnn_out_size = self._get_dnn_out(num_channel= num_outputs, c1 = num_inputs[0], c2 = num_inputs[1])
+        dnn_out_size = self._get_dnn_out(num_channel= num_clients, c1 = num_inputs[0], c2 = num_inputs[1])
         self.policy = nn.Sequential(
-            nn.Linear(num_inputs[0], hidden_size),
+            nn.Linear(dnn_out_size, hidden_size),
             nn.ReLU(),
             nn.Linear(hidden_size, 256),
             nn.ReLU(),
-            nn.Linear(256, 1),
+            nn.Linear(256, num_outputs),
             nn.Tanh()
         )
 
@@ -164,7 +163,7 @@ class ActorCritic(nn.Module):
         return
 
     def critic(self, x):
-        x = self.conv(x)
+        x = self.dnn(x)
         if self.bool == True:
             print(x.shape)
             print("OUTPUT:", x)
@@ -173,9 +172,9 @@ class ActorCritic(nn.Module):
         return self.value(x)
 
     def actor(self, x):
-        x = self.conv(x)
-        x = x.squeeze(3)
-        return self.policy(x).squeeze(2)
+        x = self.dnn(x)
+        x = x.view(x.shape[0], -1)
+        return self.policy(x)
 
     def forward(self, x):
         # x = x.reshape(x.shape[0], -1)
@@ -197,7 +196,7 @@ class ActorCritic(nn.Module):
                 print("+++FEDAVG+++")
                 action = [math.log(x) for x in fedavg_action]
                 mu = torch.tensor(fedavg_action, device = device, requires_grad = True).unsqueeze(0)
-            std   = self.log_std.exp().expand_as(mu)
+            std  = self.log_std.exp().expand_as(mu)
             return Normal(mu, std)
             # return torch.randn(action.shape[0], action.shape[1], device = action.device)
         else:
