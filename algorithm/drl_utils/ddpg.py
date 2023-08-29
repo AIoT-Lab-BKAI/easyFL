@@ -57,42 +57,56 @@ class DDPG_Agent(nn.Module):
         self.batch_size = batch_size
         self.log_dir = log_dir
         return
+    
+    
+    def compute_loss(self, buffer: ReplayBuffer, gamma=0.9, min_value=-np.inf, max_value=np.inf):
+        state, action, reward, next_state, done = buffer.sample(self.batch_size)
 
+        state = torch.DoubleTensor(state).squeeze().cuda()
+        next_state = torch.DoubleTensor(next_state).squeeze().cuda()
+        action = torch.DoubleTensor(action).squeeze().cuda()
+        reward = torch.DoubleTensor(reward).cuda()
+        done = torch.DoubleTensor(np.float32(done)).cuda()
+
+        policy_loss = self.value_net(state, self.policy_net(state))
+        policy_loss = - policy_loss.mean()
+        next_action = self.target_policy_net(next_state)
+        target_value = self.target_value_net(next_state, next_action.detach())
+
+        expected_value = reward + (1.0 - done) * gamma * target_value.squeeze()
+        expected_value = torch.clamp(expected_value, min_value, max_value)
+
+        value = self.value_net(state, action).squeeze()
+        value_loss = self.value_criterion(value, expected_value)
+        return policy_loss, value_loss
+    
 
     def ddpg_update(self, gamma=0.9, min_value=-np.inf, max_value=np.inf, soft_tau=2e-2):
-        for i in range(int(len(self.replay_buffer)/self.batch_size)):
-            state, action, reward, next_state, done = self.replay_buffer.sample(self.batch_size)
+        online_policy_loss, online_value_loss = self.compute_loss(self.replay_buffer, gamma, min_value, max_value)
+        
+        offline_policy_loss = 0
+        offline_value_loss = 0
+        for old_buffer in self.old_buffers:
+            pl, vl = self.compute_loss(old_buffer, gamma, min_value, max_value)
+            offline_policy_loss += pl
+            offline_value_loss += vl
+        
+        total_policy_loss = 0.5 * online_policy_loss + 0.5 * offline_policy_loss/len(self.old_buffers)
+        total_value_loss = 0.5 * online_value_loss + 0.5 * offline_value_loss/len(self.old_buffers)
 
-            state = torch.DoubleTensor(state).squeeze().cuda()
-            next_state = torch.DoubleTensor(next_state).squeeze().cuda()
-            action = torch.DoubleTensor(action).squeeze().cuda()
-            reward = torch.DoubleTensor(reward).cuda()
-            done = torch.DoubleTensor(np.float32(done)).cuda()
+        self.policy_optimizer.zero_grad()
+        total_policy_loss.backward()
+        self.policy_optimizer.step()
 
-            policy_loss = self.value_net(state, self.policy_net(state))
-            policy_loss = - policy_loss.mean()
-            next_action = self.target_policy_net(next_state)
-            target_value = self.target_value_net(next_state, next_action.detach())
+        self.value_optimizer.zero_grad()
+        total_value_loss.backward()
+        self.value_optimizer.step()
 
-            expected_value = reward + (1.0 - done) * gamma * target_value.squeeze()
-            expected_value = torch.clamp(expected_value, min_value, max_value)
+        for target_param, param in zip(self.target_value_net.parameters(), self.value_net.parameters()):
+            target_param.data.copy_(target_param.data * (1.0 - soft_tau) + param.data * soft_tau)
 
-            value = self.value_net(state, action).squeeze()
-            value_loss = self.value_criterion(value, expected_value)
-
-            self.policy_optimizer.zero_grad()
-            policy_loss.backward()
-            self.policy_optimizer.step()
-
-            self.value_optimizer.zero_grad()
-            value_loss.backward()
-            self.value_optimizer.step()
-
-            for target_param, param in zip(self.target_value_net.parameters(), self.value_net.parameters()):
-                target_param.data.copy_(target_param.data * (1.0 - soft_tau) + param.data * soft_tau)
-
-            for target_param, param in zip(self.target_policy_net.parameters(), self.policy_net.parameters()):
-                target_param.data.copy_(target_param.data * (1.0 - soft_tau) + param.data * soft_tau)
+        for target_param, param in zip(self.target_policy_net.parameters(), self.policy_net.parameters()):
+            target_param.data.copy_(target_param.data * (1.0 - soft_tau) + param.data * soft_tau)
 
         return
 
