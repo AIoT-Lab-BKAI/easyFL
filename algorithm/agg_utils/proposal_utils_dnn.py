@@ -165,8 +165,8 @@ class ActorCritic(nn.Module):
     def critic(self, x):
         x = self.dnn(x)
         if self.bool == True:
-            print(x.shape)
-            print("OUTPUT:", x)
+            # print(x.shape)
+            # print("OUTPUT:", x)
             self.bool = False
         x = x.view(x.shape[0], -1)
         return self.value(x)
@@ -220,8 +220,35 @@ class ActorCritic(nn.Module):
         self.rewards.append(torch.FloatTensor([reward]).unsqueeze(1).to(device))
         self.masks.append(torch.FloatTensor([1 - done]).unsqueeze(1).to(device))
     
-    def update(self, next_state, optimizer, ppo_epochs=20, mini_batch_size=10):
-        # next_state = torch.FloatTensor(next_state)
+    # def update(self, next_state, optimizer, ppo_epochs=20, mini_batch_size=10):
+    #     # next_state = torch.FloatTensor(next_state)
+    #     _, next_value = self(next_state)
+    #     returns = compute_gae(next_value, self.rewards, self.masks, self.values)
+    #     # returns, advantages = compute_gae(next_value, self.rewards, self.masks, self.values)
+
+    #     returns   = torch.cat(returns).detach()
+    #     log_probs = torch.cat(self.log_probs).detach()
+    #     values    = torch.cat(self.values).detach()
+    #     states    = torch.cat(self.states)
+    #     actions   = torch.cat(self.actions)
+    #     advantage = returns - values
+    #     # advantage = torch.cat(advantages).detach()
+    #     print("returns: ", returns)
+    #     print("values: ", values)
+
+    #     mini_batch_size = len(self.states)//4
+    #     losses, cri_losses, act_losses = ppo_update(self, optimizer, ppo_epochs, mini_batch_size, states, actions, log_probs, returns, advantage, clip_param = self.clip_param)
+    #     print("Update losses:", losses)
+    #     print("Update critic losses:", cri_losses)
+    #     print("Update actor losses:", act_losses)
+
+    #     self.init_rl()
+    #     self.epsilon = max(self.epsilon * self.epsilon_decay, self.epsilon_min)
+    #     self.clip_param = max(self.clip_param * 0.9, 0.1)
+    #     self.bool = True        
+    #     return
+    
+    def get_experience(self, next_state):
         _, next_value = self(next_state)
         returns = compute_gae(next_value, self.rewards, self.masks, self.values)
         # returns, advantages = compute_gae(next_value, self.rewards, self.masks, self.values)
@@ -232,15 +259,14 @@ class ActorCritic(nn.Module):
         states    = torch.cat(self.states)
         actions   = torch.cat(self.actions)
         advantage = returns - values
-        # advantage = torch.cat(advantages).detach()
-        print("returns: ", returns)
-        print("values: ", values)
+        return states, actions, log_probs, returns, advantage
 
+    def update(self, optimizer, states, actions, log_probs, returns, advantage, ppo_epochs=10, mini_batch_size=10):
         mini_batch_size = len(self.states)//4
         losses, cri_losses, act_losses = ppo_update(self, optimizer, ppo_epochs, mini_batch_size, states, actions, log_probs, returns, advantage, clip_param = self.clip_param)
         print("Update losses:", losses)
-        print("Update critic losses:", cri_losses)
-        print("Update actor losses:", act_losses)
+        # print("Update critic losses:", cri_losses)
+        # print("Update actor losses:", act_losses)
 
         self.init_rl()
         self.epsilon = max(self.epsilon * self.epsilon_decay, self.epsilon_min)

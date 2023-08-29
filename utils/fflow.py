@@ -20,6 +20,7 @@ def read_option():
     parser.add_argument('--algorithm', help='name of algorithm;', type=str, default='fedavg')
     parser.add_argument('--model', help='name of model;', type=str, default='cnn')
     parser.add_argument('--output_file_name', type=str, default='output.json')
+    parser.add_argument('--buffer', help="data storage location", type=str, default='buffer')
     # methods of server side for sampling and aggregating
     parser.add_argument('--sample', help='methods for sampling clients', type=str, choices=sample_list, default='uniform')
     parser.add_argument('--aggregate', help='methods for aggregating models', type=str, choices=agg_list, default='none')

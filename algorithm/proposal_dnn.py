@@ -7,8 +7,23 @@ import torch.nn as nn
 import numpy as np
 import torch
 import copy
+import torch.multiprocessing as mp
+import os
+import utils.fflow as flw
+import json
+from pathlib import Path
 from main import logger
 
+class NumpyEncoder(json.JSONEncoder):
+    """ Special json encoder for numpy types """
+    def default(self, obj):
+        if isinstance(obj, np.integer):
+            return int(obj)
+        elif isinstance(obj, np.floating):
+            return float(obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return json.JSONEncoder.default(self, obj)
 
 def get_module_from_model(model, res = None):
     if res==None: res = []
@@ -89,11 +104,60 @@ class Server(MPBasicServer):
         super(Server, self).__init__(option, model, clients, test_data)
         classifier = get_classifier(model)
         self.agent = ActorCritic(num_inputs=classifier.shape, num_outputs=self.clients_per_round, num_clients= self.num_clients, 
-                                 epsilon_initial = 0.4, epsilon_decay=0.8, epsilon_min=0.05, hidden_size=256, std=np.log(0.1))
+                                 epsilon_initial = 0.3, epsilon_decay=0.8, epsilon_min=0.02, hidden_size=256, std=np.log(0.1))
         self.agent_optimizer = torch.optim.Adam(self.agent.parameters(), lr=1e-3) # example
-        self.steps = 20
+        self.steps = 10
+        self.buffer_name = option['buffer']
+        self.current_buffer = []
+        self.replay_buffer = []
         return
     
+    def run(self):
+        """
+        Start the federated learning symtem where the global model is trained iteratively.
+        """
+        pool = mp.Pool(self.num_threads)
+        logger.time_start('Total Time Cost')
+
+        modelpath = f"./algorithm/model/model_weights.pth"
+        if Path(modelpath).exists():
+            self.agent.load_state_dict(torch.load(modelpath))
+        
+        file_list = os.listdir("./algorithm/data")
+        for file_name in file_list:
+            if file_name.split('.')[0] != self.buffer_name:
+                loaded_array = json.load(open(f"./algorithm/data/{file_name}", 'r'))
+                self.replay_buffer += loaded_array
+        
+        print(f"=====LENGTH OF REPLAY BUFFER: {len(self.replay_buffer)}=====")
+
+        for round in range(self.num_rounds+1):
+            print("--------------Round {}--------------".format(round))
+            logger.time_start('Time Cost')
+
+            # federated train
+            self.iterate(round, pool)
+            # decay learning rate
+            self.global_lr_scheduler(round)
+
+            logger.time_end('Time Cost')
+            if logger.check_if_log(round, self.eval_interval): logger.log(self)
+
+        print("=================End==================")
+        logger.time_end('Total Time Cost')
+        # save results as .json file
+        filepath = os.path.join(self.log_folder, self.option['task'], self.option['dataidx_filename']).split('.')[0]
+        if not Path(filepath).exists():
+            os.system(f"mkdir -p {filepath}")
+        logger.save(os.path.join(filepath, flw.output_filename(self.option, self)))
+
+        
+        torch.save(self.agent.state_dict(), modelpath)
+
+        with open(f"./algorithm/data/{self.buffer_name}.json", 'w') as file:
+            json.dump(self.current_buffer, file)
+        
+
     def iterate(self, t, pool):
         self.selected_clients = sorted(self.sample())
         models, train_losses = self.communicate(self.selected_clients, pool)
@@ -147,7 +211,35 @@ class Server(MPBasicServer):
             reward = - np.mean(train_losses) - (np.max(train_losses) - np.min(train_losses))
             self.agent.record(reward, device=device0)
             if t%self.steps == 0:
-                self.agent.update(state, self.agent_optimizer) # example
+                states, actions, log_probs, returns, advantage = self.agent.get_experience(state)
+                for idx in range(len(states)):
+                    self.current_buffer.append([states[idx].tolist(), actions[idx].tolist(), log_probs[idx].tolist(), returns[idx].tolist(), advantage[idx].tolist()])
+                    # self.current_buffer.append([actions[idx].detach().tolist(), log_probs[idx].detach().tolist(), returns[idx].detach().tolist(), advantage[idx].detach().tolist()])
+                    
+
+                rand_ids = np.random.randint(0, len(self.replay_buffer), min(int(len(self.replay_buffer)/2), 100))
+                rand_ids2 = np.random.randint(0, len(self.current_buffer), min(len(self.current_buffer), 100))
+
+                experiences = [self.replay_buffer[i] for i in rand_ids]
+                cur_experiences = [self.current_buffer[i] for i in rand_ids2]
+
+                experiences += cur_experiences
+
+                states2 = torch.tensor([elm[0] for elm in experiences]).to(device0)
+                actions2 = torch.tensor([elm[1] for elm in experiences]).to(device0)
+                log_probs2 = torch.tensor([elm[2] for elm in experiences]).to(device0)
+                returns2 = torch.tensor([elm[3] for elm in experiences]).to(device0)
+                advantage2 = torch.tensor([elm[4] for elm in experiences]).to(device0)
+
+                states    = torch.cat((states, states2))
+                actions   = torch.cat((actions, actions2))
+                log_probs = torch.cat((log_probs, log_probs2))
+                returns   = torch.cat((returns, returns2))
+                advantage = torch.cat((advantage, advantage2))
+
+                # self.agent.update(state, self.agent_optimizer) # example
+                # print("+++++++", states.shape, actions.shape, log_probs.shape, returns.shape, advantage.shape)
+                self.agent.update(self.agent_optimizer, states, actions, log_probs, returns, advantage)
                 
         impact_factors = self.agent.get_action(state, fedavg_action = [1.0 * self.client_vols[cid]/self.data_vol for cid in self.selected_clients])
         print("IMPACT FACTOR", impact_factors)
