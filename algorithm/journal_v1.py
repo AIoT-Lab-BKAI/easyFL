@@ -1,29 +1,17 @@
-from .mp_fedbase import MPBasicServer, MPBasicClient
+from .fedbase import BasicServer, BasicClient
+from algorithm.agg_utils.fedtest_utils import get_penultimate_layer
 from algorithm.cfmtx.cfmtx import cfmtx_test
-from algorithm.agg_utils.proposal_utils import ActorCritic
 
 import torch.nn as nn
 import numpy as np
+
 import torch
+import os
 import copy
+import wandb, time, json
 
 
-def get_module_from_model(model, res = None):
-    if res==None: res = []
-    ch_names = [item[0] for item in model.named_children()]
-    if ch_names==[]:
-        if model._parameters:
-            res.append(model)
-    else:
-        for name in ch_names:
-            get_module_from_model(model.__getattr__(name), res)
-    return res
-
-
-def get_classifier(model):
-    modules = get_module_from_model(model)
-    penul = modules[-1]._parameters['weight']
-    return penul
+time_records = {"server_aggregation": {"overhead": [], "aggregation": []}, "local_training": {}}
 
 
 def KL_divergence(teacher_batch_input, student_batch_input, device):
@@ -67,56 +55,21 @@ def KL_divergence(teacher_batch_input, student_batch_input, device):
     return kl
 
 
-def compute_similarity(a, b):
-    """
-    Parameters:
-        a, b [torch.nn.Module]
-    Returns:
-        sum of pair-wise similarity between layers of a and b
-    """
-    sim = []
-    for layer_a, layer_b in zip(a.parameters(), b.parameters()):
-        x, y = torch.flatten(layer_a), torch.flatten(layer_b)
-        sim.append((x.transpose(-1,0) @ y) / (torch.norm(x) * torch.norm(y)))
-
-    return torch.mean(torch.tensor(sim)), sim[-1]
-
-
-class Server(MPBasicServer):
-    def __init__(self, option, model, clients, test_data=None):
+class Server(BasicServer):
+    def __init__(self, option, model, clients, test_data = None):
         super(Server, self).__init__(option, model, clients, test_data)
-        classifier = get_classifier(model)
-        self.agent = ActorCritic(num_inputs=classifier.shape, num_outputs=self.clients_per_round + 1, hidden_size=512)
-        self.agent_optimizer = torch.optim.Adam(self.agent.parameters(), lr=3e-4) # example
-        self.steps = 15 # example
-        self.device = torch.device("cuda")
-        self.init_states = []
-        self.init_actions = []
-        return
     
-    def iterate(self, t, pool):
-        self.selected_clients = self.sample()
-        models, train_losses = self.communicate(self.selected_clients, pool)
-        
-        if not self.selected_clients: 
-            return
-       
-        device0 = torch.device(f"cuda:{self.server_gpu_id}")
-        models = [i.to(device0) for i in models]
-        
-        self.model = self.aggregate(models, p = [1.0 * self.client_vols[cid]/self.data_vol for cid in self.selected_clients])    
-        return
 
-class Client(MPBasicClient):
+class Client(BasicClient):
     def __init__(self, option, name='', train_data=None, valid_data=None):
         super(Client, self).__init__(option, name, train_data, valid_data)
         self.lossfunc = nn.CrossEntropyLoss()
         self.kd_fct = option['kd_fct']
         
-    def reply(self, svr_pkg, device):
+    def reply(self, svr_pkg):
         model = self.unpack(svr_pkg)
-        loss = self.train_loss(model, device)
-        self.train(model, device)
+        loss = self.train_loss(model)
+        self.train(model)
         cpkg = self.pack(model, loss)
         return cpkg
         

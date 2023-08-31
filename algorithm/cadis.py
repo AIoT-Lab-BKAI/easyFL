@@ -8,7 +8,6 @@ In which: lr = client_per_turn / all_clients
           z  = new_clients_this_turn / client_per_turn
 """
 from .fedbase import BasicServer, BasicClient
-from utils import fmodule
 from algorithm.agg_utils.fedtest_utils import get_penultimate_layer
 from algorithm.cfmtx.cfmtx import cfmtx_test
 
