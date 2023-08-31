@@ -14,30 +14,30 @@ def init_weights(m):
 
 
 class StateProcessor(nn.Module):
-    def __init__(self, state_dim, hidden_dim=128):
+    def __init__(self, state_dim, hidden_dim=256):
         """
         For example: state_dim = (100, 10, 128)
         """
         super().__init__()
-        N, M, d = state_dim   # 100, 10, 128
+        _, _, d = state_dim   # 100, 10, 128
         self.linear1 = nn.Linear(d, hidden_dim)
-        self.linear2 = nn.Linear(N, 1)
+        self.linear2 = nn.Linear(hidden_dim, 1)
         self.apply(init_weights)
         return
     
     def forward(self, state):
         """
-        The state is expected to have the dimension of (N x M x d)
+        The state is expected to have the dimension of (batch x N x M x d)
         """
-        out = self.linear1(state).squeeze()     # N x M x hidden_dim
+        out = self.linear1(state)               # batch x N x M x hidden_dim
         out = F.relu(out)
-        out = out.transpose(0,2)                # hidden_dim x M x N
         
-        out = self.linear2(out).squeeze()       # hidden_dim x M
+        out = self.linear2(out).squeeze(-1)     # batch x N x M 
         out = F.relu(out)
-        return out.flatten()                    # hidden_dim * M
+        
+        return out.transpose(1,2)               # batch x M x N
 
-# self.state_processor = StateProcessor(state_dim=(N, M, d), hidden_dim=128) # output = hidden_dim * M
+# self.state_processor = StateProcessor(state_dim=(N, M, d), hidden_dim=128) # output = batch x M x N
 
 class ValueNetwork(nn.Module): 
     """
@@ -56,21 +56,30 @@ class ValueNetwork(nn.Module):
                 K is the number of participants per communication round
         """
         super(ValueNetwork, self).__init__()
-        N, M, d = state_dim   # 100, 10, 128
-        # self.state_processor = StateProcessor(state_dim=state_dim, hidden_dim=hidden_dim) # output = hidden_dim * M
+        N, M, _ = state_dim   # 100, 10, 128
         
-        self.linear1 = nn.Linear(hidden_dim * M + action_dim, hidden_dim)
-        self.linear2 = nn.Linear(hidden_dim, hidden_dim)
-        self.linear3 = nn.Linear(hidden_dim, 1)
+        # Input: batch x M x N
+        self.linear1 = nn.Linear(N, hidden_dim)
+        # Output: batch x M x hidden
+        
+        self.linear2 = nn.Linear(hidden_dim, 1)
+        # Output: batch x M x 1 ---squeeze(-1)---> batch x M 
+        
+        self.linear3 = nn.Linear(M + action_dim, hidden_dim)
+        # Output: batch x hidden
+        
+        self.linear4 = nn.Linear(hidden_dim, 1)
+        # Output: batch x 1
 
         self.apply(init_weights)
         return
     
     def forward(self, preprocessed_state, action):
-        x = torch.cat([preprocessed_state, action])
-        x = F.relu(self.linear1(x))
-        x = F.relu(self.linear2(x))
-        x = self.linear3(x)
+        x = F.relu(self.linear1(preprocessed_state))
+        x = F.relu(self.linear2(x)).squeeze(-1)
+        x = torch.cat([x, action])
+        x = F.relu(self.linear3(x))
+        x = self.linear4(x)
         return x
 
 
@@ -80,15 +89,23 @@ class PolicyNetwork(nn.Module):
     """
     def __init__(self, state_dim, action_dim, hidden_dim=128):
         super(PolicyNetwork, self).__init__()
-        N, M, d = state_dim   # 100, 10, 128
-        self.linear1 = nn.Linear(hidden_dim * M, hidden_dim)
-        self.linear2 = nn.Linear(hidden_dim, hidden_dim)
-        self.linear3 = nn.Linear(hidden_dim, action_dim)
+        N, M, _ = state_dim   # 100, 10, 128
+        
+        # Input: batch x M x N
+        self.linear1 = nn.Linear(N, hidden_dim)
+        # Output: batch x M x hidden
+        
+        self.linear2 = nn.Linear(hidden_dim, 1)
+        # Output: batch x M x 1 ---squeeze(-1)---> batch x M 
+        
+        self.linear3 = nn.Linear(M, action_dim)
+        # Output: batch x action_dim
+        
         self.apply(init_weights)
         return
 
     def forward(self, preprocessed_state):
         x = F.relu(self.linear1(preprocessed_state))
-        x = F.relu(self.linear2(x))
-        x = self.linear3(x)
+        x = F.relu(self.linear2(x)).squeeze(-1)
+        x = F.softmax(self.linear3(x), dim=1)
         return x
