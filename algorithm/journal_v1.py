@@ -1,6 +1,7 @@
 from .fedbase import BasicServer, BasicClient
 from algorithm.agg_utils.fedtest_utils import get_penultimate_layer
 from algorithm.cfmtx.cfmtx import cfmtx_test
+from algorithm.drl_utils.ddpg import DDPG_Agent
 
 import torch.nn as nn
 import numpy as np
@@ -58,7 +59,32 @@ def KL_divergence(teacher_batch_input, student_batch_input, device):
 class Server(BasicServer):
     def __init__(self, option, model, clients, test_data = None):
         super(Server, self).__init__(option, model, clients, test_data)
+        self.device='cuda'
+        self.agent = DDPG_Agent(state_dim=(len(self.clients), 10, 256),
+                                action_dim=self.clients_per_round)
+        self.agent.load_models(path=None)
+        return
+        
     
+    def iterate(self, t):
+        self.selected_clients = sorted(self.sample())
+        models, train_losses = self.communicate(self.selected_clients)
+        classifier_diffs = [get_penultimate_layer(self.model) * 0 for _ in self.clients]
+        for client_id, model in zip(self.selected_clients, models):
+            classifier_diffs[client_id] = get_penultimate_layer(model - self.model)
+        
+        raw_state = torch.concat(classifier_diffs, dim=0)
+        print(raw_state.shape)
+        prev_reward = - np.mean(train_losses)
+        
+        impact_factor = 
+        
+
+        if not self.selected_clients:
+            return
+        # aggregate: pk = 1/K as default where K=len(selected_clients)
+        self.model = self.aggregate(models, p = [1.0 * self.client_vols[cid]/self.data_vol for cid in self.selected_clients])
+        return
 
 class Client(BasicClient):
     def __init__(self, option, name='', train_data=None, valid_data=None):
