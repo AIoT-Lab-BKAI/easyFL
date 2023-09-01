@@ -62,9 +62,16 @@ class Server(BasicServer):
         self.device='cuda'
         self.agent = DDPG_Agent(state_dim=(len(self.clients), 10, 256),
                                 action_dim=self.clients_per_round)
-        self.agent.load_models(path=None)
+        self.storage_path=option['storage_path']
         return
-        
+    
+    def run(self):
+        self.agent.load_models(path=os.path.join(self.storage_path, "models"))
+        self.agent.load_buffer(path=os.path.join(self.storage_path, "buffers"), discard_name=self.task)
+        super().run()
+        self.agent.save_models(path=os.path.join(self.storage_path, "models"))
+        self.agent.save_buffer(path=os.path.join(self.storage_path, "buffers"), name=self.task)
+        return
     
     def iterate(self, t):
         self.selected_clients = sorted(self.sample())
@@ -76,15 +83,14 @@ class Server(BasicServer):
         raw_state = torch.concat(classifier_diffs, dim=0)
         print(raw_state.shape)
         prev_reward = - np.mean(train_losses)
-        
-        impact_factor = 
-        
+        impact_factor = self.agent.get_action(raw_state, prev_reward if t > 0 else None)
 
         if not self.selected_clients:
             return
         # aggregate: pk = 1/K as default where K=len(selected_clients)
-        self.model = self.aggregate(models, p = [1.0 * self.client_vols[cid]/self.data_vol for cid in self.selected_clients])
+        self.model = self.aggregate(models, p = impact_factor)
         return
+
 
 class Client(BasicClient):
     def __init__(self, option, name='', train_data=None, valid_data=None):

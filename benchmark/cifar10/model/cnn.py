@@ -13,11 +13,9 @@ class Model(FModule):
             nn.MaxPool2d(2),
         )
         self.decoder = nn.Sequential(
-            nn.Linear(1600, 384),
+            nn.Linear(1600, 256),
             nn.ReLU(),
-            nn.Linear(384, 192),
-            nn.ReLU(),
-            nn.Linear(192, 10),
+            nn.Linear(256, 10),
         )
 
     def forward(self, x):
