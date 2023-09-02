@@ -12,6 +12,63 @@ from copy import deepcopy
 import wandb
 from pathlib import Path
 import os
+from torch.utils.data import Dataset, DataLoader
+
+
+def KL_divergence(teacher_batch_input, student_batch_input, device):
+    """
+    Compute the KL divergence of 2 batches of layers
+    Args:
+        teacher_batch_input: Size N x d
+        student_batch_input: Size N x c
+    
+    Method: Kernel Density Estimation (KDE)
+    Kernel: Gaussian
+    Author: Nguyen Nang Hung
+    """
+    batch_student, _ = student_batch_input.shape
+    batch_teacher, _ = teacher_batch_input.shape
+    
+    assert batch_teacher == batch_student, "Unmatched batch size"
+    
+    teacher_batch_input = teacher_batch_input.to(device).unsqueeze(1)
+    student_batch_input = student_batch_input.to(device).unsqueeze(1)
+    
+    sub_s = student_batch_input - student_batch_input.transpose(0,1)
+    sub_s_norm = torch.norm(sub_s, dim=2)
+    sub_s_norm = sub_s_norm.flatten()[1:].view(batch_student-1, batch_student+1)[:,:-1].reshape(batch_student, batch_student-1)
+    std_s = torch.std(sub_s_norm)
+    mean_s = torch.mean(sub_s_norm)
+    kernel_mtx_s = torch.pow(sub_s_norm - mean_s, 2) / (torch.pow(std_s, 2) + 0.001)
+    kernel_mtx_s = torch.exp(-1/2 * kernel_mtx_s)
+    kernel_mtx_s = kernel_mtx_s/torch.sum(kernel_mtx_s, dim=1, keepdim=True)
+    
+    sub_t = teacher_batch_input - teacher_batch_input.transpose(0,1)
+    sub_t_norm = torch.norm(sub_t, dim=2)
+    sub_t_norm = sub_t_norm.flatten()[1:].view(batch_teacher-1, batch_teacher+1)[:,:-1].reshape(batch_teacher, batch_teacher-1)
+    std_t = torch.std(sub_t_norm)
+    mean_t = torch.mean(sub_t_norm)
+    kernel_mtx_t = torch.pow(sub_t_norm - mean_t, 2) / (torch.pow(std_t, 2) + 0.001)
+    kernel_mtx_t = torch.exp(-1/2 * kernel_mtx_t)
+    kernel_mtx_t = kernel_mtx_t/torch.sum(kernel_mtx_t, dim=1, keepdim=True)
+    
+    kl = torch.sum(kernel_mtx_t * torch.log(kernel_mtx_t/kernel_mtx_s))
+    return kl
+
+
+class StateDataset(Dataset):
+    def __init__(self):
+        super().__init__()
+        self.data = []
+        return
+    
+    def insert(self, x):
+        self.data.append(x)     # 1 x N x M x d
+        return
+    
+    def __getitem__(self, index):
+        return self.data[index].flatten(2,3)
+    
 
 class DDPG_Agent(nn.Module):
     def __init__(
@@ -56,6 +113,8 @@ class DDPG_Agent(nn.Module):
         self.step = 0
         self.batch_size = batch_size
         self.log_dir = log_dir
+        
+        self.state_dataset = StateDataset()
         return
     
     
@@ -111,9 +170,29 @@ class DDPG_Agent(nn.Module):
         return
 
 
+    def sp_update(self, device='cuda'):
+        optimizer = optim.SGD(self.state_processor.parameters(), lr=1e-3)
+        loader = DataLoader(self.state_dataset, batch_size=4, drop_last=False, shuffle=True)
+        losses = []
+        for epoch in range(8):
+            epoch_losses = []
+            for state in loader:
+                state = state.to(device)                                            # batch x N x (M * d)
+                processed_state = self.state_processor(state).transpose(1,2)        # batch x N x M
+                correlation_loss = KL_divergence(state, processed_state, device)
+                
+                optimizer.zero_grad()
+                correlation_loss.backward()
+                optimizer.step()
+                epoch_losses.append(correlation_loss.detach().cpu().item())
+            losses.append(np.mean(epoch_losses))
+        return np.mean(losses)
+    
+
     def get_action(self, state, prev_reward, done=False):
-        state = torch.DoubleTensor(state).unsqueeze(0).cuda()  # current state
-        preprocessed_state = self.state_processor(state)
+        state = torch.DoubleTensor(state).unsqueeze(0).cuda()  # current state: 1 x N x M x d
+        self.state_dataset.insert(state)
+        preprocessed_state = self.state_processor(state)       # process state: 1 x M x N
 
         if prev_reward is not None:
             self.memory.update(r=prev_reward)
