@@ -22,13 +22,19 @@ class Server(BasicServer):
         self.agent = DDPG_Agent(state_dim=(len(self.clients), 10, 256),
                                 action_dim=self.clients_per_round)
         self.storage_path=option['storage_path']
+        self.load_agent=option['load_agent']
+        self.save_agent=option['save_agent']
         return
     
     def run(self):
-        self.agent.load_models(path=os.path.join(self.storage_path, "models"))
+        if self.load_agent:
+            self.agent.load_models(path=os.path.join(self.storage_path, "models"))
         self.agent.load_buffer(path=os.path.join(self.storage_path, "buffers"), discard_name=self.task)
+        
         super().run()
-        self.agent.save_models(path=os.path.join(self.storage_path, "models"))
+        
+        if self.save_agent:
+            self.agent.save_models(path=os.path.join(self.storage_path, "models"))
         self.agent.save_buffer(path=os.path.join(self.storage_path, "buffers"), name=self.task)
         return
     
