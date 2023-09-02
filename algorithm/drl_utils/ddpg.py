@@ -1,7 +1,7 @@
 # from utils import *
-from networks import *
-from policy import *
-from buffer import *
+from algorithm.drl_utils.networks import *
+from algorithm.drl_utils.policy import *
+from algorithm.drl_utils.buffer import *
 import torch
 import torch.nn as nn
 import torch.optim as optim
