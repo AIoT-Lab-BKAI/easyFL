@@ -201,8 +201,8 @@ class DDPG_Agent(nn.Module):
         action = self.ou_noise.get_action(action, self.step)
         self.memory.act(state, action)
 
-        if self.memory.get_last_record() is not None:
-            s, a, r, s_next = self.memory.get_last_record()
+        if self.memory.get_last_record():
+            s, a, r, s_next = self.memory.get_last_record()    # type: ignore
             self.replay_buffer.push(s, a, r, s_next, done)
 
             if len(self.replay_buffer) >= self.batch_size:
