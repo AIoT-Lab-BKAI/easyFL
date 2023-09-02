@@ -77,6 +77,11 @@ def read_option():
     parser.add_argument('--kd_fct', help="Knowledge distillation factor (Fedsdiv)", type=float, default="1.0")
     parser.add_argument('--sthr', help="Similarity threshold for clustering (Fedsdiv)", type=float, default="0.975")
     
+    # journal version
+    parser.add_argument('--storage_path', help="Folder that contain \"/buffers/\" and \"/models/\"", type=str, default="./storage")
+    parser.add_argument('--load_agent', help="If yes, then load the pretrained agent from the folder \"storage_path/models\"", type=bool, default=True)
+    parser.add_argument('--save_agent', help="If yes, then save the pretrained agent into the folder \"storage_path/models\"", type=bool, default=False)
+    
     try: option = vars(parser.parse_args())
     except IOError as msg: parser.error(str(msg))
     return option
