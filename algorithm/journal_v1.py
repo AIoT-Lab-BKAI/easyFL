@@ -45,15 +45,14 @@ class Server(BasicServer):
         for client_id, model in zip(self.selected_clients, models):
             classifier_diffs[client_id] = get_penultimate_layer(model - self.model)
         
-        raw_state = torch.concat(classifier_diffs, dim=0)
+        raw_state = torch.stack(classifier_diffs, dim=0)
         print(raw_state.shape) # N x M x d
         prev_reward = - np.mean(train_losses)
         impact_factor = self.agent.get_action(raw_state, prev_reward if t > 0 else None)
-
         if not self.selected_clients:
             return
         # aggregate: pk = 1/K as default where K=len(selected_clients)
-        self.model = self.aggregate(models, p = impact_factor)
+        self.model = self.aggregate([model.cpu() for model in models], p = impact_factor)
         return
 
 

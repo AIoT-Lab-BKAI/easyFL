@@ -9,7 +9,7 @@ def freeze_layer(layer):
 
 def init_weights(m):
     if isinstance(m, nn.Linear):
-        torch.nn.init.xavier_uniform(m.weight)
+        torch.nn.init.xavier_uniform_(m.weight)
         m.bias.data.fill_(0.01)
 
 
@@ -77,7 +77,7 @@ class ValueNetwork(nn.Module):
     def forward(self, preprocessed_state, action):
         x = F.relu(self.linear1(preprocessed_state))
         x = F.relu(self.linear2(x)).squeeze(-1)
-        x = torch.cat([x, action])
+        x = torch.cat([x, action], dim=1)
         x = F.relu(self.linear3(x))
         x = self.linear4(x)
         return x

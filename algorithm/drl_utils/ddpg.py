@@ -93,9 +93,9 @@ class DDPG_Agent(nn.Module):
 
         self.ou_noise = OUNoise(num_actions=action_dim, action_min_val=0, action_max_val=1)
 
-        self.value_net = ValueNetwork(state_dim, action_dim, hidden_dim).cuda().double()
-        self.policy_net = PolicyNetwork(state_dim, action_dim, hidden_dim).cuda().double()
-        self.state_processor = StateProcessor(state_dim, hidden_dim).cuda().double()
+        self.value_net = ValueNetwork(state_dim, action_dim, hidden_dim).cuda()
+        self.policy_net = PolicyNetwork(state_dim, action_dim, hidden_dim).cuda()
+        self.state_processor = StateProcessor(state_dim, hidden_dim).cuda()
 
         self.target_value_net = deepcopy(self.value_net)
         self.target_policy_net = deepcopy(self.policy_net)
@@ -121,11 +121,11 @@ class DDPG_Agent(nn.Module):
     def compute_loss(self, buffer: ReplayBuffer, gamma=0.9, min_value=-np.inf, max_value=np.inf):
         state, action, reward, next_state, done = buffer.sample(self.batch_size)
 
-        state = torch.DoubleTensor(state).squeeze().cuda()
-        next_state = torch.DoubleTensor(next_state).squeeze().cuda()
-        action = torch.DoubleTensor(action).squeeze().cuda()
-        reward = torch.DoubleTensor(reward).cuda()
-        done = torch.DoubleTensor(np.float32(done)).cuda()
+        state = torch.Tensor(state).squeeze().cuda()
+        next_state = torch.Tensor(next_state).squeeze().cuda()
+        action = torch.Tensor(action).squeeze().cuda()
+        reward = torch.Tensor(reward).cuda()
+        done = torch.Tensor(np.float32(done)).cuda()
 
         policy_loss = self.value_net(state, self.policy_net(state))
         policy_loss = - policy_loss.mean()
@@ -147,11 +147,11 @@ class DDPG_Agent(nn.Module):
         offline_value_loss = 0
         for old_buffer in self.old_buffers:
             pl, vl = self.compute_loss(old_buffer, gamma, min_value, max_value)
-            offline_policy_loss += pl
-            offline_value_loss += vl
+            offline_policy_loss += pl/len(self.old_buffers)
+            offline_value_loss += vl/len(self.old_buffers)
         
-        total_policy_loss = 0.5 * online_policy_loss + 0.5 * offline_policy_loss/len(self.old_buffers)
-        total_value_loss = 0.5 * online_value_loss + 0.5 * offline_value_loss/len(self.old_buffers)
+        total_policy_loss = 0.5 * online_policy_loss + 0.5 * offline_policy_loss
+        total_value_loss = 0.5 * online_value_loss + 0.5 * offline_value_loss
 
         self.policy_optimizer.zero_grad()
         total_policy_loss.backward()
@@ -190,16 +190,16 @@ class DDPG_Agent(nn.Module):
     
 
     def get_action(self, state, prev_reward, done=False):
-        state = torch.DoubleTensor(state).unsqueeze(0).cuda()  # current state: 1 x N x M x d
+        state = torch.Tensor(state).unsqueeze(0).cuda()  # current state: 1 x N x M x d
         self.state_dataset.insert(state)
         preprocessed_state = self.state_processor(state)       # process state: 1 x M x N
 
         if prev_reward is not None:
             self.memory.update(r=prev_reward)
 
-        action = self.policy_net(preprocessed_state)
+        action = self.policy_net(preprocessed_state).flatten()
         action = self.ou_noise.get_action(action, self.step)
-        self.memory.act(state, action)
+        self.memory.act(preprocessed_state.detach().cpu(), action)
 
         if self.memory.get_last_record():
             s, a, r, s_next = self.memory.get_last_record()    # type: ignore
