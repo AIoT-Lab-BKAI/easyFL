@@ -46,7 +46,6 @@ class Server(BasicServer):
             classifier_diffs[client_id] = get_penultimate_layer(model - self.model)
         
         raw_state = torch.stack(classifier_diffs, dim=0)
-        print(raw_state.shape) # N x M x d
         prev_reward = - np.mean(train_losses)
         impact_factor = self.agent.get_action(raw_state, prev_reward if t > 0 else None)
         if not self.selected_clients:

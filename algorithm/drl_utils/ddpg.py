@@ -63,11 +63,14 @@ class StateDataset(Dataset):
         return
     
     def insert(self, x):
-        self.data.append(x)     # 1 x N x M x d
+        self.data.append(x)     # N x M x d
         return
     
+    def __len__(self):
+        return len(self.data)
+    
     def __getitem__(self, index):
-        return self.data[index].flatten(2,3)
+        return self.data[index]   # N x M x d
     
 
 class DDPG_Agent(nn.Module):
@@ -176,23 +179,26 @@ class DDPG_Agent(nn.Module):
         losses = []
         for epoch in range(8):
             epoch_losses = []
-            for state in loader:
-                state = state.to(device)                                            # batch x N x (M * d)
-                processed_state = self.state_processor(state).transpose(1,2)        # batch x N x M
-                correlation_loss = KL_divergence(state, processed_state, device)
+            for batch_state in loader:
+                batch_state = batch_state.clone().detach().to(device)                           # batch x N x M x d
+                batch_processed_state = self.state_processor(batch_state).transpose(1,2)        # batch x N x M
+                correlation_loss = 0
+                for state, pstate in zip(batch_state, batch_processed_state):
+                    correlation_loss += KL_divergence(state.flatten(1,2), pstate, device)
                 
                 optimizer.zero_grad()
-                correlation_loss.backward()
+                correlation_loss.backward()                                                     # type:ignore
                 optimizer.step()
-                epoch_losses.append(correlation_loss.detach().cpu().item())
+                epoch_losses.append(correlation_loss.detach().cpu().item())                     # type:ignore
             losses.append(np.mean(epoch_losses))
         return np.mean(losses)
     
 
     def get_action(self, state, prev_reward, done=False):
-        state = torch.Tensor(state).unsqueeze(0).cuda()  # current state: 1 x N x M x d
-        self.state_dataset.insert(state)
-        preprocessed_state = self.state_processor(state)       # process state: 1 x M x N
+        state = torch.Tensor(state).unsqueeze(0)                        # current state: 1 x N x M x d
+        self.state_dataset.insert(state.squeeze(0))                     # put into dataset: N x M x d
+        print("Inserted raw state shape:", state.shape)
+        preprocessed_state = self.state_processor(state.cuda())         # process state: 1 x M x N
 
         if prev_reward is not None:
             self.memory.update(r=prev_reward)
@@ -207,6 +213,7 @@ class DDPG_Agent(nn.Module):
 
             if len(self.replay_buffer) >= self.batch_size:
                 self.ddpg_update()
+                self.sp_update()
             
         self.step += 1
         return action
