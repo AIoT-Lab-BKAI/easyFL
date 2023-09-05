@@ -106,7 +106,7 @@ class Server(MPBasicServer):
         self.agent = ActorCritic(num_inputs=classifier.shape, num_outputs=self.clients_per_round, num_clients= self.num_clients, 
                                  epsilon_initial = 0.3, epsilon_decay=0.8, epsilon_min=0.02, hidden_size=256, std=np.log(0.1))
         self.agent_optimizer = torch.optim.Adam(self.agent.parameters(), lr=1e-3) # example
-        self.steps = 10
+        self.steps = 15
         self.buffer_name = option['buffer']
         self.current_buffer = []
         self.replay_buffer = []
@@ -123,10 +123,10 @@ class Server(MPBasicServer):
         if Path(modelpath).exists():
             self.agent.load_state_dict(torch.load(modelpath))
         
-        file_list = os.listdir("./algorithm/data")
+        file_list = os.listdir("./algorithm/buffer")
         for file_name in file_list:
             if file_name.split('.')[0] != self.buffer_name:
-                loaded_array = json.load(open(f"./algorithm/data/{file_name}", 'r'))
+                loaded_array = json.load(open(f"./algorithm/buffer/{file_name}", 'r'))
                 self.replay_buffer += loaded_array
         
         print(f"=====LENGTH OF REPLAY BUFFER: {len(self.replay_buffer)}=====")
@@ -154,7 +154,7 @@ class Server(MPBasicServer):
         
         torch.save(self.agent.state_dict(), modelpath)
 
-        with open(f"./algorithm/data/{self.buffer_name}.json", 'w') as file:
+        with open(f"./algorithm/buffer/{self.buffer_name}.json", 'w') as file:
             json.dump(self.current_buffer, file)
         
 
@@ -217,13 +217,14 @@ class Server(MPBasicServer):
                     # self.current_buffer.append([actions[idx].detach().tolist(), log_probs[idx].detach().tolist(), returns[idx].detach().tolist(), advantage[idx].detach().tolist()])
                     
 
-                rand_ids = np.random.randint(0, len(self.replay_buffer), min(int(len(self.replay_buffer)/2), 100))
-                rand_ids2 = np.random.randint(0, len(self.current_buffer), min(len(self.current_buffer), 100))
+                minn = min(min(len(self.replay_buffer), 40), len(self.current_buffer))
+                rand_ids = np.random.randint(0, len(self.replay_buffer), minn)
 
-                experiences = [self.replay_buffer[i] for i in rand_ids]
-                cur_experiences = [self.current_buffer[i] for i in rand_ids2]
+                if minn == 0:
+                    minn = len(self.current_buffer)
+                rand_ids2 = np.random.randint(0, len(self.current_buffer), minn)
 
-                experiences += cur_experiences
+                experiences = [self.replay_buffer[i] for i in rand_ids] + [self.current_buffer[i] for i in rand_ids2]
 
                 states2 = torch.tensor([elm[0] for elm in experiences]).to(device0)
                 actions2 = torch.tensor([elm[1] for elm in experiences]).to(device0)

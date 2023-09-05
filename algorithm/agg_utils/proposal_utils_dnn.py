@@ -13,8 +13,7 @@ import math
 def init_weights(m):
     if isinstance(m, nn.Linear):
         nn.init.normal_(m.weight, mean=0., std=0.1)
-        nn.init.constant_(m.bias, 0.01)
-        
+        nn.init.constant_(m.bias, 0.0)
         
 def compute_gae(next_value, rewards, masks, values, gamma=0.95, tau=0.95):
     values = values + [next_value]
@@ -195,7 +194,7 @@ class ActorCritic(nn.Module):
             else:
                 print("+++FEDAVG+++")
                 action = [math.log(x) for x in fedavg_action]
-                mu = torch.tensor(fedavg_action, device = device, requires_grad = True).unsqueeze(0)
+                mu = torch.tensor(action, device = device, requires_grad = True).unsqueeze(0)
             std  = self.log_std.exp().expand_as(mu)
             return Normal(mu, std)
             # return torch.randn(action.shape[0], action.shape[1], device = action.device)
@@ -270,6 +269,6 @@ class ActorCritic(nn.Module):
 
         self.init_rl()
         self.epsilon = max(self.epsilon * self.epsilon_decay, self.epsilon_min)
-        self.clip_param = max(self.clip_param * 0.9, 0.1)
+        self.clip_param = max(self.clip_param * 0.8, 0.1)
         self.bool = True        
         return
