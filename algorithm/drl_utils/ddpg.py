@@ -170,7 +170,7 @@ class DDPG_Agent(nn.Module):
         for target_param, param in zip(self.target_policy_net.parameters(), self.policy_net.parameters()):
             target_param.data.copy_(target_param.data * (1.0 - soft_tau) + param.data * soft_tau)
 
-        return
+        return total_policy_loss.detach().cpu().item(), total_value_loss.detach().cpu().item()
 
 
     def sp_update(self, device='cuda'):
@@ -194,10 +194,9 @@ class DDPG_Agent(nn.Module):
         return np.mean(losses)
     
 
-    def get_action(self, state, prev_reward, done=False):
+    def get_action(self, state, prev_reward, done=False, log=False):
         state = torch.Tensor(state).unsqueeze(0)                        # current state: 1 x N x M x d
         self.state_dataset.insert(state.squeeze(0))                     # put into dataset: N x M x d
-        print("Inserted raw state shape:", state.shape)
         preprocessed_state = self.state_processor(state.cuda())         # process state: 1 x M x N
 
         if prev_reward is not None:
@@ -212,8 +211,10 @@ class DDPG_Agent(nn.Module):
             self.replay_buffer.push(s, a, r, s_next, done)
 
             if len(self.replay_buffer) >= self.batch_size:
-                self.ddpg_update()
-                self.sp_update()
+                pl, vl = self.ddpg_update()
+                sp_mean = self.sp_update()
+                if log:
+                    wandb.log({"agent/policy_loss": pl, "agent/value_loss": vl, "agent/stateprocessor_loss": sp_mean})
             
         self.step += 1
         return action
