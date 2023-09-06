@@ -118,6 +118,7 @@ class DDPG_Agent(nn.Module):
         self.log_dir = log_dir
         
         self.state_dataset = StateDataset()
+        self.total_reward = 0
         return
     
     
@@ -201,6 +202,7 @@ class DDPG_Agent(nn.Module):
 
         if prev_reward is not None:
             self.memory.update(r=prev_reward)
+            self.total_reward += prev_reward
 
         action = self.policy_net(preprocessed_state).flatten()
         action = self.ou_noise.get_action(action, self.step)
@@ -214,7 +216,8 @@ class DDPG_Agent(nn.Module):
                 pl, vl = self.ddpg_update()
                 sp_mean = self.sp_update()
                 if log:
-                    wandb.log({"agent/policy_loss": pl, "agent/value_loss": vl, "agent/stateprocessor_loss": sp_mean})
+                    wandb.log({"agent/policy_loss": pl, "agent/value_loss": vl,
+                               "agent/stateprocessor_loss": sp_mean, "agent/total_reward": self.total_reward}, self.step)
             
         self.step += 1
         return action
@@ -261,12 +264,13 @@ class DDPG_Agent(nn.Module):
             count = 0
             for filename in os.listdir(path):
                 if discard_name not in filename:
-                    count += 1
                     print(f"\tLoading {filename}... ", end="")
                     old_buffer = ReplayBuffer(capacity=0)
-                    old_buffer.load(path, filename)
-                    self.old_buffers.append(old_buffer)
-                    print(f"length: {len(old_buffer)} - SUCCEEDED.")
+                    if old_buffer.load(path, filename):
+                        count += 1
+                        self.old_buffers.append(old_buffer)
+                        print(f"length: {len(old_buffer)} - SUCCEEDED.")
+                        
             print(f"Finished loading {count} buffers.")
         else:
             print(f"{path} does not exist!")

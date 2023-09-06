@@ -36,13 +36,14 @@ class ReplayBuffer:
     def load(self, path, name):
         if Path(path).exists():
             try:
-                with open(os.path.join(path, f'{name}.pkl'), 'rb') as file:
+                with open(os.path.join(path, name), 'rb') as file:
                     self.buffer = pickle.load(file)
+                return True
             except:
                 print(f"Failed to load buffer from {os.path.join(path, f'{name}.pkl')}")
         else:
             print(f"{path} does not exist!")
-        return
+        return False
             
 
 class Memory:

@@ -24,6 +24,7 @@ class Server(BasicServer):
         self.storage_path=option['storage_path']
         self.load_agent=option['load_agent']
         self.save_agent=option['save_agent']
+        self.paras_name = ['ep']
         return
     
     def run(self):
@@ -47,7 +48,7 @@ class Server(BasicServer):
         
         raw_state = torch.stack(classifier_diffs, dim=0)
         prev_reward = - np.mean(train_losses)
-        impact_factor = self.agent.get_action(raw_state, prev_reward if t > 0 else None)
+        impact_factor = self.agent.get_action(raw_state, prev_reward if t > 0 else None, log=True)
         if not self.selected_clients:
             return
         # aggregate: pk = 1/K as default where K=len(selected_clients)

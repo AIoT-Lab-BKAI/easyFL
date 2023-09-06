@@ -10,7 +10,7 @@ class MyLogger(flw.Logger):
         super().__init__()
         self.max_acc = 0
         
-    def log(self, server=None):
+    def log(self, server=None, round=None):
         if server==None: return
         if self.output == {}:
             self.output = {
@@ -68,7 +68,8 @@ class MyLogger(flw.Logger):
                     "Std Client Accuracy":  self.output['var_curve'][-1],
                     "Inference Time":       self.output['inference_time'][-1],
                     "Max Testing Accuracy": self.max_acc
-                }
+                },
+                step=round
             )
 
 
