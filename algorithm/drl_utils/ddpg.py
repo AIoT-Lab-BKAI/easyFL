@@ -99,6 +99,7 @@ class DDPG_Agent(nn.Module):
         self.value_net = ValueNetwork(state_dim, action_dim, hidden_dim).cuda()
         self.policy_net = PolicyNetwork(state_dim, action_dim, hidden_dim).cuda()
         self.state_processor = StateProcessor(state_dim, hidden_dim).cuda()
+        self.state_processor_frozen = False
 
         self.target_value_net = deepcopy(self.value_net)
         self.target_policy_net = deepcopy(self.policy_net)
@@ -144,7 +145,7 @@ class DDPG_Agent(nn.Module):
         return policy_loss, value_loss
     
 
-    def ddpg_update(self, gamma=0.9, min_value=-np.inf, max_value=np.inf, soft_tau=2e-2):
+    def ddpg_update(self, gamma=0.9, min_value=-np.inf, max_value=np.inf, soft_tau=0.25):
         online_policy_loss, online_value_loss = self.compute_loss(self.replay_buffer, gamma, min_value, max_value)
         
         offline_policy_loss = 0
@@ -174,7 +175,7 @@ class DDPG_Agent(nn.Module):
         return total_policy_loss.detach().cpu().item(), total_value_loss.detach().cpu().item()
 
 
-    def sp_update(self, device='cuda'):
+    def sp_update(self, device='cuda', update=True):
         optimizer = optim.SGD(self.state_processor.parameters(), lr=1e-3)
         loader = DataLoader(self.state_dataset, batch_size=4, drop_last=False, shuffle=True)
         losses = []
@@ -189,7 +190,9 @@ class DDPG_Agent(nn.Module):
                 
                 optimizer.zero_grad()
                 correlation_loss.backward()                                                     # type:ignore
-                optimizer.step()
+                if update:
+                    optimizer.step()
+                    
                 epoch_losses.append(correlation_loss.detach().cpu().item())                     # type:ignore
             losses.append(np.mean(epoch_losses))
         return np.mean(losses)
@@ -214,7 +217,8 @@ class DDPG_Agent(nn.Module):
 
             if len(self.replay_buffer) >= self.batch_size:
                 pl, vl = self.ddpg_update()
-                sp_mean = self.sp_update()
+                sp_mean = self.sp_update(update= not self.state_processor_frozen)
+                
                 if log:
                     wandb.log({"agent/policy_loss": pl, "agent/value_loss": vl,
                                "agent/stateprocessor_loss": sp_mean, "agent/total_reward": self.total_reward}, self.step)
@@ -226,17 +230,23 @@ class DDPG_Agent(nn.Module):
     def load_models(self, path):
         if Path(path).exists():
             try:
-                self.state_processor.load_state_dict(torch.load(os.path.join(path, "StateProcessor.pt")))
+                full_path = os.path.join(path, "StateProcessor.pt")
+                self.state_processor.load_state_dict(torch.load(full_path))
+                print(f"Successfully loaded StateProcessor from {full_path}")
             except:
                 print("Failed to load StateProcessor.")
             
             try:
+                full_path = os.path.join(path, "PolicyNet.pt")
                 self.policy_net.load_state_dict(torch.load(os.path.join(path, "PolicyNet.pt")))
+                print(f"Successfully loaded PolicyNet from {full_path}")
             except:
                 print("Failed to load PolicyNet.")
             
             try:
+                full_path = os.path.join(path, "ValueNet.pt")
                 self.value_net.load_state_dict(torch.load(os.path.join(path, "ValueNet.pt")))
+                print(f"Successfully loaded ValueNet from {full_path}")
             except:
                 print("Failed to load ValueNet.")
         else:
@@ -247,6 +257,10 @@ class DDPG_Agent(nn.Module):
     def save_models(self, path):
         if not Path(path).exists():
             os.makedirs(path)
+        
+        self.state_processor.zero_grad()
+        self.policy_net.zero_grad()
+        self.value_net.zero_grad()
         
         torch.save(self.state_processor.state_dict(), os.path.join(path, "StateProcessor.pt"))
         torch.save(self.policy_net.state_dict(), os.path.join(path, "PolicyNet.pt"))

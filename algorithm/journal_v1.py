@@ -1,6 +1,5 @@
 from .fedbase import BasicServer, BasicClient
 from algorithm.agg_utils.fedtest_utils import get_penultimate_layer
-from algorithm.cfmtx.cfmtx import cfmtx_test
 from algorithm.drl_utils.ddpg import DDPG_Agent, KL_divergence
 
 import torch.nn as nn
@@ -9,8 +8,14 @@ import numpy as np
 import torch
 import os
 import copy
-import wandb, time, json
 
+def freeze(model:nn.Module):
+    for param in model.parameters():
+        param.requires_grad = False
+
+def unfreeze(model:nn.Module):
+    for param in model.parameters():
+        param.requires_grad = True
 
 time_records = {"server_aggregation": {"overhead": [], "aggregation": []}, "local_training": {}}
 
@@ -24,14 +29,21 @@ class Server(BasicServer):
         self.storage_path=option['storage_path']
         self.load_agent=option['load_agent']
         self.save_agent=option['save_agent']
+        self.is_infer= option['ep'] == 'infer'
         self.paras_name = ['ep']
         return
     
     def run(self):
         if self.load_agent:
             self.agent.load_models(path=os.path.join(self.storage_path, "models"))
+            if self.is_infer: 
+                print("Freeze the StateProcessor!")
+                self.agent.state_processor_frozen = True
+            else: 
+                print("Unfreeze the StateProcessor!")
+                self.agent.state_processor_frozen = False
+                
         self.agent.load_buffer(path=os.path.join(self.storage_path, "buffers"), discard_name=self.task)
-        
         super().run()
         
         if self.save_agent:
