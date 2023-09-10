@@ -8,7 +8,7 @@ In which: lr = client_per_turn / all_clients
           z  = new_clients_this_turn / client_per_turn
 """
 from .fedbase import BasicServer, BasicClient
-from algorithm.agg_utils.fedtest_utils import get_penultimate_layer
+from algorithm.agg_utils.fedtest_utils import get_module_from_model
 from algorithm.cfmtx.cfmtx import cfmtx_test
 
 import torch.nn as nn
@@ -17,9 +17,14 @@ import numpy as np
 import torch
 import os
 import copy
-import wandb, time, json
+# import wandb, time, json
 
 time_records = {"server_aggregation": {"overhead": [], "aggregation": []}, "local_training": {}}
+
+
+def get_penultimate_layer(model):
+    penul = get_module_from_model(model)[-1]._parameters['bias']
+    return penul
 
 
 def KL_divergence(teacher_batch_input, student_batch_input, device):
@@ -93,10 +98,10 @@ class Server(BasicServer):
         
     def run(self):
         super().run()
-        json.dump(time_records, open(f"./measures/{self.option['algorithm']}.json", "w"))
+        # json.dump(time_records, open(f"./measures/{self.option['algorithm']}.json", "w"))
         
-        acc, cfmtx = cfmtx_test(self.model, self.test_data, "cuda")
-        json.dump(cfmtx, open(f"./measures/{self.option['algorithm']}_cfmtx.json", "w"))
+        # acc, cfmtx = cfmtx_test(self.model, self.test_data, "cuda")
+        # json.dump(cfmtx, open(f"./measures/{self.option['algorithm']}_cfmtx.json", "w"))
         return
     
     def iterate(self, t):
@@ -106,23 +111,23 @@ class Server(BasicServer):
         models, train_losses = self.communicate(self.selected_clients)
         models = [model.to(self.device) for model in models]
         
-        self.model = self.model.to(self.device)
+        self.model = self.model.to(self.device)                                     # type: ignore
         model_diffs = [model.to(self.device) - self.model for model in models]
 
         if not self.selected_clients:
             return
         
-        start = time.time()
+        # start = time.time()
         self.update_Q_matrix(model_diffs, self.selected_clients, t)
         if (len(self.selected_clients) < len(self.clients)) or (self.impact_factor is None):
             self.impact_factor, self.gamma = self.get_impact_factor(self.selected_clients, t)
-        end = time.time()
-        time_records['server_aggregation']["overhead"].append(end - start)
+        # end = time.time()
+        # time_records['server_aggregation']["overhead"].append(end - start)
         
-        start = time.time()
+        # start = time.time()
         self.model = self.aggregate(models, p=self.impact_factor)
-        end = time.time()
-        time_records['server_aggregation']["aggregation"].append(end - start)
+        # end = time.time()
+        # time_records['server_aggregation']["aggregation"].append(end - start)
         
         self.update_threshold(t)
         for cid in self.selected_clients: 
@@ -262,10 +267,10 @@ class Client(BasicClient):
         model = self.unpack(svr_pkg)
         loss = self.train_loss(model)
         
-        start = time.time()
+        # start = time.time()
         self.train(model)
-        end = time.time()
-        time_records['local_training'][self.name].append(end - start)
+        # end = time.time()
+        # time_records['local_training'][self.name].append(end - start)
         
         cpkg = self.pack(model, loss)
         return cpkg
