@@ -80,7 +80,7 @@ class DDPG_Agent(nn.Module):
         action_dim=10,              # K
         hidden_dim=128,
         value_lr=1e-3,
-        policy_lr=1e-4,
+        policy_lr=1e-3,
         replay_buffer_size=1000,
         batch_size=4,
         log_dir="./log/epochs",
@@ -145,7 +145,8 @@ class DDPG_Agent(nn.Module):
         return policy_loss, value_loss
     
 
-    def ddpg_update(self, gamma=0.9, min_value=-np.inf, max_value=np.inf, soft_tau=0.25):
+    def ddpg_update(self, gamma=0.98, min_value=-np.inf, max_value=np.inf, soft_tau=0.01):
+        # for epoch in range(5):
         online_policy_loss, online_value_loss = self.compute_loss(self.replay_buffer, gamma, min_value, max_value)
         
         offline_policy_loss = 0
@@ -155,8 +156,8 @@ class DDPG_Agent(nn.Module):
             offline_policy_loss += pl/len(self.old_buffers)
             offline_value_loss += vl/len(self.old_buffers)
         
-        total_policy_loss = 0.5 * online_policy_loss + 0.5 * offline_policy_loss
-        total_value_loss = 0.5 * online_value_loss + 0.5 * offline_value_loss
+        total_policy_loss = 0.75 * online_policy_loss + 0.25 * offline_policy_loss
+        total_value_loss = 0.75 * online_value_loss + 0.25 * offline_value_loss
 
         self.policy_optimizer.zero_grad()
         total_policy_loss.backward()

@@ -81,7 +81,7 @@ def read_option():
     parser.add_argument('--storage_path', help="Folder that contain \"/buffers/\" and \"/models/\"", type=str, default="./storage")
     parser.add_argument('--load_agent', help="If >= 1, then load the pretrained agent from the folder \"storage_path/models\"", type=int, default=1)
     parser.add_argument('--save_agent', help="If >= 1, then save the pretrained agent into the folder \"storage_path/models\"", type=int, default=0)
-    parser.add_argument('--ep', type=int, default=1)
+    parser.add_argument('--ep', type=str, default="0")
     
     try: option = vars(parser.parse_args())
     except IOError as msg: parser.error(str(msg))
