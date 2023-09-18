@@ -36,7 +36,7 @@ class Server(BasicServer):
     def run(self):
         if self.load_agent:
             self.agent.load_models(path=os.path.join(self.storage_path, "models"))
-            self.agent.load_buffer(path=os.path.join(self.storage_path, "buffers"), discard_name=self.task)
+            self.agent.load_buffer(path=os.path.join(self.storage_path, "buffers"), discard_name=self.task + f"_ep{self.option['ep']}")
             if self.is_infer: 
                 print("Freeze the StateProcessor!")
                 self.agent.state_processor_frozen = True
@@ -47,7 +47,7 @@ class Server(BasicServer):
         
         if self.save_agent:
             self.agent.save_models(path=os.path.join(self.storage_path, "models"))
-            self.agent.save_buffer(path=os.path.join(self.storage_path, "buffers"), name=self.task)
+            self.agent.save_buffer(path=os.path.join(self.storage_path, "buffers"), name=self.task + f"_ep{self.option['ep']}")
         return
     
     def iterate(self, t):
