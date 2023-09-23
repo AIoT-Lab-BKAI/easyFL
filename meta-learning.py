@@ -3,52 +3,75 @@ from algorithm.drl_utils.buffer import ReplayBuffer
 from copy import deepcopy
 from tqdm import tqdm
 from torch.autograd import grad
+from pathlib import Path
 
 import argparse
 import torch
 import os
 import numpy as np
 import torch.nn.functional as F
-
-
-hidden_dim=128
-representation_dim=256
-nclass=10
-alpha=1e-2
-beta=1e-3
-soft_tau=0.01
-task_epochs=8
-batch_size=16
-outer_epochs=32
-
+import json
 
 def read_option():
     parser = argparse.ArgumentParser()
     # journal version
     parser.add_argument('--path', help="Folder that contain \"/buffers/\" and \"/models/\"", type=str, default="./storage")
-    parser.add_argument('--load_agent', help="If >= 1, then load the pretrained agent from the folder \"storage_path/models\"", type=int, default=1)
-    parser.add_argument('--save_agent', help="If >= 1, then save the pretrained agent into the folder \"storage_path/models\"", type=int, default=0)    
+    parser.add_argument('--load', help="If 1, then load the models for meta learning, otherwise meta-learning from scratch", type=int, default=1)
+    parser.add_argument('--save', help="Folder to save the meta models", type=str, default="./storage/models")
     parser.add_argument('--nclient', help="The total number of clients", type=int, default=100)
-    parser.add_argument('--clients_per_round', help="The number of participants per round", type=int, default=10)
+    parser.add_argument('--clients_per_round', help="The number of per round participants", type=int, default=10)
+    parser.add_argument('--hidden_dim', help="", type=int, default=128)
+    parser.add_argument('--representation_dim', help="", type=int, default=256)
+    parser.add_argument('--nclass', help="", type=int, default=10)
+    parser.add_argument('--alpha', help="", type=float, default="0.001")
+    parser.add_argument('--beta', help="", type=float, default="0.001")
+    parser.add_argument('--soft_tau', help="", type=float, default="0.001")
+    parser.add_argument('--task_epochs', help="", type=int, default=1)
+    parser.add_argument('--batch_size', help="", type=int, default=8)
+    parser.add_argument('--outer_epochs', help="", type=int, default=1000)
+    
     try: option = vars(parser.parse_args())
     except IOError as msg: parser.error(str(msg))
     return option
 
 
-def load_models(path, state_dim, action_dim):
-    value_net = ValueNetwork(state_dim, action_dim, hidden_dim).cuda()
-    policy_net = PolicyNetwork(state_dim, action_dim, hidden_dim).cuda()
-    
-    full_path = os.path.join(path, "PolicyNet.pt")
-    policy_net.load_state_dict(torch.load(os.path.join(path, "PolicyNet.pt")))
-    print(f"Successfully loaded PolicyNet from {full_path}")
-    
-    full_path = os.path.join(path, "ValueNet.pt")
-    value_net.load_state_dict(torch.load(os.path.join(path, "ValueNet.pt")))
-    print(f"Successfully loaded ValueNet from {full_path}")
-    
+def load_models(option, state_dim, action_dim):
+    value_net = ValueNetwork(state_dim, action_dim, option['hidden_dim']).cuda()
+    policy_net = PolicyNetwork(state_dim, action_dim, option['hidden_dim']).cuda()
     target_value_net = deepcopy(value_net)
     target_policy_net = deepcopy(policy_net)
+    
+    if option['load']:
+        path = os.path.join(option['path'], "models")
+        
+        try:
+            full_path = os.path.join(path, "PolicyNet.pt")
+            policy_net.load_state_dict(torch.load(full_path))
+            print(f"Successfully loaded PolicyNet from {full_path}")
+        except:
+            print("Failed to load policy net!")
+        
+        try:
+            full_path = os.path.join(path, "ValueNet.pt")
+            value_net.load_state_dict(torch.load(full_path))
+            print(f"Successfully loaded ValueNet from {full_path}")
+        except:
+            print("Failed to load value net!")
+        
+        try:
+            full_path = os.path.join(path, "TargetValueNet.pt")
+            target_value_net.load_state_dict(torch.load(full_path))
+            print(f"Successfully loaded TargetValueNet from {full_path}")
+        except:
+            print("Failed to load target value net!")
+            
+        try:
+            full_path = os.path.join(path, "TargetPolicyNet.pt")
+            target_policy_net.load_state_dict(torch.load(full_path))
+            print(f"Successfully loaded TargetPolicyNet from {full_path}")
+        except:
+            print("Failed to load target policy net!")
+    
     
     return value_net, policy_net, target_value_net, target_policy_net
 
@@ -68,7 +91,8 @@ def load_buffers(path):
     return res
 
 
-def compute_loss(value_net, policy_net, target_value_net, target_policy_net, buffer: ReplayBuffer, gamma=0.9, min_value=-np.inf, max_value=np.inf):
+def compute_loss(value_net, policy_net, target_value_net, target_policy_net, batch_size,
+                 buffer: ReplayBuffer, gamma=0.9, min_value=-np.inf, max_value=np.inf):
         state, action, reward, next_state, done = buffer.sample(batch_size)
 
         state = torch.Tensor(state).squeeze().cuda()
@@ -100,65 +124,110 @@ def nth_derivative(f, wrt, n):
 
 if __name__ == "__main__":
     option = read_option()
-    state_dim=(option['nclient'], nclass, representation_dim)
+    state_dim=(option['nclient'], option['nclass'], option['representation_dim'])
     action_dim=option['clients_per_round']
     
-    value_net, policy_net, target_value_net, target_policy_net = load_models(os.path.join(option['path'], "models"), state_dim, action_dim)
+    value_net, policy_net, target_value_net, target_policy_net = load_models(option, state_dim, action_dim)
     buffers = load_buffers(os.path.join(option['path'], "buffers"))
     
-    for e in tqdm(range(outer_epochs)):
-        # epoch_vl = []
-        # epoch_pl = []
+    epoch_vl = []
+    epoch_pl = []
         
+    for e in tqdm(range(option['outer_epochs'])):
         ast_value_net = deepcopy(value_net)
         ast_policy_net = deepcopy(policy_net)
+        
+        all_task_training_pl = 0
+        all_task_training_vl = 0
         
         for task_buffer in tqdm(buffers, leave=False):
             task_value_net = deepcopy(value_net)
             task_policy_net = deepcopy(policy_net)
             
-            # per_task_training_pls = []
-            # per_task_training_vls = []
-            for _ in tqdm(range(task_epochs), leave=False):
-                pl, vl = compute_loss(task_value_net, task_policy_net, target_value_net, target_policy_net, task_buffer)
-                # per_task_training_pls.append(pl.detach().cpu().item())
-                # per_task_training_vls.append(vl.detach().cpu().item())
+            task_training_pls = []
+            task_training_vls = []
+            for _ in range(option['task_epochs']):
+                pl, vl = compute_loss(task_value_net, task_policy_net, target_value_net, target_policy_net, option['batch_size'], task_buffer)
+                task_training_pls.append(pl.detach().cpu().item())
+                task_training_vls.append(vl.detach().cpu().item())
                 
                 # First order derivative dL/dtheta
                 task_value_grad = nth_derivative(vl, list(task_value_net.parameters()), n=1)
                 for param, grad_param in zip(task_value_net.parameters(), task_value_grad):
-                    param.data.copy_(param.data - alpha * grad_param)
+                    param.data.copy_(param.data - option['alpha'] * grad_param)
                 
                 task_policy_grad = nth_derivative(pl, list(task_policy_net.parameters()), n=1)
                 for param, grad_param in zip(task_policy_net.parameters(), task_policy_grad):
-                    param.data.copy_(param.data - alpha * grad_param)
+                    param.data.copy_(param.data - option['alpha'] * grad_param)
                     
                 # Second derivative d2L/d(theta)^2
                 task_value_sec_order_grad = nth_derivative(vl, list(task_value_net.parameters()), n=2)
                 task_policy_sec_order_grad = nth_derivative(pl, list(task_policy_net.parameters()), n=2)
                 
                 # First order derivative w.r.t the updated parameters (theta')
-                pl_prime, vl_prime = compute_loss(task_value_net, task_policy_net, target_value_net, target_policy_net, task_buffer)
+                pl_prime, vl_prime = compute_loss(task_value_net, task_policy_net, target_value_net, target_policy_net, option['batch_size'], task_buffer)
                 task_value_prime_grad = nth_derivative(vl_prime, list(task_value_net.parameters()), n=1)
                 task_policy_prime_grad = nth_derivative(pl_prime, list(task_policy_net.parameters()), n=1)
                 
                 # Accumulate derivatives into theta*
                 for ast_value_param, ast_policy_param, task_value_prime_grad_param, task_policy_prime_grad_param, task_value_sec_order_grad_param, task_policy_sec_order_grad_param in zip(ast_value_net.parameters(), ast_policy_net.parameters(), task_value_prime_grad, task_policy_prime_grad, task_value_sec_order_grad, task_policy_sec_order_grad):
-                    ast_value_param.data.copy_(ast_value_param.data - beta * (1 + alpha * task_value_sec_order_grad_param.data) * task_value_prime_grad_param.data)
-                    ast_policy_param.data.copy_(ast_policy_param.data - beta * (1 + alpha * task_policy_sec_order_grad_param.data) * task_policy_prime_grad_param.data)
-
+                    ast_value_param.data.copy_(ast_value_param.data - option['beta'] * (1 + option['alpha'] * task_value_sec_order_grad_param.data) * task_value_prime_grad_param.data)
+                    ast_policy_param.data.copy_(ast_policy_param.data - option['beta'] * (1 + option['alpha'] * task_policy_sec_order_grad_param.data) * task_policy_prime_grad_param.data)
+        
             # Update target network
             for target_param, param in zip(target_value_net.parameters(), value_net.parameters()):
-                target_param.data.copy_(target_param.data * (1.0 - soft_tau) + param.data * soft_tau)
+                target_param.data.copy_(target_param.data * (1.0 - option['soft_tau']) + param.data * option['soft_tau'])
 
             for target_param, param in zip(target_policy_net.parameters(), policy_net.parameters()):
-                target_param.data.copy_(target_param.data * (1.0 - soft_tau) + param.data * soft_tau)
+                target_param.data.copy_(target_param.data * (1.0 - option['soft_tau']) + param.data * option['soft_tau'])
             
+            all_task_training_pl += np.mean(task_training_pls)
+            all_task_training_vl += np.mean(task_training_vls) 
+
             # Update theta <- theta*
             for ast_param, param in zip(ast_value_net.parameters(), value_net.parameters()):
                 param.data.copy_(ast_param.data)
                 
             for ast_param, param in zip(ast_policy_net.parameters(), policy_net.parameters()):
                 param.data.copy_(ast_param.data)
-            
+        
+        epoch_pl.append(all_task_training_pl)
+        epoch_vl.append(all_task_training_vl)
     
+    
+    # ===========================================================================
+    print("start:", epoch_pl[0], "end:", epoch_pl[-1], "max:", np.max(epoch_pl), "min:", np.min(epoch_pl), "mean:", np.mean(epoch_pl))
+    print("start:", epoch_vl[0], "end:", epoch_vl[-1], "max:", np.max(epoch_vl), "min:", np.min(epoch_vl), "mean:", np.mean(epoch_vl))
+
+    json.dump(
+        {
+            "meta": option,
+            "result": {
+                "policy_loss": {
+                    "max": np.max(epoch_pl), 
+                    "min": np.min(epoch_pl), 
+                    "mean": np.mean(epoch_pl),
+                    "all": epoch_pl
+                },
+                "value_loss": {
+                    "max": np.max(epoch_vl), 
+                    "min": np.min(epoch_vl), 
+                    "mean": np.mean(epoch_vl),
+                    "all": epoch_vl
+                }
+            }
+        },
+        open("./meta_results/meta_run{}.json".format(len(os.listdir("./meta_results/"))), "w")
+    )
+    
+    save_meta_path = os.path.join(option['path'], "meta_models")
+    if not Path(save_meta_path).exists():
+        os.makedirs(save_meta_path)
+        
+    policy_net.zero_grad()
+    value_net.zero_grad()
+    
+    torch.save(policy_net.state_dict(), os.path.join(save_meta_path, "MetaPolicyNet.pt"))
+    torch.save(value_net.state_dict(), os.path.join(save_meta_path, "MetaValueNet.pt"))
+    torch.save(target_policy_net.state_dict(), os.path.join(save_meta_path, "MetaTargetPolicyNet.pt"))
+    torch.save(target_value_net.state_dict(), os.path.join(save_meta_path, "MetaTargetValueNet.pt"))
