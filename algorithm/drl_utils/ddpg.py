@@ -200,8 +200,8 @@ class DDPG_Agent(nn.Module):
     
 
     def get_action(self, state, prev_reward, done=False, log=False):
-        state = torch.Tensor(state)                                     # current state: 1 x N x M x d
-        self.state_dataset.insert(state)                                # put into dataset: N x M x d
+        state = torch.Tensor(state).unsqueeze(0)                        # current state: 1 x N x M x d
+        self.state_dataset.insert(state.squeeze(0))                     # put into dataset: N x M x d
         preprocessed_state = self.state_processor(state.cuda())         # process state: 1 x M x N
 
         if prev_reward is not None:
