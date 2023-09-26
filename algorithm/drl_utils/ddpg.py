@@ -82,7 +82,7 @@ class DDPG_Agent(nn.Module):
         value_lr=1e-3,
         policy_lr=1e-3,
         replay_buffer_size=1000,
-        batch_size=4,
+        batch_size=8,
         log_dir="./log/epochs",
     ):
         super(DDPG_Agent, self).__init__()
@@ -145,7 +145,7 @@ class DDPG_Agent(nn.Module):
         return policy_loss, value_loss
     
 
-    def ddpg_update(self, gamma=0.98, min_value=-np.inf, max_value=np.inf, soft_tau=0.01):
+    def ddpg_update(self, gamma=0.9, min_value=-np.inf, max_value=np.inf, soft_tau=0.001):
         # for epoch in range(5):
         online_policy_loss, online_value_loss = self.compute_loss(self.replay_buffer, gamma, min_value, max_value)
         
@@ -200,8 +200,8 @@ class DDPG_Agent(nn.Module):
     
 
     def get_action(self, state, prev_reward, done=False, log=False):
-        state = torch.Tensor(state).unsqueeze(0)                        # current state: 1 x N x M x d
-        self.state_dataset.insert(state.squeeze(0))                     # put into dataset: N x M x d
+        state = torch.Tensor(state)                                     # current state: 1 x N x M x d
+        self.state_dataset.insert(state)                                # put into dataset: N x M x d
         preprocessed_state = self.state_processor(state.cuda())         # process state: 1 x M x N
 
         if prev_reward is not None:
@@ -237,19 +237,37 @@ class DDPG_Agent(nn.Module):
             except:
                 print("Failed to load StateProcessor.")
             
+            # Policy
             try:
-                full_path = os.path.join(path, "PolicyNet.pt")
-                self.policy_net.load_state_dict(torch.load(os.path.join(path, "PolicyNet.pt")))
-                print(f"Successfully loaded PolicyNet from {full_path}")
+                full_path = os.path.join(path, "MetaPolicyNet.pt")
+                self.policy_net.load_state_dict(torch.load(full_path))
+                print(f"Successfully loaded MetaPolicyNet from {full_path}")
             except:
-                print("Failed to load PolicyNet.")
+                print("Failed to load MetaPolicyNet.")
             
+            # Target Policy
             try:
-                full_path = os.path.join(path, "ValueNet.pt")
-                self.value_net.load_state_dict(torch.load(os.path.join(path, "ValueNet.pt")))
-                print(f"Successfully loaded ValueNet from {full_path}")
+                full_path = os.path.join(path, "MetaTargetPolicyNet.pt")
+                self.target_policy_net.load_state_dict(torch.load(full_path))
+                print(f"Successfully loaded MetaPolicyNet from {full_path}")
             except:
-                print("Failed to load ValueNet.")
+                print("Failed to load MetaTargetPolicyNet.")
+            
+            # Value
+            try:
+                full_path = os.path.join(path, "MetaValueNet.pt")
+                self.value_net.load_state_dict(torch.load(full_path))
+                print(f"Successfully loaded MetaValueNet from {full_path}")
+            except:
+                print("Failed to load MetaValueNet.")
+            
+            # Target Value
+            try:
+                full_path = os.path.join(path, "MetaTargetValueNet.pt")
+                self.target_value_net.load_state_dict(torch.load(full_path))
+                print(f"Successfully loaded MetaTargetValueNet from {full_path}")
+            except:
+                print("Failed to load MetaTargetValueNet.")
         else:
             print(f"{path} does not exist!")
         return
@@ -266,6 +284,8 @@ class DDPG_Agent(nn.Module):
         torch.save(self.state_processor.state_dict(), os.path.join(path, "StateProcessor.pt"))
         torch.save(self.policy_net.state_dict(), os.path.join(path, "PolicyNet.pt"))
         torch.save(self.value_net.state_dict(), os.path.join(path, "ValueNet.pt"))
+        torch.save(self.target_policy_net.state_dict(), os.path.join(path, "ValueNet.pt"))
+        torch.save(self.target_value_net.state_dict(), os.path.join(path, "ValueNet.pt"))
         return
     
     
