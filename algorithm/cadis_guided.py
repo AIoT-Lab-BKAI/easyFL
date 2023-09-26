@@ -41,8 +41,8 @@ class StateDataset(Dataset):
         return self.data[index]   # N x M x d
     
 
-def get_penultimate_layer(model):
-    penul = get_module_from_model(model)[-1]._parameters['bias']
+def get_penultimate_layer(model, mode='bias'):
+    penul = get_module_from_model(model)[-1]._parameters[mode]
     return penul
 
 
@@ -122,16 +122,17 @@ class Server(BasicServer):
         return
         
     def run(self):
-        torch.save(self.state_processor.state_dict(), os.path.join("./storage/models", "StateProcessor.pt"))
+        self.state_processor.load_state_dict(torch.load(os.path.join("./storage/models", "StateProcessor.pt")))
         super().run()
+        # torch.save(self.state_processor.state_dict(), os.path.join("./storage/models", "StateProcessor.pt"))
         self.replay_buffer.save(path=os.path.join("./storage", "buffers"), name=self.task + "_CADIS-GUIDED")
         return
     
     def sp_update(self, device='cuda', update=True):
         optimizer = optim.SGD(self.state_processor.parameters(), lr=1e-3)
-        loader = DataLoader(self.state_dataset, batch_size=4, drop_last=False, shuffle=True)
+        loader = DataLoader(self.state_dataset, batch_size=8, drop_last=False, shuffle=True)
         losses = []
-        for epoch in range(8):
+        for epoch in range(1):
             epoch_losses = []
             for batch_state in loader:
                 batch_state = batch_state.clone().detach().to(device)                           # batch x N x M x d
@@ -153,13 +154,13 @@ class Server(BasicServer):
         self.selected_clients = self.sample()
         models, train_losses = self.communicate(self.selected_clients)
         
-        classifier_diffs = [get_penultimate_layer(self.model) * 0 for _ in self.clients]
+        classifier_diffs = [get_penultimate_layer(self.model, 'weight') * 0 for _ in self.clients]
         for client_id, model in zip(self.selected_clients, models):
-            classifier_diffs[client_id] = get_penultimate_layer(model - self.model)
+            classifier_diffs[client_id] = get_penultimate_layer(model - self.model, 'weight')
         
         raw_state = torch.stack(classifier_diffs, dim=0)
         self.state_dataset.insert(raw_state)                     # put into dataset: N x M x d
-        preprocessed_state = self.state_processor(raw_state.cuda())
+        preprocessed_state = self.state_processor(raw_state.unsqueeze(0).cuda())
         if t  > 0:
             prev_reward = - np.mean(train_losses)
             self.memory.update(r=prev_reward)
