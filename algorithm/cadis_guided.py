@@ -99,6 +99,7 @@ def compute_similarity(a, b):
     pen_b = torch.flatten(get_penultimate_layer(b))
     return (pen_a @ pen_b) / (torch.norm(pen_a) * torch.norm(pen_b))
 
+
 class Server(BasicServer):
     def __init__(self, option, model, clients, test_data=None):
         super(Server, self).__init__(option, model, clients, test_data)
@@ -162,7 +163,7 @@ class Server(BasicServer):
         self.state_dataset.insert(raw_state)                     # put into dataset: N x M x d
         preprocessed_state = self.state_processor(raw_state.unsqueeze(0).cuda())
         if t  > 0:
-            prev_reward = - np.mean(train_losses)
+            prev_reward = np.exp(-np.mean(train_losses))
             self.memory.update(r=prev_reward)
             if len(self.replay_buffer) >= 8:
                 self.sp_update()
