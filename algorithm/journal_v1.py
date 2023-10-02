@@ -42,12 +42,13 @@ class Server(BasicServer):
                 self.agent.state_processor_frozen = True
             else: 
                 print("Unfreeze the StateProcessor!")
-                self.agent.state_processor_frozen = False    
+                self.agent.state_processor_frozen = False
+                
         super().run()
         
         if self.save_agent:
             self.agent.save_models(path=os.path.join(self.storage_path, "models"))
-            self.agent.save_buffer(path=os.path.join(self.storage_path, "buffers"), name=self.task)
+            self.agent.save_buffer(path=os.path.join(self.storage_path, "buffers"), name=self.task + f"_ep{self.option['ep']}")
         return
     
     def iterate(self, t):

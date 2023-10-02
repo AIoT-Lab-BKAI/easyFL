@@ -27,8 +27,8 @@ def read_option():
     parser.add_argument('--beta', help="", type=float, default="0.001")
     parser.add_argument('--soft_tau', help="", type=float, default="0.001")
     parser.add_argument('--task_epochs', help="", type=int, default=1)
-    parser.add_argument('--batch_size', help="", type=int, default=8)
-    parser.add_argument('--outer_epochs', help="", type=int, default=1000)
+    parser.add_argument('--batch_size', help="", type=int, default=32)
+    parser.add_argument('--outer_epochs', help="", type=int, default=5000)
     
     try: option = vars(parser.parse_args())
     except IOError as msg: parser.error(str(msg))
@@ -77,18 +77,16 @@ def load_models(option, state_dim, action_dim):
 
 
 def load_buffers(path):
-    res = []
     count = 0
+    buffer = ReplayBuffer(capacity=0)
     for filename in os.listdir(path):
         print(f"\tLoading {filename}... ", end="")
-        buffer = ReplayBuffer(capacity=0)
         if buffer.load(path, filename):
             count += 1
-            res.append(buffer)
             print(f"length: {len(buffer)} - SUCCEEDED.")
     
-    print(f"Finished loading {count} buffers.")
-    return res
+    print(f"Finished loading {count} buffers into one buffer of size {len(buffer)}.")
+    return buffer
 
 
 def compute_loss(value_net, policy_net, target_value_net, target_policy_net, batch_size,
@@ -128,7 +126,7 @@ if __name__ == "__main__":
     action_dim=option['clients_per_round']
     
     value_net, policy_net, target_value_net, target_policy_net = load_models(option, state_dim, action_dim)
-    buffers = load_buffers(os.path.join(option['path'], "guided"))
+    buffer = load_buffers(os.path.join(option['path'], "guided"))
     
     epoch_vl = []
     epoch_pl = []
@@ -137,52 +135,38 @@ if __name__ == "__main__":
         ast_value_net = deepcopy(value_net)
         ast_policy_net = deepcopy(policy_net)
         
-        all_task_training_pl = 0
-        all_task_training_vl = 0
+        all_task_training_pl = []
+        all_task_training_vl = []
         
-        for task_buffer in tqdm(buffers, leave=False):
-            task_value_net = deepcopy(value_net)
-            task_policy_net = deepcopy(policy_net)
+        for _ in range(option['task_epochs']):
+            pl, vl = compute_loss(ast_value_net, ast_policy_net, target_value_net, target_policy_net, option['batch_size'], buffer)
+            all_task_training_pl.append(pl.detach().cpu().item())
+            all_task_training_vl.append(vl.detach().cpu().item())
             
-            task_training_pls = []
-            task_training_vls = []
-            for _ in range(option['task_epochs']):
-                pl, vl = compute_loss(task_value_net, task_policy_net, target_value_net, target_policy_net, option['batch_size'], task_buffer)
-                task_training_pls.append(pl.detach().cpu().item())
-                task_training_vls.append(vl.detach().cpu().item())
+            # First order derivative dL/dtheta
+            task_value_grad = nth_derivative(vl, list(ast_value_net.parameters()), n=1)
+            for param, grad_param in zip(ast_value_net.parameters(), task_value_grad):
+                param.data.copy_(param.data - option['alpha'] * grad_param)
+            
+            task_policy_grad = nth_derivative(pl, list(ast_policy_net.parameters()), n=1)
+            for param, grad_param in zip(ast_policy_net.parameters(), task_policy_grad):
+                param.data.copy_(param.data - option['alpha'] * grad_param)
                 
-                # First order derivative dL/dtheta
-                task_value_grad = nth_derivative(vl, list(task_value_net.parameters()), n=1)
-                for param, grad_param in zip(task_value_net.parameters(), task_value_grad):
-                    param.data.copy_(param.data - option['alpha'] * grad_param)
-                
-                task_policy_grad = nth_derivative(pl, list(task_policy_net.parameters()), n=1)
-                for param, grad_param in zip(task_policy_net.parameters(), task_policy_grad):
-                    param.data.copy_(param.data - option['alpha'] * grad_param)
-                    
-                # Second derivative d2L/d(theta)^2
-                task_value_sec_order_grad = nth_derivative(vl, list(task_value_net.parameters()), n=2)
-                task_policy_sec_order_grad = nth_derivative(pl, list(task_policy_net.parameters()), n=2)
-                
-                # First order derivative w.r.t the updated parameters (theta')
-                pl_prime, vl_prime = compute_loss(task_value_net, task_policy_net, target_value_net, target_policy_net, option['batch_size'], task_buffer)
-                task_value_prime_grad = nth_derivative(vl_prime, list(task_value_net.parameters()), n=1)
-                task_policy_prime_grad = nth_derivative(pl_prime, list(task_policy_net.parameters()), n=1)
-                
-                # Accumulate derivatives into theta*
-                for ast_value_param, ast_policy_param, task_value_prime_grad_param, task_policy_prime_grad_param, task_value_sec_order_grad_param, task_policy_sec_order_grad_param in zip(ast_value_net.parameters(), ast_policy_net.parameters(), task_value_prime_grad, task_policy_prime_grad, task_value_sec_order_grad, task_policy_sec_order_grad):
-                    ast_value_param.data.copy_(ast_value_param.data - option['beta'] * (1 + option['alpha'] * task_value_sec_order_grad_param.data) * task_value_prime_grad_param.data)
-                    ast_policy_param.data.copy_(ast_policy_param.data - option['beta'] * (1 + option['alpha'] * task_policy_sec_order_grad_param.data) * task_policy_prime_grad_param.data)
-        
+            # Second derivative d2L/d(theta)^2
+            task_value_sec_order_grad = nth_derivative(vl, list(ast_value_net.parameters()), n=2)
+            task_policy_sec_order_grad = nth_derivative(pl, list(ast_policy_net.parameters()), n=2)
+            
+            # First order derivative w.r.t the updated parameters (theta')
+            pl_prime, vl_prime = compute_loss(ast_value_net, ast_policy_net, target_value_net, target_policy_net, option['batch_size'], buffer)
+            task_value_prime_grad = nth_derivative(vl_prime, list(ast_value_net.parameters()), n=1)
+            task_policy_prime_grad = nth_derivative(pl_prime, list(ast_policy_net.parameters()), n=1)
+            
             # Update target network
             for target_param, param in zip(target_value_net.parameters(), value_net.parameters()):
                 target_param.data.copy_(target_param.data * (1.0 - option['soft_tau']) + param.data * option['soft_tau'])
 
             for target_param, param in zip(target_policy_net.parameters(), policy_net.parameters()):
                 target_param.data.copy_(target_param.data * (1.0 - option['soft_tau']) + param.data * option['soft_tau'])
-            
-            all_task_training_pl += np.mean(task_training_pls)
-            all_task_training_vl += np.mean(task_training_vls) 
 
             # Update theta <- theta*
             for ast_param, param in zip(ast_value_net.parameters(), value_net.parameters()):
@@ -191,8 +175,8 @@ if __name__ == "__main__":
             for ast_param, param in zip(ast_policy_net.parameters(), policy_net.parameters()):
                 param.data.copy_(ast_param.data)
         
-        epoch_pl.append(all_task_training_pl)
-        epoch_vl.append(all_task_training_vl)
+        epoch_pl.append(np.mean(all_task_training_pl))
+        epoch_vl.append(np.mean(all_task_training_vl))
     
     
     # ===========================================================================

@@ -126,7 +126,8 @@ class Server(BasicServer):
         self.state_processor.load_state_dict(torch.load(os.path.join("./storage/models", "StateProcessor.pt")))
         super().run()
         # torch.save(self.state_processor.state_dict(), os.path.join("./storage/models", "StateProcessor.pt"))
-        self.replay_buffer.save(path=os.path.join("./storage", "buffers"), name=self.task + "_CADIS-GUIDED")
+        self.replay_buffer.save(path=os.path.join("./storage", "guided"), name=self.task + f"_CADIS-GUIDED_ep{self.option['ep']}")
+        torch.save(self.state_processor.state_dict(), os.path.join("./storage/models", "StateProcessor.pt"))
         return
     
     def sp_update(self, device='cuda', update=True):

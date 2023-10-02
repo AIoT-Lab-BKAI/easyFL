@@ -1,2 +1,3 @@
 # CUDA_VISIBLE_DEVICES=0 /home/admin/miniconda3/envs/easyFL/bin/python meta-policy.py --path "storage" --nclient 100 --clients_per_round 10
-CUDA_VISIBLE_DEVICES=0 /home/admin/miniconda3/envs/easyFL/bin/python meta-learning.py --path "storage" --load 0 --nclient 100 --clients_per_round 10
+# CUDA_VISIBLE_DEVICES=0 /home/admin/miniconda3/envs/easyFL/bin/python meta-learning.py --path "storage" --load 0 --nclient 100 --clients_per_round 10 --batch_size 8 --outer_epochs 1000
+CUDA_VISIBLE_DEVICES=0 /home/admin/miniconda3/envs/easyFL/bin/python meta-learning-2.py --path "storage" --load 0 --nclient 100 --clients_per_round 10 --batch_size 16 --outer_epochs 10000
