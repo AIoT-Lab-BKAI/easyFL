@@ -35,8 +35,7 @@ class Server(BasicServer):
     
     def run(self):
         if self.load_agent:
-            self.agent.load_models(path=os.path.join(self.storage_path, "models"))
-            # self.agent.load_buffer(path=os.path.join(self.storage_path, "buffers"), discard_name=self.task)
+            self.agent.load_models(path=os.path.join(self.storage_path, "meta_models", "checkpoint_gamma0.001"))
             if self.is_infer: 
                 print("Freeze the StateProcessor!")
                 self.agent.state_processor_frozen = True
@@ -45,10 +44,6 @@ class Server(BasicServer):
                 self.agent.state_processor_frozen = False
                 
         super().run()
-        
-        if self.save_agent:
-            self.agent.save_models(path=os.path.join(self.storage_path, "models"))
-            # self.agent.save_buffer(path=os.path.join(self.storage_path, "buffers"), name=self.task + f"_ep{self.option['ep']}")
         return
     
     def iterate(self, t):
@@ -59,12 +54,12 @@ class Server(BasicServer):
             classifier_diffs[client_id] = get_penultimate_layer(model - self.model)
         
         raw_state = torch.stack(classifier_diffs, dim=0)
-        prev_reward = - np.mean(train_losses)
-        impact_factor = self.agent.get_action(raw_state, prev_reward if t > 0 else None, log=True)
+        prev_reward = np.exp(- np.mean(train_losses))
+        impact_factor = self.agent.get_action(raw_state, prev_reward if t > 0 else None, log=self.wandb)
         if not self.selected_clients:
             return
         # aggregate: pk = 1/K as default where K=len(selected_clients)
-        self.model = self.aggregate([model.cpu() for model in models], p = impact_factor)
+        self.model = self.aggregate(models, p = impact_factor)
         return
 
 

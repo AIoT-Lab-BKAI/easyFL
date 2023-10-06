@@ -55,6 +55,7 @@ class MyLogger(flw.Logger):
         # print(self.temp.format("Mean of Inference Time:", self.output['inference_time'][-1]))
         
         self.max_acc = max(self.max_acc, test_metric)
+        print(self.temp.format("Max Accuracy:", self.max_acc))
 
         # wandb record
         if server.wandb:
@@ -93,7 +94,7 @@ def main():
     
     if option['wandb']:
         wandb.init(
-            project="journal_v1", 
+            project="journal_ha", 
             entity="aiotlab",
             group=option['task'],
             name=runname[:-1],
