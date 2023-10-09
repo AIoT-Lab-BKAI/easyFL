@@ -60,6 +60,7 @@ class Server(BasicServer):
             return
         # aggregate: pk = 1/K as default where K=len(selected_clients)
         self.model = self.aggregate(models, p = impact_factor)
+        print("Imp factor: ", impact_factor)
         return
 
 
