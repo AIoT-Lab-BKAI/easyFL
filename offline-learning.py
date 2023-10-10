@@ -151,15 +151,6 @@ if __name__ == "__main__":
             task_policy_grad = nth_derivative(pl, list(ast_policy_net.parameters()), n=1)
             for param, grad_param in zip(ast_policy_net.parameters(), task_policy_grad):
                 param.data.copy_(param.data - option['alpha'] * grad_param)
-                
-            # Second derivative d2L/d(theta)^2
-            task_value_sec_order_grad = nth_derivative(vl, list(ast_value_net.parameters()), n=2)
-            task_policy_sec_order_grad = nth_derivative(pl, list(ast_policy_net.parameters()), n=2)
-            
-            # First order derivative w.r.t the updated parameters (theta')
-            pl_prime, vl_prime = compute_loss(ast_value_net, ast_policy_net, target_value_net, target_policy_net, option['batch_size'], buffer)
-            task_value_prime_grad = nth_derivative(vl_prime, list(ast_value_net.parameters()), n=1)
-            task_policy_prime_grad = nth_derivative(pl_prime, list(ast_policy_net.parameters()), n=1)
             
             # Update target network
             for target_param, param in zip(target_value_net.parameters(), value_net.parameters()):
