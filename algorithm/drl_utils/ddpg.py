@@ -133,7 +133,7 @@ class DDPG_Agent(nn.Module):
         done = torch.Tensor(np.float32(done)).cuda()
 
         policy_loss = self.value_net(state, self.policy_net(state))
-        policy_loss = - policy_loss.mean()
+        policy_loss = 1/(policy_loss.mean() + 0.001)
         next_action = self.target_policy_net(next_state)
         target_value = self.target_value_net(next_state, next_action.detach())
 
