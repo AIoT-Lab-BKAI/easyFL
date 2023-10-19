@@ -25,3 +25,4 @@ wandb/
 benchmark/pilldataset/data/pill3*
 results/
 storage/
+meta_results/

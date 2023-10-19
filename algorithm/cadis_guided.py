@@ -123,11 +123,11 @@ class Server(BasicServer):
         return
         
     def run(self):
-        self.state_processor.load_state_dict(torch.load(os.path.join("./storage/models", "StateProcessor.pt")))
+        self.state_processor.load_state_dict(torch.load(os.path.join("./storage/meta_models", "StateProcessor.pt")))
         super().run()
         # torch.save(self.state_processor.state_dict(), os.path.join("./storage/models", "StateProcessor.pt"))
         self.replay_buffer.save(path=os.path.join("./storage", "guided"), name=self.task + f"_CADIS-GUIDED_ep{self.option['ep']}")
-        torch.save(self.state_processor.state_dict(), os.path.join("./storage/models", "StateProcessor.pt"))
+        torch.save(self.state_processor.state_dict(), os.path.join("./storage/meta_models", "StateProcessor.pt"))
         return
     
     def sp_update(self, device='cuda', update=True):

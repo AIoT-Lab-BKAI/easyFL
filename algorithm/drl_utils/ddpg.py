@@ -133,7 +133,7 @@ class DDPG_Agent(nn.Module):
         done = torch.Tensor(np.float32(done)).cuda()
 
         policy_loss = self.value_net(state, self.policy_net(state))
-        policy_loss = - policy_loss.mean()
+        policy_loss = 1/(policy_loss.mean() + 0.001) # - policy_loss.mean()
         next_action = self.target_policy_net(next_state)
         target_value = self.target_value_net(next_state, next_action.detach())
 
@@ -166,11 +166,11 @@ class DDPG_Agent(nn.Module):
         return total_policy_loss.detach().cpu().item(), total_value_loss.detach().cpu().item()
 
 
-    def sp_update(self, device='cuda', update=True):
+    def sp_update(self, device='cuda'):
         optimizer = optim.SGD(self.state_processor.parameters(), lr=1e-3)
         loader = DataLoader(self.state_dataset, batch_size=4, drop_last=False, shuffle=True)
         losses = []
-        for epoch in range(8):
+        for epoch in range(4):
             epoch_losses = []
             for batch_state in loader:
                 batch_state = batch_state.clone().detach().to(device)                           # batch x N x M x d
@@ -178,18 +178,16 @@ class DDPG_Agent(nn.Module):
                 correlation_loss = 0
                 for state, pstate in zip(batch_state, batch_processed_state):
                     correlation_loss += KL_divergence(state.flatten(1,2), pstate, device)
-                
                 optimizer.zero_grad()
                 correlation_loss.backward()                                                     # type:ignore
-                if update:
-                    optimizer.step()
+                optimizer.step()
                     
                 epoch_losses.append(correlation_loss.detach().cpu().item())                     # type:ignore
             losses.append(np.mean(epoch_losses))
         return np.mean(losses)
     
 
-    def get_action(self, state, prev_reward, done=False, log=False):
+    def get_action(self, state, prev_reward, done=False, log=False, learnst=False):
         state = torch.Tensor(state).unsqueeze(0)                        # current state: 1 x N x M x d
         self.state_dataset.insert(state.squeeze(0).cpu())               # put into dataset: N x M x d
         preprocessed_state = self.state_processor(state.cuda())         # process state: 1 x M x N
@@ -199,7 +197,6 @@ class DDPG_Agent(nn.Module):
             self.total_reward += prev_reward
 
         action = self.policy_net(preprocessed_state).flatten()
-        # action = self.ou_noise.get_action(action, self.step)
         self.memory.act(preprocessed_state.detach().cpu(), action.detach().cpu())
 
         if self.memory.get_last_record():
@@ -208,7 +205,8 @@ class DDPG_Agent(nn.Module):
 
             if len(self.replay_buffer) >= self.batch_size:
                 pl, vl = self.ddpg_update()
-                sp_mean = -1 # self.sp_update(update= not self.state_processor_frozen)
+                if learnst:
+                    sp_mean = self.sp_update()
                 
                 if log:
                     wandb.log({"agent/policy_loss": pl, "agent/value_loss": vl,

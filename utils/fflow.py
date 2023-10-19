@@ -70,18 +70,12 @@ def read_option():
     parser.add_argument('--log_folder', help="folder to write results", type=str, default='fedtask')
     parser.add_argument('--wandb', help="whether to use wandb or not", type=int, default=0)
     
-    parser.add_argument('--neg_fct', help="Factor for negative learning (Fedtest)", type=float, default="1.0")
-    parser.add_argument('--neg_mrg', help="Margin for negative learning (Fedtest)", type=float, default="5.0")
-    parser.add_argument('--temp', help="Temperature for extreme assembling aggregation (Fedtest)", type=float, default="1.0")
-    
-    parser.add_argument('--kd_fct', help="Knowledge distillation factor (Fedsdiv)", type=float, default="1.0")
-    parser.add_argument('--sthr', help="Similarity threshold for clustering (Fedsdiv)", type=float, default="0.975")
+    parser.add_argument('--kd_fct', help="Knowledge distillation factor (CADIS)", type=float, default="1.0")
+    parser.add_argument('--sthr', help="Similarity threshold for clustering (CADIS)", type=float, default="0.975")
     
     # journal version
-    parser.add_argument('--storage_path', help="Folder that contain \"/buffers/\" and \"/models/\"", type=str, default="./storage")
-    parser.add_argument('--load_agent', help="If >= 1, then load the pretrained agent from the folder \"storage_path/models\"", type=int, default=1)
-    parser.add_argument('--save_agent', help="If >= 1, then save the pretrained agent into the folder \"storage_path/models\"", type=int, default=0)
-    parser.add_argument('--ep', type=str, default="0")
+    parser.add_argument('--storage_path', help="Folder that contain \"/models/\" (REST)", type=str, default="./storage")
+    parser.add_argument('--learnst', help="If 1, then the state processor is learnable. If 0, then state processor is frozen (REST)", type=int, default=0)
     
     try: option = vars(parser.parse_args())
     except IOError as msg: parser.error(str(msg))

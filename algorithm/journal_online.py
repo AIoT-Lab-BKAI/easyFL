@@ -27,22 +27,12 @@ class Server(BasicServer):
         self.agent = DDPG_Agent(state_dim=(len(self.clients), 10, 256),
                                 action_dim=self.clients_per_round)
         self.storage_path=option['storage_path']
-        self.load_agent=option['load_agent']
-        self.save_agent=option['save_agent']
-        self.is_infer= option['ep'] == 'infer'
-        self.paras_name = ['ep']
+        self.learnst=option['learnst']
+        self.paras_name=['learnst']
         return
     
     def run(self):
-        if self.load_agent:
-            self.agent.load_models(path=os.path.join(self.storage_path, "meta_models", "checkpoint_gamma0.001"))
-            if self.is_infer: 
-                print("Freeze the StateProcessor!")
-                self.agent.state_processor_frozen = True
-            else: 
-                print("Unfreeze the StateProcessor!")
-                self.agent.state_processor_frozen = False
-                
+        self.agent.load_models(path=os.path.join(self.storage_path, "meta_models", "checkpoint_gamma0.001"))
         super().run()
         return
     
@@ -55,10 +45,9 @@ class Server(BasicServer):
         
         raw_state = torch.stack(classifier_diffs, dim=0)
         prev_reward = np.exp(- np.mean(train_losses))
-        impact_factor = self.agent.get_action(raw_state, prev_reward if t > 0 else None, log=self.wandb)
+        impact_factor = self.agent.get_action(raw_state, prev_reward if t > 0 else None, log=self.wandb, learnst=self.learnst)
         if not self.selected_clients:
             return
-        # aggregate: pk = 1/K as default where K=len(selected_clients)
         self.model = self.aggregate(models, p = impact_factor)
         return
 

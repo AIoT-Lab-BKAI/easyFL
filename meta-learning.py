@@ -92,7 +92,7 @@ def load_buffers(path):
 
 
 def compute_loss(value_net, policy_net, target_value_net, target_policy_net, batch_size,
-                 buffer: ReplayBuffer, gamma=0.9, min_value=-np.inf, max_value=np.inf):
+                 buffer: ReplayBuffer, gamma=0.001, min_value=-np.inf, max_value=np.inf):
         state, action, reward, next_state, done = buffer.sample(batch_size)
 
         state = torch.Tensor(state).squeeze().cuda()
@@ -217,7 +217,7 @@ if __name__ == "__main__":
                 }
             }
         },
-        open("./meta_results/meta_run{}.json".format(len(os.listdir("./meta_results/"))), "w")
+        open("./meta_results/meta_run{}.json".format(len(os.listdir("./meta_results/vermeta/"))), "w")
     )
     
     save_meta_path = os.path.join(option['path'], "meta_models")
