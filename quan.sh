@@ -1,0 +1,1 @@
+CUDA_VISIBLE_DEVICES=0 python main.py --task cifar10_cnn_quantitative_N100_K10 --model cnn --algorithm mp_fedavg --wandb 1 --data_folder "./benchmark/cifar10/data" --log_folder "fedtask" --dataidx_filename "CADIS/cifar10/100client/quantitative" --num_rounds 1000 --num_epochs 5 --proportion 0.1 --batch_size 8 --num_threads_per_gpu 2  --num_gpus 1 --server_gpu_id 0

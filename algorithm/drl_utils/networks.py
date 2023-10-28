@@ -10,7 +10,7 @@ def freeze_layer(layer):
 def init_weights(m):
     if isinstance(m, nn.Linear):
         torch.nn.init.xavier_uniform_(m.weight)
-        m.bias.data.fill_(0.01)
+        m.bias.data.fill_(0.00001)
 
 
 class StateProcessor(nn.Module):
@@ -91,21 +91,104 @@ class PolicyNetwork(nn.Module):
         super(PolicyNetwork, self).__init__()
         N, M, _ = state_dim   # 100, 10, 128
         
-        # Input: batch x M x N
-        self.linear1 = nn.Linear(N, hidden_dim)
-        # Output: batch x M x hidden
+        # # Input: batch x M x N
+        # self.linear1 = nn.Linear(N, hidden_dim)
+        # # Output: batch x M x hidden
         
-        self.linear2 = nn.Linear(hidden_dim, 1)
-        # Output: batch x M x 1 ---squeeze(-1)---> batch x M 
+        # self.linear2 = nn.Linear(hidden_dim, 1)
+        # # Output: batch x M x 1 ---squeeze(-1)---> batch x M 
         
-        self.linear3 = nn.Linear(M, action_dim)
-        # Output: batch x action_dim
-        
+        # self.linear3 = nn.Linear(M, action_dim)
+        # # Output: batch x action_dim
+        self.encoder = EncoderRNN(input_size=M, hidden_size=256)
+        self.decoder = AttnDecoderRNN(output_size=action_dim, hidden_size=256)
         self.apply(init_weights)
         return
 
-    def forward(self, preprocessed_state):
-        x = F.relu(self.linear1(preprocessed_state))
-        x = F.relu(self.linear2(x)).squeeze(-1)
-        x = F.softmax(self.linear3(x), dim=1)
+    def forward(self, preprocessed_state, list_client = None):
+        output, hidden = self.encoder(preprocessed_state.permute(0,2,1))
+        x = self.decoder(output, hidden, list_client)
+        x = F.softmax(x, dim=1)
         return x
+
+class EncoderRNN(nn.Module):
+    def __init__(self, input_size, hidden_size, dropout_p=0.1):
+        super(EncoderRNN, self).__init__()
+        self.hidden_size = hidden_size
+        self.gru = nn.GRU(input_size, hidden_size, batch_first=True)
+        # self.dropout = nn.Dropout(dropout_p)
+
+    def forward(self, input):
+        # Input: batch x N x M
+        output, hidden = self.gru(input)
+        # Output: batch x N x hidden
+        
+        return output, hidden
+    
+class BahdanauAttention(nn.Module):
+    def __init__(self, hidden_size):
+        super(BahdanauAttention, self).__init__()
+        self.Wa = nn.Linear(hidden_size, hidden_size)
+        self.Ua = nn.Linear(hidden_size, hidden_size)
+        self.Va = nn.Linear(hidden_size, 1)
+
+    def forward(self, query, keys):
+        scores = self.Va(torch.tanh(self.Wa(query) + self.Ua(keys)))
+        scores = scores.squeeze(2).unsqueeze(1)
+
+        weights = F.softmax(scores, dim=-1)
+        context = torch.bmm(weights, keys)
+
+        return context, weights
+
+class AttnDecoderRNN(nn.Module):
+    def __init__(self, hidden_size, output_size, dropout_p=0.1):
+        super(AttnDecoderRNN, self).__init__()
+        # self.embedding = nn.Embedding(output_size, hidden_size)
+        self.hidden_size = hidden_size
+        self.output_size = output_size
+        self.attention = BahdanauAttention(hidden_size)
+        self.gru = nn.GRU(2 * hidden_size, hidden_size, batch_first=True)
+        self.out = nn.Linear(hidden_size, 1)
+
+    def forward(self, encoder_outputs, encoder_hidden, list_client=None):
+        batch_size = encoder_outputs.size(0)
+        decoder_hidden = encoder_hidden
+        decoder_input = torch.empty(batch_size, 1, self.hidden_size).fill_(0.01).cuda()
+        decoder_outputs = []
+
+        for i in range(self.output_size):
+            if list_client != None:
+                if i in list_client:
+                    decoder_input = torch.empty(batch_size, 1, self.hidden_size).fill_(1.0).cuda()
+                else:
+                    decoder_input = torch.empty(batch_size, 1, self.hidden_size).fill_(0.0).cuda()
+                
+            decoder_output, decoder_hidden, decoder_input, attn_weights = self.forward_step(
+                decoder_input, decoder_hidden, encoder_outputs
+            )
+            decoder_outputs.append(decoder_output)
+            # attentions.append(attn_weights)
+
+            # if target_tensor is not None:
+            #     # Teacher forcing: Feed the target as the next input
+            #     decoder_input = target_tensor[:, i].unsqueeze(1) # Teacher forcing
+            # else:
+            #     # Without teacher forcing: use its own predictions as the next input
+            #     _, topi = decoder_output.topk(1)
+            #     decoder_input = topi.squeeze(-1).detach()  # detach from history as input
+
+        decoder_outputs = torch.cat(decoder_outputs, dim=1).squeeze(-1)
+
+        return decoder_outputs
+
+
+    def forward_step(self, input, hidden, encoder_outputs):
+        query = hidden.permute(1, 0, 2)
+        context, attn_weights = self.attention(query, encoder_outputs)
+        input_gru = torch.cat((input, context), dim=2)
+
+        x, hidden = self.gru(input_gru, hidden)
+        output2 = self.out(x)
+
+        return output2, hidden, x, attn_weights

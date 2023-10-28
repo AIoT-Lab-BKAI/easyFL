@@ -153,8 +153,8 @@ if __name__ == "__main__":
                 param.data.copy_(param.data - option['alpha'] * grad_param)
                 
             # Second derivative d2L/d(theta)^2
-            task_value_sec_order_grad = nth_derivative(vl, list(ast_value_net.parameters()), n=2)
-            task_policy_sec_order_grad = nth_derivative(pl, list(ast_policy_net.parameters()), n=2)
+            task_value_sec_order_grad = nth_derivative(vl, list(ast_value_net.parameters()), n=1)
+            task_policy_sec_order_grad = nth_derivative(pl, list(ast_policy_net.parameters()), n=1)
             
             # First order derivative w.r.t the updated parameters (theta')
             pl_prime, vl_prime = compute_loss(ast_value_net, ast_policy_net, target_value_net, target_policy_net, option['batch_size'], buffer)
@@ -183,28 +183,28 @@ if __name__ == "__main__":
     print("Policy\tstart:", epoch_pl[0], "\tend:", epoch_pl[-1], "\tmax:", np.max(epoch_pl), "\tmin:", np.min(epoch_pl), "\tmean:", np.mean(epoch_pl))
     print("Value\tstart:", epoch_vl[0], "\tend:", epoch_vl[-1], "\tmax:", np.max(epoch_vl), "\tmin:", np.min(epoch_vl), "\tmean:", np.mean(epoch_vl))
 
-    json.dump(
-        {
-            "meta": option,
-            "result": {
-                "policy_loss": {
-                    "max": np.max(epoch_pl), 
-                    "min": np.min(epoch_pl), 
-                    "mean": np.mean(epoch_pl),
-                    "all": epoch_pl
-                },
-                "value_loss": {
-                    "max": np.max(epoch_vl), 
-                    "min": np.min(epoch_vl), 
-                    "mean": np.mean(epoch_vl),
-                    "all": epoch_vl
-                }
-            }
-        },
-        open("./meta_results/meta_run{}.json".format(len(os.listdir("./meta_results/"))), "w")
-    )
+    # json.dump(
+    #     {
+    #         "meta": option,
+    #         "result": {
+    #             "policy_loss": {
+    #                 "max": np.max(epoch_pl), 
+    #                 "min": np.min(epoch_pl), 
+    #                 "mean": np.mean(epoch_pl),
+    #                 "all": epoch_pl
+    #             },
+    #             "value_loss": {
+    #                 "max": np.max(epoch_vl), 
+    #                 "min": np.min(epoch_vl), 
+    #                 "mean": np.mean(epoch_vl),
+    #                 "all": epoch_vl
+    #             }
+    #         }
+    #     },
+    #     open("./meta_results/meta_run{}.json".format(len(os.listdir("./meta_results/"))), "w")
+    # )
     
-    save_meta_path = os.path.join(option['path'], "meta_models", "checkpoint_gamma0.001")
+    save_meta_path = os.path.join(option['path'], "meta_models", "checkpoint_gamma0.001_rnn")
     if not Path(save_meta_path).exists():
         os.makedirs(save_meta_path)
         

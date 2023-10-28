@@ -12,6 +12,7 @@ from copy import deepcopy
 import wandb
 from pathlib import Path
 import os
+import copy
 from torch.utils.data import Dataset, DataLoader
 
 
@@ -133,7 +134,7 @@ class DDPG_Agent(nn.Module):
         done = torch.Tensor(np.float32(done)).cuda()
 
         policy_loss = self.value_net(state, self.policy_net(state))
-        policy_loss = - policy_loss.mean()
+        policy_loss = 1/(policy_loss.mean() + 0.001)
         next_action = self.target_policy_net(next_state)
         target_value = self.target_value_net(next_state, next_action.detach())
 
@@ -145,23 +146,23 @@ class DDPG_Agent(nn.Module):
         return policy_loss, value_loss
     
 
-    def ddpg_update(self, gamma=0.001, min_value=-np.inf, max_value=np.inf, soft_tau=0.001):
-        # for epoch in range(5):
-        total_policy_loss, total_value_loss = self.compute_loss(self.replay_buffer, gamma, min_value, max_value)
+    def ddpg_update(self, gamma=0.001, min_value=-np.inf, max_value=np.inf, soft_tau=0.01):
+        for epoch in range(8):
+            total_policy_loss, total_value_loss = self.compute_loss(self.replay_buffer, gamma, min_value, max_value)
 
-        self.policy_optimizer.zero_grad()
-        total_policy_loss.backward()
-        self.policy_optimizer.step()
+            self.policy_optimizer.zero_grad()
+            total_policy_loss.backward()
+            self.policy_optimizer.step()
 
-        self.value_optimizer.zero_grad()
-        total_value_loss.backward()
-        self.value_optimizer.step()
+            self.value_optimizer.zero_grad()
+            total_value_loss.backward()
+            self.value_optimizer.step()
 
-        for target_param, param in zip(self.target_value_net.parameters(), self.value_net.parameters()):
-            target_param.data.copy_(target_param.data * (1.0 - soft_tau) + param.data * soft_tau)
+            for target_param, param in zip(self.target_value_net.parameters(), self.value_net.parameters()):
+                target_param.data.copy_(target_param.data * (1.0 - soft_tau) + param.data * soft_tau)
 
-        for target_param, param in zip(self.target_policy_net.parameters(), self.policy_net.parameters()):
-            target_param.data.copy_(target_param.data * (1.0 - soft_tau) + param.data * soft_tau)
+            for target_param, param in zip(self.target_policy_net.parameters(), self.policy_net.parameters()):
+                target_param.data.copy_(target_param.data * (1.0 - soft_tau) + param.data * soft_tau)
 
         return total_policy_loss.detach().cpu().item(), total_value_loss.detach().cpu().item()
 
@@ -189,7 +190,7 @@ class DDPG_Agent(nn.Module):
         return np.mean(losses)
     
 
-    def get_action(self, state, prev_reward, done=False, log=False):
+    def get_action(self, state, list_clients, prev_reward, done=False, log=False):
         state = torch.Tensor(state).unsqueeze(0)                        # current state: 1 x N x M x d
         self.state_dataset.insert(state.squeeze(0).cpu())               # put into dataset: N x M x d
         preprocessed_state = self.state_processor(state.cuda())         # process state: 1 x M x N
@@ -198,7 +199,7 @@ class DDPG_Agent(nn.Module):
             self.memory.update(r=prev_reward)
             self.total_reward += prev_reward
 
-        action = self.policy_net(preprocessed_state).flatten()
+        action = self.policy_net(preprocessed_state, list_clients).flatten()
         # action = self.ou_noise.get_action(action, self.step)
         self.memory.act(preprocessed_state.detach().cpu(), action.detach().cpu())
 
@@ -208,7 +209,8 @@ class DDPG_Agent(nn.Module):
 
             if len(self.replay_buffer) >= self.batch_size:
                 pl, vl = self.ddpg_update()
-                sp_mean = -1 # self.sp_update(update= not self.state_processor_frozen)
+                # sp_mean = -1 
+                sp_mean = self.sp_update(update= not self.state_processor_frozen)
                 
                 if log:
                     wandb.log({"agent/policy_loss": pl, "agent/value_loss": vl,
