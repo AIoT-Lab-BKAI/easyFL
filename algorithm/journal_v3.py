@@ -30,7 +30,7 @@ class Server(BasicServer):
         super(Server, self).__init__(option, model, clients, test_data)
         self.device = 'cuda'
         self.agent = DDPG_Agent(state_dim=(len(self.clients), 10, 256),
-                                action_dim=len(self.clients))
+                                action_dim=len(self.selected_clients))
         self.storage_path = option['storage_path']
         self.load_agent = option['load_agent']
         self.save_agent = option['save_agent']

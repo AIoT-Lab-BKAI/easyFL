@@ -14,7 +14,7 @@ class ReplayBuffer:
     def push(self, state, action, reward, next_state, done):
         if len(self.buffer) < self.capacity:
             self.buffer.append(None)
-        self.buffer[self.position] = (state.cpu(), action, reward, next_state.cpu(), done)
+        self.buffer[self.position] = (state, action, reward, next_state, done)
         self.position = (self.position + 1) % self.capacity
     
     def sample(self, batch_size):
@@ -52,7 +52,7 @@ class Memory:
         self.actions = []
         self.rewards = []
         self.next_states = []
-    
+        
     def get_last_record(self):
         if len(self.states) < 2:
             return None
@@ -63,11 +63,12 @@ class Memory:
         # at state s, agent performs action a
         self.actions.append(a)
         self.states.append(s)
-    
+
     def update(self, r):
         # update reward and next state s' after perform last action a in state s
         # self.states.append(next_s)
         self.rewards.append(r)
+        print("Previous Reward: ", r)
 
     def reset(self):
         self.states.clear()

@@ -78,11 +78,11 @@ class DDPG_Agent(nn.Module):
     def __init__(
         self,
         state_dim=(100, 10, 128),   # (N x M x d)
-        action_dim=10,              # K
+        action_dim=100,              # K
         hidden_dim=128,
         value_lr=1e-3,
         policy_lr=1e-3,
-        replay_buffer_size=1000,
+        replay_buffer_size=300,
         batch_size=4,
         log_dir="./log/epochs",
     ):
@@ -97,9 +97,9 @@ class DDPG_Agent(nn.Module):
 
         self.ou_noise = OUNoise(num_actions=action_dim, action_min_val=0, action_max_val=1)
 
-        self.value_net = ValueNetwork(state_dim, action_dim, hidden_dim).cuda()
-        self.policy_net = PolicyNetwork(state_dim, action_dim, hidden_dim).cuda()
-        self.state_processor = StateProcessor(state_dim, hidden_dim).cuda()
+        self.value_net = ValueNetwork((100, 10, 256), action_dim, hidden_dim).cuda()
+        self.policy_net = PolicyNetwork((100, 10, 256), action_dim, hidden_dim).cuda()
+        self.state_processor = StateProcessor((100, 10, 256), hidden_dim).cuda()
         self.state_processor_frozen = False
 
         self.target_value_net = deepcopy(self.value_net)
@@ -146,8 +146,8 @@ class DDPG_Agent(nn.Module):
         return policy_loss, value_loss
     
 
-    def ddpg_update(self, gamma=0.001, min_value=-np.inf, max_value=np.inf, soft_tau=0.01):
-        for epoch in range(8):
+    def ddpg_update(self, gamma=0.001, min_value=-np.inf, max_value=np.inf, soft_tau=0.001):
+        for epoch in range(3):
             total_policy_loss, total_value_loss = self.compute_loss(self.replay_buffer, gamma, min_value, max_value)
 
             self.policy_optimizer.zero_grad()
@@ -158,11 +158,11 @@ class DDPG_Agent(nn.Module):
             total_value_loss.backward()
             self.value_optimizer.step()
 
-            for target_param, param in zip(self.target_value_net.parameters(), self.value_net.parameters()):
-                target_param.data.copy_(target_param.data * (1.0 - soft_tau) + param.data * soft_tau)
+        for target_param, param in zip(self.target_value_net.parameters(), self.value_net.parameters()):
+            target_param.data.copy_(target_param.data * (1.0 - soft_tau) + param.data * soft_tau)
 
-            for target_param, param in zip(self.target_policy_net.parameters(), self.policy_net.parameters()):
-                target_param.data.copy_(target_param.data * (1.0 - soft_tau) + param.data * soft_tau)
+        for target_param, param in zip(self.target_policy_net.parameters(), self.policy_net.parameters()):
+            target_param.data.copy_(target_param.data * (1.0 - soft_tau) + param.data * soft_tau)
 
         return total_policy_loss.detach().cpu().item(), total_value_loss.detach().cpu().item()
 
@@ -191,17 +191,20 @@ class DDPG_Agent(nn.Module):
     
 
     def get_action(self, state, list_clients, prev_reward, done=False, log=False):
-        state = torch.Tensor(state).unsqueeze(0)                        # current state: 1 x N x M x d
+        # b_losses = torch.tensor([b_losses], requires_grad=True).unsqueeze(0).cuda()                # shape: 1 x 1 x N
+        # a_losses = torch.tensor([a_losses], requires_grad=True).unsqueeze(0).cuda()                # shape: 1 x 1 x N
+        state = torch.Tensor(state).unsqueeze(0).cuda()                        # current state: 1 x N x M x d
         self.state_dataset.insert(state.squeeze(0).cpu())               # put into dataset: N x M x d
-        preprocessed_state = self.state_processor(state.cuda())         # process state: 1 x M x N
+        # preprocessed_state = self.state_processor(state.cuda())         # process state: 1 x M x N
+        # preprocessed_state = torch.cat((preprocessed_state, b_losses, a_losses), dim=1)
 
         if prev_reward is not None:
             self.memory.update(r=prev_reward)
             self.total_reward += prev_reward
 
-        action = self.policy_net(preprocessed_state, list_clients).flatten()
+        action = self.policy_net(state).flatten()
         # action = self.ou_noise.get_action(action, self.step)
-        self.memory.act(preprocessed_state.detach().cpu(), action.detach().cpu())
+        self.memory.act(state.detach().cpu(), action.detach().cpu())
 
         if self.memory.get_last_record():
             s, a, r, s_next = self.memory.get_last_record()    # type: ignore
@@ -209,8 +212,8 @@ class DDPG_Agent(nn.Module):
 
             if len(self.replay_buffer) >= self.batch_size:
                 pl, vl = self.ddpg_update()
-                # sp_mean = -1 
-                sp_mean = self.sp_update(update= not self.state_processor_frozen)
+                sp_mean = -1 
+                # sp_mean = self.sp_update(update= not self.state_processor_frozen)
                 
                 if log:
                     wandb.log({"agent/policy_loss": pl, "agent/value_loss": vl,
