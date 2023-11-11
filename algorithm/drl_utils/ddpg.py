@@ -78,11 +78,11 @@ class DDPG_Agent(nn.Module):
     def __init__(
         self,
         state_dim=(100, 10, 128),   # (N x M x d)
-        action_dim=100,              # K
+        action_dim=10,              # K
         hidden_dim=128,
         value_lr=1e-3,
         policy_lr=1e-3,
-        replay_buffer_size=300,
+        replay_buffer_size=800,
         batch_size=4,
         log_dir="./log/epochs",
     ):
@@ -191,12 +191,8 @@ class DDPG_Agent(nn.Module):
     
 
     def get_action(self, state, list_clients, prev_reward, done=False, log=False):
-        # b_losses = torch.tensor([b_losses], requires_grad=True).unsqueeze(0).cuda()                # shape: 1 x 1 x N
-        # a_losses = torch.tensor([a_losses], requires_grad=True).unsqueeze(0).cuda()                # shape: 1 x 1 x N
         state = torch.Tensor(state).unsqueeze(0).cuda()                        # current state: 1 x N x M x d
         self.state_dataset.insert(state.squeeze(0).cpu())               # put into dataset: N x M x d
-        # preprocessed_state = self.state_processor(state.cuda())         # process state: 1 x M x N
-        # preprocessed_state = torch.cat((preprocessed_state, b_losses, a_losses), dim=1)
 
         if prev_reward is not None:
             self.memory.update(r=prev_reward)

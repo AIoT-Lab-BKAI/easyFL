@@ -59,22 +59,23 @@ class Server(BasicServer):
         if t > 0 :
             _, losses_after_aggre, _ = self.communicate(self.selected_clients)
             print("Client loss after aggreation:", losses_after_aggre)
-            # prev_sum_client = sum([self.client_vols[id] for id in self.selected_clients])
+            prev_sum_client =sum([self.client_vols[id] for id in self.selected_clients])
+            mean_loss = sum([self.client_vols[id] * loss for id, loss in zip(self.selected_clients, losses_after_aggre)])/prev_sum_client 
             curr_loss = np.mean(losses_after_aggre) + self.epsilon*(np.max(losses_after_aggre) - np.min(losses_after_aggre))
-            prev_reward = self.prev_loss/curr_loss
+            prev_reward = self.prev_loss/curr_loss * (prev_sum_client/self.data_vol)
+            # prev_reward = self.prev_loss - curr_loss
         else:
             prev_reward = None
 
         self.selected_clients = sorted(self.sample())
         models, train_losses, _ = self.communicate(self.selected_clients)
-        classifier_diffs = [get_penultimate_layer(
-            self.model) * 0 for _ in self.clients]
+        classifier_diffs = [get_penultimate_layer(self.model) * 0 for _ in self.clients]
 
         #Compute previous loss after aggregation
 
-        for client_id, model in zip(self.selected_clients, models):
+        for client_id, model, loss in zip(self.selected_clients, models, train_losses):
             classifier_diffs[client_id] = get_penultimate_layer(
-                model.to(self.device) - self.model)
+                model.to(self.device) - self.model*0.999)*loss
 
         raw_state = torch.stack(classifier_diffs, dim=0)
     
@@ -88,6 +89,9 @@ class Server(BasicServer):
         print("Clients: ", self.selected_clients)
         print("Impact factor:", ip.detach().cpu().numpy())
         self.model = self.aggregate(models, p=ip)
+
+        sum_client =sum([self.client_vols[id] for id in self.selected_clients])
+        mean_loss2 = sum([self.client_vols[id] * loss for id, loss in zip(self.selected_clients, train_losses)])/sum_client
         self.prev_loss = (np.mean(train_losses) + self.epsilon*(np.max(train_losses) - np.min(train_losses)))
         return
     

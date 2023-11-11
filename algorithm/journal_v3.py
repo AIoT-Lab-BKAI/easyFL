@@ -30,7 +30,7 @@ class Server(BasicServer):
         super(Server, self).__init__(option, model, clients, test_data)
         self.device = 'cuda'
         self.agent = DDPG_Agent(state_dim=(len(self.clients), 10, 256),
-                                action_dim=len(self.selected_clients))
+                                action_dim=self.clients_per_round)
         self.storage_path = option['storage_path']
         self.load_agent = option['load_agent']
         self.save_agent = option['save_agent']
@@ -84,7 +84,8 @@ class Server(BasicServer):
         if not self.selected_clients:
             return
     
-        ip = impact_factor[torch.tensor(self.selected_clients)]
+        # ip = impact_factor[torch.tensor(self.selected_clients)]
+        ip = impact_factor
         print("Clients: ", self.selected_clients)
         print("Impact factor:", ip.detach().cpu().numpy())
         self.model = self.aggregate(models, p=ip)

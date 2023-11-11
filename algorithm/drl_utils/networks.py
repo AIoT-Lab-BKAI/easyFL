@@ -92,49 +92,57 @@ class ValueNetwork(nn.Module):
         x = self.linear4(x)
         return x
 
-class PolicyNetwork(nn.Module):
-    """
-    Policy network: f(state) -> action
-    """
-    def __init__(self, state_dim, action_dim, hidden_dim=128):
-        super(PolicyNetwork, self).__init__()
-        N, M, d = state_dim   # 100, 10, 128
+# class PolicyNetwork(nn.Module):
+#     """
+#     Policy network: f(state) -> action
+#     """
+#     def __init__(self, state_dim, action_dim, hidden_dim=128):
+#         super(PolicyNetwork, self).__init__()
+#         N, M, d = state_dim   # 100, 10, 128
         
-        # # Input: batch x M x N
-        # self.linear1 = nn.Linear(N, hidden_dim)
-        # # Output: batch x M x hidden
+#         # # Input: batch x M x N
+#         # self.linear1 = nn.Linear(N, hidden_dim)
+#         # # Output: batch x M x hidden
         
-        # self.linear2 = nn.Linear(hidden_dim, 1)
-        # # Output: batch x M x 1 ---squeeze(-1)---> batch x M 
+#         # self.linear2 = nn.Linear(hidden_dim, 1)
+#         # # Output: batch x M x 1 ---squeeze(-1)---> batch x M 
 
-        # Input: batch x N x M x d
-        self.linear_s1 = nn.Linear(d, hidden_dim)
-        # Output: batch x N x M x hidden
+#         # Input: batch x N x M x d
+#         self.linear_s1 = nn.Linear(d, hidden_dim)
+#         # Output: batch x N x M x hidden
 
-        self.linear_s2 = nn.Linear(hidden_dim, 1)
-        #Output: batch x N x M x 1
+#         self.linear_s2 = nn.Linear(hidden_dim, 1)
+#         #Output: batch x N x M x 1
 
-        self.linear = nn.Linear(M, 256)
-        # # Output: batch x action_dim
-        self.encoder = EncoderRNN(input_size=M, hidden_size=256)
-        self.decoder = AttnDecoderRNN(output_size=action_dim, hidden_size=256)
-        self.apply(init_weights)
-        return
+#         self.linear = nn.Linear(M, 256)
+#         # # Output: batch x action_dim
+#         self.encoder = EncoderRNN(input_size=M, hidden_size=256)
+#         self.decoder = AttnDecoderRNN(output_size=action_dim, hidden_size=256)
+#         self.apply(init_weights)
+#         return
 
-    def forward(self, state, list_clients = None):
-        x = F.relu(self.linear_s1(state))
-        x = F.relu(self.linear_s2(x)).squeeze(-1)    
+#     def forward(self, state, list_clients = None):
+#         x = F.relu(self.linear_s1(state))
+#         x = F.relu(self.linear_s2(x)).squeeze(-1)    
 
-        output, hidden = self.encoder(x)
+#         output, hidden = self.encoder(x)
 
-        input_decoder = self.linear(x)
-        x = self.decoder(output, hidden, input_decoder)
-        # if list_clients != None:
-        #     mask = torch.ones_like(x, dtype=torch.bool)
-        #     mask[:, list_clients] = False
-        #     x[mask] = -9999999
-        x = F.softmax(x, dim=1)
-        return x
+#         input_decoder = self.linear(x)
+#         x = self.decoder(output, hidden, input_decoder)
+
+#         # mask = torch.ones(state.shape[0], state.shape[1]).cuda()
+#         for i in range(state.shape[0]):
+#             for j in range(state.shape[1]):
+#                 if torch.all(state[i, j, :, :] == 0):
+#                     x[i, j] = -99999
+#                     # print(i, j)
+
+#         # if list_clients != None:
+#         #     mask = torch.ones_like(x, dtype=torch.bool)
+#         #     mask[:, list_clients] = False
+#         #     x[mask] = -9999999
+#         x = F.softmax(x, dim=1)
+#         return x
 
 class EncoderRNN(nn.Module):
     def __init__(self, input_size, hidden_size, dropout_p=0.1):
@@ -179,11 +187,10 @@ class AttnDecoderRNN(nn.Module):
     def forward(self, encoder_outputs, encoder_hidden, input_vector=None):
         batch_size = encoder_outputs.size(0)
         decoder_hidden = encoder_hidden
-        decoder_input = torch.empty(batch_size, 1, self.hidden_size).fill_(1.0).cuda()
+        decoder_input = torch.empty(batch_size, 1, self.hidden_size).fill_(0.01).cuda()
         decoder_outputs = []
-
         for i in range(self.output_size):
-            decoder_input = input_vector[: , i:i+1 , :]
+            # decoder_input = input_vector[: , i:i+1 , :]
 
             decoder_output, decoder_hidden, decoder_input, attn_weights = self.forward_step(
                 decoder_input, decoder_hidden, encoder_outputs
@@ -215,34 +222,46 @@ class AttnDecoderRNN(nn.Module):
         return output2, hidden, x, attn_weights
 
 
-# class PolicyNetwork(nn.Module):
-#     """
-#     Policy network: f(state) -> action
-#     """
-#     def __init__(self, state_dim, action_dim, hidden_dim=128):
-#         super(PolicyNetwork, self).__init__()
-#         N, M, _ = state_dim   # 100, 10, 128
+class PolicyNetwork(nn.Module):
+    """
+    Policy network: f(state) -> action
+    """
+    def __init__(self, state_dim, action_dim, hidden_dim=128):
+        super(PolicyNetwork, self).__init__()
+        N, M, d = state_dim   # 100, 10, 128
         
-#         # Input: batch x M x N
-#         self.linear1 = nn.Linear(N, hidden_dim)
-#         # Output: batch x M x hidden
+        # Input: batch x N x M x d
+        self.linear_s1 = nn.Linear(d, hidden_dim)
+        # Output: batch x N x M x hidden
+
+        self.linear_s2 = nn.Linear(hidden_dim, 1)
+        #Output: batch x N x M x 1
+
+        # Input: batch x M x N
+        self.linear1 = nn.Linear(M, hidden_dim)
+        # Output: batch x M x hidden
         
-#         self.linear2 = nn.Linear(hidden_dim, 1)
-#         # Output: batch x M x 1 ---squeeze(-1)---> batch x M 
+        self.linear2 = nn.Linear(hidden_dim, hidden_dim)
+        # Output: batch x M x 1 ---squeeze(-1)---> batch x M 
         
-#         self.linear3 = nn.Linear(M, action_dim)
-#         # Output: batch x action_dim
+        self.linear3 = nn.Linear(hidden_dim, 1)
+        # Output: batch x action_dim
         
-#         self.apply(init_weights)
-#         return
+        self.apply(init_weights)
+        return
     
-#     def forward(self, preprocessed_state, list_clients = None):
-#         x = F.relu(self.linear1(preprocessed_state))
-#         x = F.relu(self.linear2(x)).squeeze(-1)
-#         x = self.linear3(x)
-#         if list_clients != None:
-#             mask = torch.ones_like(x, dtype=torch.bool)
-#             mask[:, list_clients] = False
-#             x[mask] = -9999999
-#         x = F.softmax(x, dim=1)
-#         return x
+    def forward(self, state, list_clients = None):
+        x = F.relu(self.linear_s1(state))
+        x = F.relu(self.linear_s2(x)).squeeze(-1)
+
+        x = F.relu(self.linear1(x))
+        x = F.relu(self.linear2(x))
+        x = self.linear3(x).squeeze(-1)
+
+        for i in range(state.shape[0]):
+            for j in range(state.shape[1]):
+                if torch.all(state[i, j, :, :] == 0):
+                    x[i, j] = -99999
+
+        x = F.softmax(x, dim=1)
+        return x
