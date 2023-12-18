@@ -1,7 +1,7 @@
 # from utils import *
-from algorithm.drl_utils.networks import *
-from algorithm.drl_utils.policy import *
-from algorithm.drl_utils.buffer import *
+from algorithm.utils_new.networks import *
+from algorithm.utils_new.policy import *
+from algorithm.utils_new.buffer import *
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -77,7 +77,7 @@ class StateDataset(Dataset):
 class DDPG_Agent(nn.Module):
     def __init__(
         self,
-        state_dim=(100, 10, 128),   # (N x M x d)
+        state_dim=(10, 10, 128),   # (N x M x d)
         action_dim=10,              # K
         hidden_dim=128,
         value_lr=1e-3,
@@ -97,9 +97,9 @@ class DDPG_Agent(nn.Module):
 
         self.ou_noise = OUNoise(num_actions=action_dim, action_min_val=0, action_max_val=1)
 
-        self.value_net = ValueNetwork((100, 10, 256), action_dim, hidden_dim).cuda()
-        self.policy_net = PolicyNetwork((100, 10, 256), action_dim, hidden_dim).cuda()
-        self.state_processor = StateProcessor((100, 10, 256), hidden_dim).cuda()
+        self.value_net = ValueNetwork(state_dim, action_dim, hidden_dim).cuda()
+        self.policy_net = PolicyNetwork(state_dim, action_dim, hidden_dim).cuda()
+        self.state_processor = StateProcessor(state_dim, hidden_dim).cuda()
         self.state_processor_frozen = False
 
         self.target_value_net = deepcopy(self.value_net)
@@ -151,7 +151,8 @@ class DDPG_Agent(nn.Module):
         done = torch.Tensor(np.float32(done)).cuda()
 
         policy_loss = self.value_net(state, self.policy_net(state))
-        policy_loss = 1/(policy_loss.mean() + 0.001)
+        # policy_loss = 1/(policy_loss.mean() + 0.001)
+        policy_loss = -policy_loss.mean()
         next_action = self.target_policy_net(next_state)
         target_value = self.target_value_net(next_state, next_action.detach())
 
@@ -163,7 +164,7 @@ class DDPG_Agent(nn.Module):
         return policy_loss, value_loss
     
 
-    def ddpg_update(self, gamma=0.001, min_value=-np.inf, max_value=np.inf, soft_tau=0.001):
+    def ddpg_update(self, gamma=0.001, min_value=-np.inf, max_value=np.inf, soft_tau=0.005):
         for epoch in range(2):
             total_policy_loss, total_value_loss = self.compute_loss(self.replay_buffer, gamma, min_value, max_value)
 
@@ -229,7 +230,7 @@ class DDPG_Agent(nn.Module):
             s, a, r, s_next = self.memory.get_last_record()    # type: ignore
             self.replay_buffer.push(s, a, r, s_next, done)
 
-            if len(self.replay_buffer) >= self.batch_size:
+            if len(self.replay_buffer) >= self.batch_size * 5:
                 pl, vl = self.ddpg_update()
                 sp_mean = -1 
                 # sp_mean = self.sp_update(update= not self.state_processor_frozen)

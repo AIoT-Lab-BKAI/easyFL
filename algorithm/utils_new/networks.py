@@ -12,30 +12,9 @@ def init_weights(m):
         torch.nn.init.xavier_uniform_(m.weight)
         m.bias.data.fill_(0.001)
 
-class FeatureExtractor(nn.Module):
-    def __init__(self, M, d, hidden_dim=128):
-        super(FeatureExtractor, self).__init__()
-        # N, M, d = state_dim   # 100, 10, 128
-        
-        # Input: batch x N x M x d
-        self.linear_s1 = nn.Linear(d, hidden_dim)
-        # Output: batch x N x M x hidden
 
-        self.linear_s2 = nn.Linear(hidden_dim, 1)
-        #Output: batch x N x M x 1
+# self.state_processor = StateProcessor(state_dim=(N, M, d), hidden_dim=128) # output = batch x M x N
 
-        self.linear1 = nn.Linear(M, hidden_dim)
-        # Output: batch x N x hidden
-        
-        self.linear2 = nn.Linear(hidden_dim, 1)
-        # Output: batch x N x 1 ---squeeze(-1)---> batch x N
-
-    def forward(self, grad):
-        x = F.relu(self.linear_s1(grad))
-        x = F.relu(self.linear_s2(x)).squeeze(-1)
-        x = F.relu(self.linear1(x))
-        x = F.relu(self.linear2(x)).squeeze(-1)
-        return x
 class ValueNetwork(nn.Module): 
     """
     Value network: f(state, action) -> goodness
@@ -53,11 +32,22 @@ class ValueNetwork(nn.Module):
                 K is the number of participants per communication round
         """
         super(ValueNetwork, self).__init__()
-        N, M, d = state_dim   # 100, 10, 128
+        N, M, d = state_dim   # 10, 10, 128
         
-        self.feat_extrac = FeatureExtractor(M, d, hidden_dim).cuda()
+        # Input: batch x N x M x d
+        self.linear_s1 = nn.Linear(d, hidden_dim)
+        # Output: batch x N x M x hidden
+
+        self.linear_s2 = nn.Linear(hidden_dim, 1)
+        #Output: batch x N x M x 1
+
+        self.linear1 = nn.Linear(N, hidden_dim)
+        # Output: batch x M x hidden
         
-        self.linear3 = nn.Linear(N*3 + action_dim, hidden_dim)
+        self.linear2 = nn.Linear(hidden_dim, 1)
+        # Output: batch x M x 1 ---squeeze(-1)---> batch x M 
+        
+        self.linear3 = nn.Linear(M + 2 + action_dim, hidden_dim)
         # Output: batch x hidden
         
         self.linear4 = nn.Linear(hidden_dim, 1)
@@ -68,11 +58,15 @@ class ValueNetwork(nn.Module):
     
     def forward(self, raw_state, action):
         grad, loss, num_vol = raw_state
-        x = self.feat_extrac(grad)
+        x = F.relu(self.linear_s1(grad))
+        x = F.relu(self.linear_s2(x)).squeeze(-1)
 
-        # x = torch.cat([x, loss.unsqueeze(-1), num_vol.unsqueeze(-1)], dim=2)    
+        x = torch.cat([x, loss.unsqueeze(-1), num_vol.unsqueeze(-1)], dim=2)    
+        x = x.transpose(1,2)
 
-        x = torch.cat([x, loss, num_vol, action], dim=1)
+        x = F.relu(self.linear1(x))
+        x = F.relu(self.linear2(x)).squeeze(-1)
+        x = torch.cat([x, action], dim=1)
         x = F.relu(self.linear3(x))
         x = self.linear4(x)
         return x
@@ -84,11 +78,22 @@ class PolicyNetwork(nn.Module):
     def __init__(self, state_dim, action_dim, hidden_dim=128):
         super(PolicyNetwork, self).__init__()
         N, M, d = state_dim   # 100, 10, 128
-
-        self.feat_extrac = FeatureExtractor(M, d, hidden_dim).cuda()
         
-        self.linear3 = nn.Linear(N*3, hidden_dim)
-        self.linear4 = nn.Linear(hidden_dim, N)
+        # Input: batch x N x M x d
+        self.linear_s1 = nn.Linear(d, hidden_dim)
+        # Output: batch x N x M x hidden
+
+        self.linear_s2 = nn.Linear(hidden_dim, 1)
+        #Output: batch x N x M x 1
+
+        # Input: batch x M x N
+        self.linear1 = nn.Linear(M + 2, hidden_dim)
+        # Output: batch x M x hidden
+        
+        self.linear2 = nn.Linear(hidden_dim, hidden_dim)
+        # Output: batch x M x 1 ---squeeze(-1)---> batch x M 
+        
+        self.linear3 = nn.Linear(hidden_dim, 1)
         # Output: batch x action_dim
         
         self.apply(init_weights)
@@ -96,18 +101,20 @@ class PolicyNetwork(nn.Module):
     
     def forward(self, raw_state, list_clients = None):
         grad, loss, num_vol = raw_state
-        x = self.feat_extrac(grad)
-        x = torch.cat([x, loss, num_vol], dim=1)
-        x = F.relu(self.linear3(x))
-        x = self.linear4(x)
+        x = F.relu(self.linear_s1(grad))
+        x = F.relu(self.linear_s2(x)).squeeze(-1)
+        x = torch.cat([x, loss.unsqueeze(-1), num_vol.unsqueeze(-1)], dim=2)
 
-        for i in range(num_vol.shape[0]):  #batch_size
-            for j in range(num_vol.shape[1]): #N
-                if num_vol[i, j] == 0 and loss[i, j] == 0:
-                    x[i, j] = -99999
+        x = F.relu(self.linear1(x))
+        x = F.relu(self.linear2(x))
+        x = self.linear3(x).squeeze(-1)
+        # for i in range(state.shape[0]):
+        #     for j in range(state.shape[1]):
+        #         if torch.all(state[i, j, :, :] == 0):
+        #             x[i, j] = -99999
         x = F.softmax(x, dim=1)
         return x
-
+    
 # class PolicyNetwork(nn.Module):
 #     """
 #     Policy network: f(state) -> action
@@ -236,7 +243,8 @@ class AttnDecoderRNN(nn.Module):
         output2 = self.out(x)
 
         return output2, hidden, x, attn_weights
-  
+
+    
 class StateProcessor(nn.Module):
     def __init__(self, state_dim, hidden_dim=256):
         """

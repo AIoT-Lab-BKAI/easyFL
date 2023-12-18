@@ -312,7 +312,7 @@ class BasicClient():
         model.train()
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
         model = model.to(device)
-        data_loader = self.calculator.get_data_loader(self.train_data, batch_size=self.batch_size)
+        data_loader = self.calculator.get_data_loader(self.train_data, batch_size=self.batch_size, droplast=True)
         optimizer = self.calculator.get_optimizer(self.optimizer_name, model, lr = self.learning_rate, weight_decay=self.weight_decay, momentum=self.momentum)
         for iter in range(self.epochs):
             for batch_id, batch_data in enumerate(data_loader):

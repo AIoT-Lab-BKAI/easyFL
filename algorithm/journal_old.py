@@ -61,53 +61,47 @@ class Server(BasicServer):
         return
 
     def iterate(self, t):
+        # if t > 0 :
+        #     models_after_aggre, losses_after_aggre, _ = self.communicate(self.selected_clients)
+        #     prev_sum_client =sum([self.client_vols[id] for id in self.selected_clients])
+        #     mean_loss = sum([self.client_vols[id] * loss for id, loss in zip(self.selected_clients, losses_after_aggre)])/prev_sum_client 
+        #     # curr_loss = np.mean(losses_after_aggre) + self.epsilon*(np.max(losses_after_aggre) - np.min(losses_after_aggre))
+        #     curr_loss =  mean_loss + self.epsilon*(np.max(losses_after_aggre) - np.min(losses_after_aggre))
+        #     # reward = np.exp(- curr_loss)
+        # else:
+        #     print("Client Volume:",  self.client_vols)
+        #     reward = None
 
         self.selected_clients = sorted(self.sample())
         models, train_losses, losses_after_train = self.communicate(self.selected_clients)
+        classifier_diffs = [get_penultimate_layer(self.model) * 0 for _ in self.clients]
         print("Client loss after aggreation:", train_losses)
 
         # Calculate reward
         sum_client =sum([self.client_vols[id] for id in self.selected_clients])
         mean_loss = sum([self.client_vols[id] * loss for id, loss in zip(self.selected_clients, train_losses)])/sum_client
         # avg_loss = (mean_loss)
-        avg_loss = (np.mean(train_losses) + self.epsilon*(np.max(train_losses) - np.min(train_losses)))
-        reward = np.exp(-avg_loss)
+        avg_loss = (mean_loss + self.epsilon*(np.max(train_losses) - np.min(train_losses)))
+        reward = (-avg_loss)
 
         gradients = []
         alpha = 0
-        classifier_diffs = [get_penultimate_layer(self.model) * 0 for _ in self.clients]
-        client_vol_t = [0 for _ in self.clients]
-        training_losses = [0 for _ in self.clients]
 
-        for client_id, model, loss in zip(self.selected_clients, models, train_losses):
+        for client_id, model, loss, loss2 in zip(self.selected_clients, models, train_losses, losses_after_train):
             beta = self.client_epochs * math.ceil(self.client_vols[client_id] / self.client_batch_size)
-            alpha += beta*self.client_vols[client_id]/sum_client
-            gradients.append((model.to(self.device) - self.model)/beta)
-             
-            grad = get_penultimate_layer(model.to(self.device) - self.model)
-            classifier_diffs[client_id] = (grad/torch.norm(grad))
 
-            client_vol_t[client_id] = self.client_vols[client_id]/sum_client
-            training_losses[client_id] = loss
+            alpha += beta*self.client_vols[client_id]/sum_client
+            classifier_diffs[client_id] = (-get_penultimate_layer(
+                model.to(self.device) - self.model*0.999)/beta)*loss*100
             
+            gradients.append((model.to(self.device) - self.model)/beta)
             # * self.client_vols[client_id]
             
-        raw_state = torch.stack(classifier_diffs, dim=0)
-        # Tính min và max của list
-        min_loss, max_loss = min(training_losses), max(training_losses)
-        min_num_client, max_num_client = min(client_vol_t), max(client_vol_t)
-        min_grad, max_grad = torch.min(raw_state), torch.max(raw_state)
-        # print(min_grad)
-        # classifier_diffs[client_id] = (classifier_diffs[client_id] - min_grad) / (max_grad - min_grad + 1e-7)
 
-        # Áp dụng Min-Max Scaling
-        scaled_losses = [(x - min_loss) / (max_loss - min_loss) for x in training_losses]
-        scaled_num_client = [(x - min_num_client) / (max_num_client - min_num_client) for x in client_vol_t]
-        scaled_grad = (raw_state - min_grad) / (max_grad - min_grad)
-        # print(scaled_grad)
+        raw_state = torch.stack(classifier_diffs, dim=0)
 
         impact_factor = self.agent.get_action(
-            (raw_state, training_losses, client_vol_t), reward if t > 0 else None, log=self.wandb)
+            raw_state, reward if t > 0 else None, log=self.wandb)
             
         if not self.selected_clients:
             return
@@ -118,11 +112,24 @@ class Server(BasicServer):
         print("Impact factor:", ip.detach().cpu().numpy())
         
         ip2 = ip.detach().cpu().numpy()
-        ip_final = [ip2[id]*(self.client_vols[self.selected_clients[id]])/sum_client for id in range(len(ip2))]
+        ip_final = [ip2[id]*(self.client_vols[self.selected_clients[id]])/self.data_vol for id in range(len(ip2))]
         print("Impact factor final:", ip_final)
+        
+        # grandient_direct_t = sum([(get_penultimate_layer(i)*hs).detach().cpu().numpy() for i, hs in zip(gradients, ip)]).reshape(1, -1)
+        # print("gt:", grandient_direct_t.shape)
 
-        self.model = self.aggregate(models, p=ip_final)
-        # self.model = self.model + alpha * self.aggregate(gradients, p=ip_final)
+        # if t == 0:
+        #     self.server_gradient = grandient_direct_t
+        #     distance = 1
+        # else:
+        #     distance = cosine_similarity(self.server_gradient, grandient_direct_t).item()
+        #     print("Cosine similarity:", distance)
+        # distance = distance if distance > 0 else 0
+        # alpha = alpha * (distance + 1)/2
+
+        print("Alpha:", alpha)
+        self.model = self.model + alpha * self.aggregate(gradients, p=ip_final)
+        # self.model = self.aggregate(models, p=ip)
         # if t != 0:
         #     self.server_gradient += alpha * grandient_direct_t
         # self.model = alpha * self.aggregate(models, p=ip) + (1 - alpha)*self.model

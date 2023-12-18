@@ -60,11 +60,11 @@ class Server(BasicServer):
         
         raw_state = torch.stack(classifier_diffs, dim=0)
         prev_reward = - np.mean(train_losses)
-        impact_factor = self.agent.get_action(raw_state, prev_reward if t > 0 else None, log=True)
+        # impact_factor = self.agent.get_action(raw_state, prev_reward if t > 0 else None, log=True)
         if not self.selected_clients:
             return
         # aggregate: pk = 1/K as default where K=len(selected_clients)
-        self.model = self.aggregate([model.cpu() for model in models], p = impact_factor)
+        self.model = self.aggregate([model.cpu() for model in models], p = [1.0 * self.client_vols[cid]/self.data_vol for cid in self.selected_clients])
         return
 
 
@@ -72,7 +72,7 @@ class Client(BasicClient):
     def __init__(self, option, name='', train_data=None, valid_data=None):
         super(Client, self).__init__(option, name, train_data, valid_data)
         self.lossfunc = nn.CrossEntropyLoss()
-        self.kd_fct = option['kd_fct']
+        self.kd_fct = 0
         
     def reply(self, svr_pkg):
         model = self.unpack(svr_pkg)
@@ -82,11 +82,11 @@ class Client(BasicClient):
         return cpkg
         
     def train(self, model, device='cuda'):
-        model = model.to(device)
-        model.train()
-        
         src_model = copy.deepcopy(model).to(device)
         src_model.freeze_grad()
+
+        model = model.to(device)
+        model.train()
                 
         data_loader = self.calculator.get_data_loader(self.train_data, batch_size=self.batch_size, droplast=True)
         optimizer = self.calculator.get_optimizer(self.optimizer_name, model, lr=self.learning_rate, weight_decay=self.weight_decay, momentum=self.momentum)
@@ -95,6 +95,8 @@ class Client(BasicClient):
             for batch_id, batch_data in enumerate(data_loader):
                 model.zero_grad()
                 loss, kl_loss = self.get_loss(model, src_model, batch_data, device)
+                if (self.name == 1):
+                    print(loss, kl_loss)
                 loss = loss + self.kd_fct * kl_loss
                 loss.backward()
                 optimizer.step()

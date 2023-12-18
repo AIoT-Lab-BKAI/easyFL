@@ -1,9 +1,10 @@
 from .fedbase import BasicServer, BasicClient
 from algorithm.agg_utils.fedtest_utils import get_penultimate_layer
-from algorithm.drl_utils.ddpg import DDPG_Agent, KL_divergence
+from algorithm.utils_new.ddpg import DDPG_Agent, KL_divergence
 
 import torch.nn as nn
 import numpy as np
+from sklearn.metrics.pairwise import cosine_similarity
 
 import torch
 import os
@@ -29,7 +30,7 @@ class Server(BasicServer):
     def __init__(self, option, model, clients, test_data=None):
         super(Server, self).__init__(option, model, clients, test_data)
         self.device = 'cuda'
-        self.agent = DDPG_Agent(state_dim=(len(self.clients), 10, 256),
+        self.agent = DDPG_Agent(state_dim=(self.clients_per_round, 10, 256),
                                 action_dim=self.clients_per_round)
         self.storage_path = option['storage_path']
         self.load_agent = option['load_agent']
@@ -37,8 +38,12 @@ class Server(BasicServer):
         # self.is_infer= option['ep'] == 'infer'
         self.is_infer = False
         self.paras_name = ['ep']
-        self.epsilon = 2
-        self.prev_loss = 0
+        self.epsilon = 1
+        self.server_gradient = None
+
+        self.client_epochs = option['num_epochs']
+        self.client_batch_size = option['batch_size']
+
         return
 
     def run(self):
@@ -56,40 +61,66 @@ class Server(BasicServer):
         return
 
     def iterate(self, t):
-        if t > 0 :
-            _, losses_after_aggre, _ = self.communicate(self.selected_clients)
-            print("Client loss after aggreation:", losses_after_aggre)
-            # prev_sum_client = sum([self.client_vols[id] for id in self.selected_clients])
-            curr_loss = np.mean(losses_after_aggre) + self.epsilon*(np.max(losses_after_aggre) - np.min(losses_after_aggre))
-            prev_reward = self.prev_loss/curr_loss
-        else:
-            prev_reward = None
 
         self.selected_clients = sorted(self.sample())
         models, train_losses, _ = self.communicate(self.selected_clients)
-        classifier_diffs = [get_penultimate_layer(
-            self.model) * 0 for _ in self.clients]
+        print("Client loss after aggreation:", train_losses)
+        
+        # Calculate reward
+        client_vol_t = [self.client_vols[id] for id in self.selected_clients]
+        sum_client =sum(client_vol_t)
+        client_vol_t = [self.client_vols[id]/sum_client for id in self.selected_clients]
+        mean_loss = sum([self.client_vols[id] * loss for id, loss in zip(self.selected_clients, train_losses)])/sum_client
+        avg_loss = (np.mean(train_losses) + self.epsilon*(np.max(train_losses) - np.min(train_losses)))
+        reward = np.exp(-avg_loss)
 
-        #Compute previous loss after aggregation
+        gradients = []
+        alphas = []
+        classifier_diffs = []
 
-        for client_id, model in zip(self.selected_clients, models):
-            classifier_diffs[client_id] = get_penultimate_layer(
-                model.to(self.device) - self.model)
+        for client_id, model, loss in zip(self.selected_clients, models, train_losses):
+            beta = self.client_epochs * math.ceil(self.client_vols[client_id] / self.client_batch_size)
+            alphas.append(beta*self.client_vols[client_id]/sum_client)
+            gradients.append((model.to(self.device) - self.model)/beta)
+            
+            grad = get_penultimate_layer(model.to(self.device) - self.model)
+            classifier_diffs.append(grad/torch.norm(grad))      
 
         raw_state = torch.stack(classifier_diffs, dim=0)
-    
+        # print(raw_state)
+
+        # Tính min và max của list
+        min_loss, max_loss = min(train_losses), max(train_losses)
+        min_num_client, max_num_client = min(client_vol_t), max(client_vol_t)
+        min_grad, max_grad = torch.min(raw_state), torch.max(raw_state)
+
+        # Áp dụng Min-Max Scaling
+        # scaled_losses = [(x - min_loss) / (max_loss - min_loss) for x in train_losses]
+        # scaled_num_client = [(x - min_num_client) / (max_num_client - min_num_client) for x in client_vol_t]
+        scaled_grad = (raw_state - min_grad) / (max_grad - min_grad)
+
+        # print(scaled_grad)
         impact_factor = self.agent.get_action(
-            raw_state, self.selected_clients, prev_reward if t > 0 else None, log=self.wandb)
+            (raw_state, train_losses, client_vol_t), reward if t > 0 else None, log=self.wandb)
             
         if not self.selected_clients:
             return
-    
-        # ip = impact_factor[torch.tensor(self.selected_clients)]
-        ip = impact_factor
+
         print("Clients: ", self.selected_clients)
-        print("Impact factor:", ip.detach().cpu().numpy())
-        self.model = self.aggregate(models, p=ip)
-        self.prev_loss = (np.mean(train_losses) + self.epsilon*(np.max(train_losses) - np.min(train_losses)))
+        print("Impact factor:", impact_factor.detach().cpu().numpy())
+        
+        ip2 = impact_factor.detach().cpu().numpy()
+        # ip_final = [ip2[id]*(self.client_vols[self.selected_clients[id]])/sum_client for id in range(len(ip2))]
+        ip_final = [ip2[id] for id in range(len(ip2))]
+        # alpha = sum([alp * ip2[id] for id, alp in enumerate(alphas)])*10
+        print("Impact factor final:", ip_final)
+
+        self.model = self.aggregate(models, p=ip_final)
+        # self.model = self.aggregate(models, p=ip)
+        # if t != 0:
+        #     self.server_gradient += alpha * grandient_direct_t
+        # self.model = alpha * self.aggregate(models, p=ip) + (1 - alpha)*self.model
+
         return
     
     def unpack(self, packages_received_from_clients):
@@ -111,11 +142,15 @@ class Client(BasicClient):
     def __init__(self, option, name='', train_data=None, valid_data=None):
         super(Client, self).__init__(option, name, train_data, valid_data)
         self.lossfunc = nn.CrossEntropyLoss()
-        self.kd_fct = option['kd_fct']
+        self.kd_fct = 1
+        self.h = None
+        # self.kd_fct = option['kd_fct']
 
     def reply(self, svr_pkg):
         model = self.unpack(svr_pkg)
         loss = self.train_loss(model)
+
+        # self.kd_fct = 1/loss
         self.train(model)
         after_train_loss = self.train_loss(model)
         cpkg = self.pack(model, loss, after_train_loss)
@@ -129,6 +164,9 @@ class Client(BasicClient):
         }
 
     def train(self, model, device='cuda'):
+        if not self.h:
+            self.h = model.zeros_like().to(device)
+            self.h.freeze_grad()
         model = model.to(device)
         model.train()
 
@@ -148,10 +186,10 @@ class Client(BasicClient):
                 loss = loss + self.kd_fct * kl_loss
                 loss.backward()
                 optimizer.step()
-        return
 
     def get_loss(self, model, src_model, data, device):
         tdata = self.calculator.data_to_device(data, device)
+        
         output_s, representation_s = model.pred_and_rep(
             tdata[0])                  # Student
         _, representation_t = src_model.pred_and_rep(
