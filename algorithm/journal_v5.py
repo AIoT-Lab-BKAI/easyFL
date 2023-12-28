@@ -39,7 +39,7 @@ class Server(BasicServer):
         # self.is_infer= option['ep'] == 'infer'
         self.is_infer = False
         self.paras_name = ['ep']
-        self.epsilon = 1
+        self.epsilon = 0.5
         self.server_gradient = None
         self.init_model = model
 
@@ -159,7 +159,7 @@ class Client(BasicClient):
     def __init__(self, option, name='', train_data=None, valid_data=None):
         super(Client, self).__init__(option, name, train_data, valid_data)
         self.lossfunc = nn.CrossEntropyLoss()
-        self.kd_fct = 1
+        self.kd_fct = 0.5
         # self.kd_fct = option['kd_fct']
 
     def reply(self, svr_pkg):

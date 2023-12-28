@@ -95,7 +95,7 @@ def main():
     if option['wandb']:
         wandb.init(
             # project="journal_ha", 
-            project="R.E.S.T", 
+            project="Journal-CADIS-FEDRL", 
             entity="aiotlab",
             group=option['task'],
             name=runname[:-1],
