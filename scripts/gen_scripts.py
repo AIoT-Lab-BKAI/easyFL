@@ -4,24 +4,24 @@ visible_cudas = [0, 1]
 cudas = ",".join([str(i) for i in visible_cudas])
 task_file = "main.py"
 
-dataset = "cifar100"
-sthr = 0.9
+dataset = "mnist"
+sthr = 0.975
 
-dataset_types = ["uc1_nc10", "uc5_nc10"]
-model = "resnet9"
-# model = "cnn"
+dataset_types = ["dirichlet_0.3", "pareto2_0.3"]
+# model = "resnet9"
+model = "cnn"
 
 # config parameters
 N = 100
-rate = 0.5
+rate = 0.1
 K = int(N*rate)
 E = 5
 batch_size = 8
 num_round = 3000
 
 
-# algos = ["cadis"]
-algos = ["singleset", "scaffold", "fedavg", "fedprox", "fedfa", "cadis"]
+algos = ["singleset", "cadis", "fedavg"]
+# algos = ["singleset", "scaffold", "fedavg", "fedprox", "fedfa", "cadis"]
 
 data_folder = f"./benchmark/{dataset}/data"
 log_folder = f"motiv/{dataset}"
@@ -82,7 +82,7 @@ for dataset_type in dataset_types:
             
         body_text = "python main.py  --task ${TASK}  --model ${MODEL}  --algorithm ${ALG} --sthr ${STHR} --wandb ${WANDB} --data_folder ${DATA_DIR}  --log_folder ${LOG_DIR}   --dataidx_filename ${DATA_IDX_FILE}   --num_rounds ${ROUND} --num_epochs ${EPOCH_PER_ROUND} --proportion ${PROPOTION} --batch_size ${BATCH} --num_threads_per_gpu ${NUM_THRESH_PER_GPU}  --num_gpus ${NUM_GPUS} --server_gpu_id ${SERVER_GPU_ID} "
 
-        dir_path = f"./run2/{dataset}/{dataset_type}/"
+        dir_path = f"./run3/{dataset}/{dataset_type}/"
         
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
