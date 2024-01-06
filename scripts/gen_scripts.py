@@ -1,15 +1,18 @@
 import os
+import textwrap
+
 
 visible_cudas = [0, 1]
 cudas = ",".join([str(i) for i in visible_cudas])
 task_file = "main.py"
 
-dataset = "mnist"
-sthr = 0.975
+dataset = "cifar100"
+sthr = 0.9
 
-dataset_types = ["dirichlet_0.3", "pareto2_0.3"]
-# model = "resnet9"
-model = "cnn"
+dataset_types = ["dirichlet_0.1", "pareto_0.5"]
+# dataset_types = ["uc1_nc5", "uc10_nc5"]
+model = "resnet9"
+# model = "cnn"
 
 # config parameters
 N = 100
@@ -32,23 +35,33 @@ header_text = "\
 #!/bin/bash\n\
 #$ -cwd\n\
 #$ -l rt_G.small=1\n\
-#$ -l h_rt=36:00:00\n\
-#$ -o /home/aaa10078nj/Federated_Learning/Journal_CADIS_FEDRL/logs/cifar100/$JOB_NAME_$JOB_ID.log\n\
+#$ -l h_rt=48:00:00\n\
+#$ -o /home/aaa10078nj/Federated_Learning/Ha_CADIS_FEDRL/logs/cifar100/$JOB_NAME_$JOB_ID.log\n\
 #$ -j y\n\n\
 source /etc/profile.d/modules.sh\n\
-module load gcc/11.2.0\n\
-module load openmpi/4.1.3\n\
+#module load gcc/11.2.0\n\
+#Old gcc. Newest support is 12.2.0. See module avail\n\
+LD_LIBRARY_PATH=/apps/centos7/gcc/11.2.0/lib:${LD_LIBRARY_PATH}\n\
+PATH=/apps/centos7/gcc/11.2.0/bin:${PATH}\n\
+#module load openmpi/4.1.3\n\
+#Old mpi. Use intel mpi instead\n\
+LD_LIBRARY_PATH=/apps/centos7/openmpi/4.1.3/gcc11.2.0/lib:${LD_LIBRARY_PATH}\n\
+PATH=/apps/centos7/openmpi/4.1.3/gcc11.2.0/bin:${PATH}\n\
 module load cuda/11.5/11.5.2\n\
 module load cudnn/8.3/8.3.3\n\
 module load nccl/2.11/2.11.4-1\n\
-module load python/3.10/3.10.4\n\
-source ~/venv/pytorch1.11+horovod/bin/activate\n\n\
-LOG_DIR=\"/home/aaa10078nj/Federated_Learning/Journal_CADIS_FEDRL/logs/cifar100/$JOB_NAME_$JOB_ID\"\n\
+#module load python/3.10/3.10.4\n\
+#Old python. Newest support is 10.3.10.10. See module avail\n\
+LD_LIBRARY_PATH=/apps/centos7/python/3.10.4/lib:${LD_LIBRARY_PATH}\n\
+PATH=/apps/centos7/python/3.10.4/bin:${PATH}\n\n\
+source ~/venv/pytorch1.11+horovod/bin/activate\n\
+python --version\n\
+LOG_DIR=\"/home/aaa10078nj/Federated_Learning/Ha_CADIS_FEDRL/logs/cifar100/$JOB_NAME_$JOB_ID\"\n\
 rm -r ${LOG_DIR}\n\
 mkdir ${LOG_DIR}\n\n\
 #Dataset\n\
 DATA_DIR=\"$SGE_LOCALDIR/$JOB_ID/\"\n\
-cp -r ./easyFL/benchmark/cifar100/data ${DATA_DIR}\n\n\
+cp -r ../2023_CCGRID_Hung/easyFL/benchmark/cifar100/data ${DATA_DIR}\n\n\
 "
 
 for dataset_type in dataset_types:
@@ -88,5 +101,5 @@ for dataset_type in dataset_types:
             os.makedirs(dir_path)
     
         file = open(dir_path + f"{task_name}_{algo}.sh", "w")
-        file.write(header_text + command + body_text)
+        file.write(header_text + textwrap.dedent(command) + body_text)
         file.close()
