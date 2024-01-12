@@ -73,7 +73,7 @@ class CustomDataset(Dataset):
 class Server(BasicServer):
     def __init__(self, option, model, clients, test_data = None):
         super(Server, self).__init__(option, model, clients, test_data)
-        single_set_idx = 'dataset_idx/' + option['dataidx_filename']
+        single_set_idx = 'dataset_idx/' + option['dataidx_filename'] + '/train.json'
         data_folder = option['data_folder']
         
         dataset_name = option['task'].split('_')[0]
