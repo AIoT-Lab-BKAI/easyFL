@@ -32,39 +32,30 @@ class Server(BasicServer):
         self.device = 'cuda'
         self.agent = DDPG_Agent(state_dim=(self.clients_per_round, 10, 256),
                                 action_dim=self.clients_per_round)
-        self.storage_path = option['storage_path']
-        self.load_agent = option['load_agent']
-        self.save_agent = option['save_agent']
-        # self.is_infer= option['ep'] == 'infer'
-        self.is_infer = False
-        self.paras_name = ['ep']
-        self.epsilon = 1
-        self.server_gradient = None
-
+        self.epsilon = 0.5
         self.client_epochs = option['num_epochs']
         self.client_batch_size = option['batch_size']
-
         return
 
-    def run(self):
-        if self.load_agent:
-            self.agent.load_models(path=os.path.join(
-                self.storage_path, "meta_models", "checkpoint_gamma0.001_rnn"))
-            if self.is_infer:
-                print("Freeze the StateProcessor!")
-                self.agent.state_processor_frozen = True
-            else:
-                print("Unfreeze the StateProcessor!")
-                self.agent.state_processor_frozen = False
+    # def run(self):
+    #     if self.load_agent:
+    #         self.agent.load_models(path=os.path.join(
+    #             self.storage_path, "meta_models", "checkpoint_gamma0.001_rnn"))
+    #         if self.is_infer:
+    #             print("Freeze the StateProcessor!")
+    #             self.agent.state_processor_frozen = True
+    #         else:
+    #             print("Unfreeze the StateProcessor!")
+    #             self.agent.state_processor_frozen = False
 
-        super().run()
-        return
+    #     super().run()
+    #     return
 
     def iterate(self, t):
 
         self.selected_clients = sorted(self.sample())
         models, train_losses, _ = self.communicate(self.selected_clients)
-        print("Client loss after aggreation:", train_losses)
+        # print("Client loss after aggreation:", train_losses)
         
         # Calculate reward
         client_vol_t = [self.client_vols[id] for id in self.selected_clients]
@@ -87,7 +78,6 @@ class Server(BasicServer):
             classifier_diffs.append(grad/torch.norm(grad))      
 
         raw_state = torch.stack(classifier_diffs, dim=0)
-        # print(raw_state)
 
         # Tính min và max của list
         min_loss, max_loss = min(train_losses), max(train_losses)
@@ -97,29 +87,23 @@ class Server(BasicServer):
         # Áp dụng Min-Max Scaling
         # scaled_losses = [(x - min_loss) / (max_loss - min_loss) for x in train_losses]
         # scaled_num_client = [(x - min_num_client) / (max_num_client - min_num_client) for x in client_vol_t]
-        scaled_grad = (raw_state - min_grad) / (max_grad - min_grad)
+        # scaled_grad = (raw_state - min_grad) / (max_grad - min_grad)
 
-        # print(scaled_grad)
         impact_factor = self.agent.get_action(
             (raw_state, train_losses, client_vol_t), reward if t > 0 else None, log=self.wandb)
             
         if not self.selected_clients:
             return
 
-        print("Clients: ", self.selected_clients)
-        print("Impact factor:", impact_factor.detach().cpu().numpy())
+        # print("Clients: ", self.selected_clients)
+        # print("Impact factor:", impact_factor.detach().cpu().numpy())
         
         ip2 = impact_factor.detach().cpu().numpy()
-        # ip_final = [ip2[id]*(self.client_vols[self.selected_clients[id]])/sum_client for id in range(len(ip2))]
         ip_final = [ip2[id] for id in range(len(ip2))]
-        # alpha = sum([alp * ip2[id] for id, alp in enumerate(alphas)])*10
-        print("Impact factor final:", ip_final)
+        # print("Impact factor final:", ip_final)
 
         self.model = self.aggregate(models, p=ip_final)
-        # self.model = self.aggregate(models, p=ip)
-        # if t != 0:
-        #     self.server_gradient += alpha * grandient_direct_t
-        # self.model = alpha * self.aggregate(models, p=ip) + (1 - alpha)*self.model
+       
 
         return
     
@@ -142,15 +126,12 @@ class Client(BasicClient):
     def __init__(self, option, name='', train_data=None, valid_data=None):
         super(Client, self).__init__(option, name, train_data, valid_data)
         self.lossfunc = nn.CrossEntropyLoss()
-        self.kd_fct = 1
-        self.h = None
-        # self.kd_fct = option['kd_fct']
+        self.kd_fct = option['kd_fct']
 
     def reply(self, svr_pkg):
         model = self.unpack(svr_pkg)
         loss = self.train_loss(model)
 
-        # self.kd_fct = 1/loss
         self.train(model)
         after_train_loss = self.train_loss(model)
         cpkg = self.pack(model, loss, after_train_loss)
@@ -164,9 +145,6 @@ class Client(BasicClient):
         }
 
     def train(self, model, device='cuda'):
-        if not self.h:
-            self.h = model.zeros_like().to(device)
-            self.h.freeze_grad()
         model = model.to(device)
         model.train()
 
@@ -197,5 +175,4 @@ class Client(BasicClient):
         kl_loss = KL_divergence(
             representation_t, representation_s, device)        # KL divergence
         loss = self.lossfunc(output_s, tdata[1])
-        # print(loss, kl_loss)
         return loss, kl_loss

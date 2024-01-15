@@ -32,39 +32,32 @@ class Server(BasicServer):
         self.device = 'cuda'
         self.agent = DDPG_Agent(state_dim=(self.clients_per_round, 10, 256),
                                 action_dim=self.clients_per_round)
-        self.storage_path = option['storage_path']
-        self.load_agent = option['load_agent']
-        self.save_agent = option['save_agent']
-        # self.is_infer= option['ep'] == 'infer'
-        self.is_infer = False
-        self.paras_name = ['ep']
-        self.epsilon = 0.5
-        self.server_gradient = None
+        self.epsilon = 1
 
         self.client_epochs = option['num_epochs']
         self.client_batch_size = option['batch_size']
 
         return
 
-    def run(self):
-        if self.load_agent:
-            self.agent.load_models(path=os.path.join(
-                self.storage_path, "meta_models", "checkpoint_gamma0.001_rnn"))
-            if self.is_infer:
-                print("Freeze the StateProcessor!")
-                self.agent.state_processor_frozen = True
-            else:
-                print("Unfreeze the StateProcessor!")
-                self.agent.state_processor_frozen = False
+    # def run(self):
+    #     if self.load_agent:
+    #         self.agent.load_models(path=os.path.join(
+    #             self.storage_path, "meta_models", "checkpoint_gamma0.001_rnn"))
+    #         if self.is_infer:
+    #             print("Freeze the StateProcessor!")
+    #             self.agent.state_processor_frozen = True
+    #         else:
+    #             print("Unfreeze the StateProcessor!")
+    #             self.agent.state_processor_frozen = False
 
-        super().run()
-        return
+    #     super().run()
+    #     return
 
     def iterate(self, t):
 
         self.selected_clients = sorted(self.sample())
         models, train_losses, _ = self.communicate(self.selected_clients)
-        print("Client loss after aggreation:", train_losses)
+        # print("Client loss after aggreation:", train_losses)
         
         # Calculate reward
         client_vol_t = [self.client_vols[id] for id in self.selected_clients]
@@ -98,15 +91,14 @@ class Server(BasicServer):
         # scaled_num_client = [(x - min_num_client) / (max_num_client - min_num_client) for x in client_vol_t]
         scaled_grad = (raw_state - min_grad) / (max_grad - min_grad)
 
-        # print(scaled_grad)
         impact_factor = self.agent.get_action(
             (scaled_grad, train_losses, client_vol_t), reward if t > 0 else None, log=self.wandb)
             
         if not self.selected_clients:
             return
 
-        print("Clients: ", self.selected_clients)
-        print("Impact factor:", impact_factor.detach().cpu().numpy())
+        # print("Clients: ", self.selected_clients)
+        # print("Impact factor:", impact_factor.detach().cpu().numpy())
         
         ip2 = impact_factor.detach().cpu().numpy()
         ip_final = [ip2[id] for id in range(len(ip2))]
@@ -171,6 +163,9 @@ class Client(BasicClient):
                 loss = loss + self.kd_fct * kl_loss
                 loss.backward()
                 optimizer.step()
+                
+                src_model = copy.deepcopy(model).to(device)
+                src_model.freeze_grad()
         return
 
     def get_loss(self, model, src_model, data, device):

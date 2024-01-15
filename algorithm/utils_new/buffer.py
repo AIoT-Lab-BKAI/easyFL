@@ -72,7 +72,6 @@ class Memory:
         # update reward and next state s' after perform last action a in state s
         # self.states.append(next_s)
         self.rewards.append(r)
-        print("Previous Reward: ", r)
 
     def reset(self):
         self.states.clear()
