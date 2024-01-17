@@ -9,8 +9,8 @@ task_file = "main.py"
 dataset = "cifar100"
 sthr = 0.9
 
-# dataset_types = ["dirichlet_0.1", "pareto_0.5"]
-dataset_types = ["uc1_nc5", "uc4_nc5"]
+dataset_types = ["dirichlet_0.5", "pareto2_1"]
+# dataset_types = ["uc1_nc5", "uc4_nc5"]
 model = "resnet9"
 # model = "cnn"
 
@@ -23,9 +23,9 @@ batch_size = 8
 num_round = 3000
 
 
-# algos = ["singleset", "cadis", "fedavg"]
+algos = ["singleset", "cadis", "fedavg"]
 # algos = ["singleset"]
-algos = ["scaffold", "fedavg", "fedprox", "fedfa", "cadis"]
+# algos = ["scaffold", "fedavg", "fedprox", "fedfa", "cadis"]
 
 data_folder = f"./benchmark/{dataset}/data"
 log_folder = f"motiv/{dataset}"
@@ -96,7 +96,7 @@ for dataset_type in dataset_types:
             
         body_text = "python main.py  --task ${TASK}  --model ${MODEL}  --algorithm ${ALG} --sthr ${STHR} --wandb ${WANDB} --data_folder ${DATA_DIR}  --log_folder ${LOG_DIR}   --dataidx_filename ${DATA_IDX_FILE}   --num_rounds ${ROUND} --num_epochs ${EPOCH_PER_ROUND} --proportion ${PROPOTION} --batch_size ${BATCH} --num_threads_per_gpu ${NUM_THRESH_PER_GPU}  --num_gpus ${NUM_GPUS} --server_gpu_id ${SERVER_GPU_ID} "
 
-        dir_path = f"./run1/{dataset}/{dataset_type}/"
+        dir_path = f"./run3/{dataset}/{dataset_type}/"
         
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)

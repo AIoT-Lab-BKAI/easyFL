@@ -32,7 +32,7 @@ class Server(BasicServer):
         self.device = 'cuda'
         self.agent = DDPG_Agent(state_dim=(self.clients_per_round, 10, 256),
                                 action_dim=self.clients_per_round)
-        self.epsilon = 0.8
+        self.epsilon = option['eps']
 
         self.client_epochs = option['num_epochs']
         self.client_batch_size = option['batch_size']

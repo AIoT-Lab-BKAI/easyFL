@@ -32,10 +32,11 @@ mkdir ${LOG_DIR}
 DATA_DIR="$SGE_LOCALDIR/$JOB_ID/"
 cp -r ../2023_CCGRID_Hung/easyFL/benchmark/cifar10/data ${DATA_DIR}
 
-GROUP="cifar10_cnn_pareto2_0.3_N100_K10"
-ALG="fedavg"
+GROUP="cifar10_cnn_pareto2_1_N100_K10"
+ALG="journal_v4"
 MODEL="cnn"
 STHR=0.9
+EPS=1.0
 WANDB=1
 ROUND=3000
 EPOCH_PER_ROUND=5
@@ -44,9 +45,9 @@ PROPOTION=0.1
 NUM_THRESH_PER_GPU=1
 NUM_GPUS=1
 SERVER_GPU_ID=0
-TASK="cifar10_cnn_pareto2_0.3_N100_K10"
-DATA_IDX_FILE="journal/cifar10/pareto2_0.3/100client"
+TASK="cifar10_cnn_pareto2_1_N100_K10"
+DATA_IDX_FILE="journal/cifar10/pareto2_1/100client"
 
 cd easyFL
 
-python main.py  --task ${TASK}  --model ${MODEL}  --algorithm ${ALG} --sthr ${STHR} --wandb ${WANDB} --data_folder ${DATA_DIR}  --log_folder ${LOG_DIR}   --dataidx_filename ${DATA_IDX_FILE}   --num_rounds ${ROUND} --num_epochs ${EPOCH_PER_ROUND} --proportion ${PROPOTION} --batch_size ${BATCH} --num_threads_per_gpu ${NUM_THRESH_PER_GPU}  --num_gpus ${NUM_GPUS} --server_gpu_id ${SERVER_GPU_ID} 
+python main.py  --task ${TASK}  --model ${MODEL}  --algorithm ${ALG} --eps ${EPS} --sthr ${STHR} --wandb ${WANDB} --data_folder ${DATA_DIR}  --log_folder ${LOG_DIR}   --dataidx_filename ${DATA_IDX_FILE}   --num_rounds ${ROUND} --num_epochs ${EPOCH_PER_ROUND} --proportion ${PROPOTION} --batch_size ${BATCH} --num_threads_per_gpu ${NUM_THRESH_PER_GPU}  --num_gpus ${NUM_GPUS} --server_gpu_id ${SERVER_GPU_ID} 

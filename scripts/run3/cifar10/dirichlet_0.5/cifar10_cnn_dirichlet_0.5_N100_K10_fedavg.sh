@@ -2,7 +2,7 @@
 #$ -cwd
 #$ -l rt_G.small=1
 #$ -l h_rt=48:00:00
-#$ -o /home/aaa10078nj/Federated_Learning/Ha_CADIS_FEDRL/logs/cifar100/$JOB_NAME_$JOB_ID.log
+#$ -o /home/aaa10078nj/Federated_Learning/Ha_CADIS_FEDRL/logs/cifar10/$JOB_NAME_$JOB_ID.log
 #$ -j y
 
 source /etc/profile.d/modules.sh
@@ -24,28 +24,28 @@ PATH=/apps/centos7/python/3.10.4/bin:${PATH}
 
 source ~/venv/pytorch1.11+horovod/bin/activate
 python --version
-LOG_DIR="/home/aaa10078nj/Federated_Learning/Ha_CADIS_FEDRL/logs/cifar100/$JOB_NAME_$JOB_ID"
+LOG_DIR="/home/aaa10078nj/Federated_Learning/Ha_CADIS_FEDRL/logs/cifar10/$JOB_NAME_$JOB_ID"
 rm -r ${LOG_DIR}
 mkdir ${LOG_DIR}
 
 #Dataset
 DATA_DIR="$SGE_LOCALDIR/$JOB_ID/"
-cp -r ../2023_CCGRID_Hung/easyFL/benchmark/cifar100/data ${DATA_DIR}
+cp -r ../2023_CCGRID_Hung/easyFL/benchmark/cifar10/data ${DATA_DIR}
 
-GROUP="cifar100_resnet9_dirichlet_0.1_N100_K10"
-ALG="singleset"
-MODEL="resnet9"
+GROUP="cifar10_cnn_dirichlet_0.5_N100_K10"
+ALG="fedavg"
+MODEL="cnn"
 STHR=0.9
 WANDB=1
-ROUND=500
+ROUND=3000
 EPOCH_PER_ROUND=5
 BATCH=8
 PROPOTION=0.1
 NUM_THRESH_PER_GPU=1
 NUM_GPUS=1
 SERVER_GPU_ID=0
-TASK="cifar100_resnet9_dirichlet_0.1_N100_K10"
-DATA_IDX_FILE="journal/cifar100/dirichlet_0.1/100client"
+TASK="cifar10_cnn_dirichlet_0.5_N100_K10"
+DATA_IDX_FILE="journal/cifar10/dirichlet_0.5/100client"
 
 cd easyFL
 

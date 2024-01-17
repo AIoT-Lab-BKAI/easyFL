@@ -8,14 +8,15 @@ task_file = "main.py"
 
 dataset = "cifar10"
 sthr = 0.9
+epsilon = 1.0
 
-# dataset_types = ["dirichlet_0.1", "pareto_0.5"]
-dataset_types = ["uc1_nc5", "uc4_nc5"]
+dataset_types = ["dirichlet_0.5", "pareto2_1"]
+# dataset_types = ["uc1_nc5", "uc4_nc5"]
 model = "cnn"
 
 # config parameters
 N = 100
-rate = 0.4
+rate = 0.1
 K = int(N*rate)
 E = 5
 batch_size = 8
@@ -23,8 +24,8 @@ num_round = 3000
 
 
 # algos = ["singleset", "cadis", "fedavg"]
-# algos = ["singleset"]
-algos = ["singleset","scaffold", "fedavg", "fedprox", "fedfa", "cadis"]
+algos = ["journal_v4"]
+# algos = ["singleset","scaffold", "fedavg", "fedprox", "fedfa", "cadis"]
 
 data_folder = f"./benchmark/{dataset}/data"
 log_folder = f"motiv/{dataset}"
@@ -75,6 +76,7 @@ for dataset_type in dataset_types:
         ALG=\"{algo}\"\n\
         MODEL=\"{model}\"\n\
         STHR={sthr}\n\
+        EPS={epsilon}\n\
         WANDB=1\n\
         ROUND={num_round}\n\
         EPOCH_PER_ROUND={E}\n\
@@ -93,9 +95,9 @@ for dataset_type in dataset_types:
         #     task_name, algo, model, 1000, E, batch_size, K/N, task_name, dataset_type, N
         # )
             
-        body_text = "python main.py  --task ${TASK}  --model ${MODEL}  --algorithm ${ALG} --sthr ${STHR} --wandb ${WANDB} --data_folder ${DATA_DIR}  --log_folder ${LOG_DIR}   --dataidx_filename ${DATA_IDX_FILE}   --num_rounds ${ROUND} --num_epochs ${EPOCH_PER_ROUND} --proportion ${PROPOTION} --batch_size ${BATCH} --num_threads_per_gpu ${NUM_THRESH_PER_GPU}  --num_gpus ${NUM_GPUS} --server_gpu_id ${SERVER_GPU_ID} "
+        body_text = "python main.py  --task ${TASK}  --model ${MODEL}  --algorithm ${ALG} --eps ${EPS} --sthr ${STHR} --wandb ${WANDB} --data_folder ${DATA_DIR}  --log_folder ${LOG_DIR}   --dataidx_filename ${DATA_IDX_FILE}   --num_rounds ${ROUND} --num_epochs ${EPOCH_PER_ROUND} --proportion ${PROPOTION} --batch_size ${BATCH} --num_threads_per_gpu ${NUM_THRESH_PER_GPU}  --num_gpus ${NUM_GPUS} --server_gpu_id ${SERVER_GPU_ID} "
 
-        dir_path = f"./run2/{dataset}/{dataset_type}/"
+        dir_path = f"./run3/{dataset}/{dataset_type}/"
         
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)

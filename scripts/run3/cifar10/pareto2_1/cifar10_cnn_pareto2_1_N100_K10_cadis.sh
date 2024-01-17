@@ -32,8 +32,8 @@ mkdir ${LOG_DIR}
 DATA_DIR="$SGE_LOCALDIR/$JOB_ID/"
 cp -r ../2023_CCGRID_Hung/easyFL/benchmark/cifar10/data ${DATA_DIR}
 
-GROUP="cifar10_cnn_dirichlet_0.3_N100_K10"
-ALG="fedavg"
+GROUP="cifar10_cnn_pareto2_1_N100_K10"
+ALG="cadis"
 MODEL="cnn"
 STHR=0.9
 WANDB=1
@@ -44,8 +44,8 @@ PROPOTION=0.1
 NUM_THRESH_PER_GPU=1
 NUM_GPUS=1
 SERVER_GPU_ID=0
-TASK="cifar10_cnn_dirichlet_0.3_N100_K10"
-DATA_IDX_FILE="journal/cifar10/dirichlet_0.3/100client"
+TASK="cifar10_cnn_pareto2_1_N100_K10"
+DATA_IDX_FILE="journal/cifar10/pareto2_1/100client"
 
 cd easyFL
 
