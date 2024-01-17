@@ -32,7 +32,7 @@ class Server(BasicServer):
         self.device = 'cuda'
         self.agent = DDPG_Agent(state_dim=(self.clients_per_round, 10, 256),
                                 action_dim=self.clients_per_round)
-        self.epsilon = 1
+        self.epsilon = 0.8
 
         self.client_epochs = option['num_epochs']
         self.client_batch_size = option['batch_size']
@@ -98,7 +98,7 @@ class Server(BasicServer):
             return
 
         # print("Clients: ", self.selected_clients)
-        # print("Impact factor:", impact_factor.detach().cpu().numpy())
+        print("Impact factor:", impact_factor.detach().cpu().numpy())
         
         ip2 = impact_factor.detach().cpu().numpy()
         ip_final = [ip2[id] for id in range(len(ip2))]

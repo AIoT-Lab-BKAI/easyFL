@@ -6,25 +6,25 @@ visible_cudas = [0, 1]
 cudas = ",".join([str(i) for i in visible_cudas])
 task_file = "main.py"
 
-dataset = "cifar100"
+dataset = "cifar10"
 sthr = 0.9
 
-dataset_types = ["dirichlet_0.1", "pareto_0.5"]
-# dataset_types = ["uc1_nc5", "uc10_nc5"]
-model = "resnet9"
-# model = "cnn"
+# dataset_types = ["dirichlet_0.1", "pareto_0.5"]
+dataset_types = ["uc1_nc5", "uc4_nc5"]
+model = "cnn"
 
 # config parameters
 N = 100
-rate = 0.1
+rate = 0.4
 K = int(N*rate)
 E = 5
 batch_size = 8
 num_round = 3000
 
 
-algos = ["singleset", "cadis", "fedavg"]
-# algos = ["singleset", "scaffold", "fedavg", "fedprox", "fedfa", "cadis"]
+# algos = ["singleset", "cadis", "fedavg"]
+# algos = ["singleset"]
+algos = ["singleset","scaffold", "fedavg", "fedprox", "fedfa", "cadis"]
 
 data_folder = f"./benchmark/{dataset}/data"
 log_folder = f"motiv/{dataset}"
@@ -36,7 +36,7 @@ header_text = "\
 #$ -cwd\n\
 #$ -l rt_G.small=1\n\
 #$ -l h_rt=48:00:00\n\
-#$ -o /home/aaa10078nj/Federated_Learning/Ha_CADIS_FEDRL/logs/cifar100/$JOB_NAME_$JOB_ID.log\n\
+#$ -o /home/aaa10078nj/Federated_Learning/Ha_CADIS_FEDRL/logs/cifar10/$JOB_NAME_$JOB_ID.log\n\
 #$ -j y\n\n\
 source /etc/profile.d/modules.sh\n\
 #module load gcc/11.2.0\n\
@@ -56,12 +56,12 @@ LD_LIBRARY_PATH=/apps/centos7/python/3.10.4/lib:${LD_LIBRARY_PATH}\n\
 PATH=/apps/centos7/python/3.10.4/bin:${PATH}\n\n\
 source ~/venv/pytorch1.11+horovod/bin/activate\n\
 python --version\n\
-LOG_DIR=\"/home/aaa10078nj/Federated_Learning/Ha_CADIS_FEDRL/logs/cifar100/$JOB_NAME_$JOB_ID\"\n\
+LOG_DIR=\"/home/aaa10078nj/Federated_Learning/Ha_CADIS_FEDRL/logs/cifar10/$JOB_NAME_$JOB_ID\"\n\
 rm -r ${LOG_DIR}\n\
 mkdir ${LOG_DIR}\n\n\
 #Dataset\n\
 DATA_DIR=\"$SGE_LOCALDIR/$JOB_ID/\"\n\
-cp -r ../2023_CCGRID_Hung/easyFL/benchmark/cifar100/data ${DATA_DIR}\n\n\
+cp -r ../2023_CCGRID_Hung/easyFL/benchmark/cifar10/data ${DATA_DIR}\n\n\
 "
 
 for dataset_type in dataset_types:
@@ -95,7 +95,7 @@ for dataset_type in dataset_types:
             
         body_text = "python main.py  --task ${TASK}  --model ${MODEL}  --algorithm ${ALG} --sthr ${STHR} --wandb ${WANDB} --data_folder ${DATA_DIR}  --log_folder ${LOG_DIR}   --dataidx_filename ${DATA_IDX_FILE}   --num_rounds ${ROUND} --num_epochs ${EPOCH_PER_ROUND} --proportion ${PROPOTION} --batch_size ${BATCH} --num_threads_per_gpu ${NUM_THRESH_PER_GPU}  --num_gpus ${NUM_GPUS} --server_gpu_id ${SERVER_GPU_ID} "
 
-        dir_path = f"./run3/{dataset}/{dataset_type}/"
+        dir_path = f"./run2/{dataset}/{dataset_type}/"
         
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
