@@ -9,8 +9,8 @@ task_file = "main.py"
 dataset = "cifar100"
 sthr = 0.9
 
-dataset_types = ["dirichlet_0.5", "pareto2_1"]
-# dataset_types = ["uc1_nc5", "uc4_nc5"]
+# dataset_types = ["dirichlet_0.5", "pareto2_1"]
+dataset_types = ["uc1_nc5", "uc4_nc5"]
 model = "resnet9"
 # model = "cnn"
 
