@@ -10,8 +10,9 @@ dataset = "cifar10"
 sthr = 0.9
 epsilon = 1.0
 
-dataset_types = ["dirichlet_0.5", "pareto2_1"]
+# dataset_types = ["dirichlet_0.5", "pareto2_1"]
 # dataset_types = ["uc1_nc5", "uc4_nc5"]
+dataset_types = ["pareto_1"]
 model = "cnn"
 
 # config parameters
@@ -23,8 +24,8 @@ batch_size = 8
 num_round = 3000
 
 
-# algos = ["singleset", "cadis", "fedavg"]
-algos = ["journal_v4"]
+algos = ["singleset", "cadis", "fedavg", "journal_v4"]
+# algos = ["journal_v4"]
 # algos = ["singleset","scaffold", "fedavg", "fedprox", "fedfa", "cadis"]
 
 data_folder = f"./benchmark/{dataset}/data"
