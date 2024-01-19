@@ -33,7 +33,7 @@ class Server(BasicServer):
         self.agent = DDPG_Agent(state_dim=(self.clients_per_round, 100, 256),
                                 action_dim=self.clients_per_round)
         self.epsilon = option['eps']
-
+        self.paras_name = ['eps', 'kd_fct']
         self.client_epochs = option['num_epochs']
         self.client_batch_size = option['batch_size']
 
