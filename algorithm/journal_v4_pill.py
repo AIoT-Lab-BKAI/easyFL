@@ -30,7 +30,7 @@ class Server(BasicServer):
     def __init__(self, option, model, clients, test_data=None):
         super(Server, self).__init__(option, model, clients, test_data)
         self.device = 'cuda'
-        self.agent = DDPG_Agent(state_dim=(self.clients_per_round, 100, 256),
+        self.agent = DDPG_Agent(state_dim=(self.clients_per_round, 100, 512),
                                 action_dim=self.clients_per_round)
         self.epsilon = option['eps']
         self.paras_name = ['eps', 'kd_fct']

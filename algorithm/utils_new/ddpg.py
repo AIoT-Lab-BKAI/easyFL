@@ -82,7 +82,7 @@ class DDPG_Agent(nn.Module):
         hidden_dim=128,
         value_lr=1e-3,
         policy_lr=1e-3,
-        replay_buffer_size=500,
+        replay_buffer_size=400,
         batch_size=4,
         log_dir="./log/epochs",
     ):

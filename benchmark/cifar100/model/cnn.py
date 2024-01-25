@@ -9,8 +9,8 @@ class Model(FModule):
         self.conv2 = nn.Conv2d(in_channels=64, out_channels=64, kernel_size=5)
         self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
         self.fc1 = nn.Linear(1600, 384)
-        self.fc2 = nn.Linear(384, 192)
-        self.fc3 = nn.Linear(192, 100)
+        self.fc2 = nn.Linear(384, 256)
+        self.fc3 = nn.Linear(256, 100)
 
     def forward(self, x):
         x = self.pool(F.relu(self.conv1(x)))
