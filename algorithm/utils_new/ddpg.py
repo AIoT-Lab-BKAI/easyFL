@@ -210,9 +210,9 @@ class DDPG_Agent(nn.Module):
 
     def get_action(self, raw_state, prev_reward, done=False, log=False):
         grad, loss, num_vol = raw_state
-        grad = torch.Tensor(grad).unsqueeze(0).cuda()                # current state: 1 x K x M x d
-        loss = torch.Tensor(loss).unsqueeze(0).cuda()                  # current state: 1 x K
-        num_vol = torch.Tensor(num_vol).unsqueeze(0).cuda()            # current state: 1 x K
+        grad = torch.tensor(grad, device='cuda').unsqueeze(0)                # current state: 1 x K x M x d
+        loss = torch.tensor(loss, device='cuda').unsqueeze(0)                  # current state: 1 x K
+        num_vol = torch.tensor(num_vol, device='cuda').unsqueeze(0)            # current state: 1 x K
 
         # self.state_dataset.insert(state.squeeze(0).cpu())               # put into dataset: N x M x d
 
