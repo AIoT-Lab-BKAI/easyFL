@@ -5,7 +5,6 @@ from algorithm.utils_new.ddpg import DDPG_Agent, KL_divergence
 import torch.nn as nn
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
-import torch.nn.functional as F
 
 import torch
 import os
@@ -33,39 +32,32 @@ class Server(BasicServer):
         self.device = 'cuda'
         self.agent = DDPG_Agent(state_dim=(self.clients_per_round, 100, 256),
                                 action_dim=self.clients_per_round)
-        self.storage_path = option['storage_path']
-        self.load_agent = option['load_agent']
-        self.save_agent = option['save_agent']
-        # self.is_infer= option['ep'] == 'infer'
-        self.is_infer = False
-        self.paras_name = ['ep']
-        self.epsilon = 1
-        self.avg_loss = None
-        self.init_model = model
-
+        self.epsilon = option['eps']
+        self.paras_name = ['eps', 'kd_fct']
         self.client_epochs = option['num_epochs']
         self.client_batch_size = option['batch_size']
+        self.beta = 0.7
+        self.v = None
 
         return
 
-    def run(self):
-        if self.load_agent:
-            self.agent.load_models(path=os.path.join(
-                self.storage_path, "meta_models", "checkpoint_gamma0.001_rnn"))
-            if self.is_infer:
-                print("Freeze the StateProcessor!")
-                self.agent.state_processor_frozen = True
-            else:
-                print("Unfreeze the StateProcessor!")
-                self.agent.state_processor_frozen = False
+    # def run(self):
+    #     if self.load_agent:
+    #         self.agent.load_models(path=os.path.join(
+    #             self.storage_path, "meta_models", "checkpoint_gamma0.001_rnn"))
+    #         if self.is_infer:
+    #             print("Freeze the StateProcessor!")
+    #             self.agent.state_processor_frozen = True
+    #         else:
+    #             print("Unfreeze the StateProcessor!")
+    #             self.agent.state_processor_frozen = False
 
-        super().run()
-        return
+    #     super().run()
+    #     return
 
     def iterate(self, t):
-
         self.selected_clients = sorted(self.sample())
-        models, train_losses, _ = self.communicate(self.selected_clients)
+        models, train_losses, after_losses = self.communicate(self.selected_clients)
         print("Client loss after aggreation:", train_losses)
         
         # Calculate reward
@@ -75,7 +67,6 @@ class Server(BasicServer):
         mean_loss = sum([self.client_vols[id] * loss for id, loss in zip(self.selected_clients, train_losses)])/sum_client
         avg_loss = (np.mean(train_losses) + self.epsilon*(np.max(train_losses) - np.min(train_losses)))
         reward = np.exp(-avg_loss)
-        self.avg_loss = np.mean(train_losses)
 
         gradients = []
         alphas = []
@@ -84,26 +75,25 @@ class Server(BasicServer):
         for client_id, model, loss in zip(self.selected_clients, models, train_losses):
             beta = self.client_epochs * math.ceil(self.client_vols[client_id] / self.client_batch_size)
             alphas.append(beta*self.client_vols[client_id]/sum_client)
-            gradients.append((model.to(self.device) - self.model)/beta)
+            gradients.append((model.to(self.device) - self.model))
             
             grad = get_penultimate_layer(model.to(self.device) - self.model)
-            # classifier_diffs.append(grad/(torch.norm(grad)+0.0001))      
-            classifier_diffs.append(grad)      
+            classifier_diffs.append(grad) 
 
         raw_state = torch.stack(classifier_diffs, dim=0)
-        # print(raw_state)
 
         # Tính min và max của list
         min_loss, max_loss = min(train_losses), max(train_losses)
+        min_aloss, max_aloss = min(after_losses), max(after_losses)
         min_num_client, max_num_client = min(client_vol_t), max(client_vol_t)
         min_grad, max_grad = torch.min(raw_state), torch.max(raw_state)
 
         # Áp dụng Min-Max Scaling
-        # scaled_losses = [(x - min_loss) / (max_loss - min_loss) for x in train_losses]
+        scaled_losses = [(x - min_loss) / (max_loss - min_loss) for x in train_losses]
+        scaled_alosses = [(x - min_aloss) / (max_aloss - min_aloss) for x in after_losses]
         # scaled_num_client = [(x - min_num_client) / (max_num_client - min_num_client) for x in client_vol_t]
         scaled_grad = (raw_state - min_grad) / (max_grad - min_grad)
 
-        # print(scaled_grad)
         impact_factor = self.agent.get_action(
             (scaled_grad, train_losses, client_vol_t), reward if t > 0 else None, log=self.wandb)
             
@@ -114,33 +104,16 @@ class Server(BasicServer):
         print("Impact factor:", impact_factor.detach().cpu().numpy())
         
         ip2 = impact_factor.detach().cpu().numpy()
-        # ip_final = [ip2[id]*(self.client_vols[self.selected_clients[id]])/sum_client for id in range(len(ip2))]
-        # ip_final = [(self.client_vols[self.selected_clients[id]])/sum_client for id in range(len(ip2))]
         ip_final = [ip2[id] for id in range(len(ip2))]
-        # alpha = sum([alp * ip2[id] for id, alp in enumerate(alphas)])*10
-        # print("Impact factor final:", ip_final)
 
-        self.model = self.aggregate(models, p=ip_final)
-        # self.model = self.aggregate(models, p=ip)
-        # if t != 0:
-        #     self.server_gradient += alpha * grandient_direct_t
-        # self.model = alpha * self.aggregate(models, p=ip) + (1 - alpha)*self.model
-
+        # self.model = self.aggregate(models, p=ip_final)
+        
+        if self.v == None:
+            self.v = copy.deepcopy(self.model - self.model)
+        delta = -self.aggregate(gradients, p=ip_final)
+        self.v = self.beta * self.v + delta
+        self.model = self.model - self.v
         return
-    def pack(self, client_id):
-        """
-        Pack the necessary information for the client's local training.
-        Any operations of compression or encryption should be done here.
-        :param
-            client_id: the id of the client to communicate with
-        :return
-            a dict that only contains the global model as default.
-        """
-        return {
-            "model" : copy.deepcopy(self.model),
-            "init_model": copy.deepcopy(self.init_model),
-            "avg_loss": self.avg_loss
-        }
     
     def unpack(self, packages_received_from_clients):
         """
@@ -161,21 +134,14 @@ class Client(BasicClient):
     def __init__(self, option, name='', train_data=None, valid_data=None):
         super(Client, self).__init__(option, name, train_data, valid_data)
         self.lossfunc = nn.CrossEntropyLoss()
-        self.kd_fct = 0.5
-        # self.kd_fct = option['kd_fct']
+        self.kd_fct = option['kd_fct']
 
     def reply(self, svr_pkg):
-        model, init_model, server_avg_loss = self.unpack(svr_pkg)
+        model = self.unpack(svr_pkg)
         loss = self.train_loss(model)
-        if server_avg_loss == None:
-            server_avg_loss = loss
-            self.kd_fct = 0
-        
-        mu = server_avg_loss/loss
 
-        self.train(model, init_model, mu)
-        # after_train_loss = self.train_loss(model)
-        after_train_loss = 0
+        self.train(model)
+        after_train_loss = self.train_loss(model)
         cpkg = self.pack(model, loss, after_train_loss)
         return cpkg
     
@@ -185,43 +151,8 @@ class Client(BasicClient):
             "train_loss": loss,
             "after_train_loss": after_train_loss
         }
-    
-    def unpack(self, received_pkg):
-        """
-        Unpack the package received from the server
-        :param
-            received_pkg: a dict contains the global model as default
-        :return:
-            the unpacked information that can be rewritten
-        """
-        # unpack the received package
-        return received_pkg['model'], received_pkg['init_model'], received_pkg['avg_loss']
 
-    # def train(self, model, device='cuda'):
-    #     model = model.to(device)
-    #     model.train()
-
-    #     src_model = copy.deepcopy(model).to(device)
-    #     src_model.freeze_grad()
-
-    #     data_loader = self.calculator.get_data_loader(
-    #         self.train_data, batch_size=self.batch_size, droplast=True)
-    #     optimizer = self.calculator.get_optimizer(
-    #         self.optimizer_name, model, lr=self.learning_rate, weight_decay=self.weight_decay, momentum=self.momentum)
-
-    #     for iter in range(self.epochs):
-    #         for batch_id, batch_data in enumerate(data_loader):
-    #             model.zero_grad()
-    #             loss, kl_loss = self.get_loss(
-    #                 model, src_model, batch_data, device)
-    #             loss = loss + self.kd_fct * kl_loss
-    #             loss.backward()
-    #             optimizer.step()
-
-    def train(self, model, init_model, mu, device='cuda'):
-        init_model.to(device)
-        init_model.freeze_grad()
-
+    def train(self, model, device='cuda'):
         model = model.to(device)
         model.train()
 
@@ -236,20 +167,15 @@ class Client(BasicClient):
         for iter in range(self.epochs):
             for batch_id, batch_data in enumerate(data_loader):
                 model.zero_grad()
-                original_loss = self.calculator.get_loss(model, batch_data, device='cuda')
-                
-                loss_proximal = 0
-                # cnt = 0
-                for pi, pm, ps in zip(init_model.parameters(), model.parameters(), src_model.parameters()):
-                    loss_proximal += torch.sum(1 - F.cosine_similarity((ps-pi).reshape(1, -1), (pm-pi).reshape(1, -1)))
-                    # cnt += 1
-                # loss_proximal = loss_proximal/cnt
-                if(self.name == 4):
-                    print(loss_proximal, original_loss)
-
-                loss = original_loss + (self.kd_fct)* mu * loss_proximal
+                loss, kl_loss = self.get_loss(
+                    model, src_model, batch_data, device)
+                loss = loss + self.kd_fct * kl_loss
                 loss.backward()
                 optimizer.step()
+                
+                # src_model = copy.deepcopy(model).to(device)
+                # src_model.freeze_grad()
+        return
 
     def get_loss(self, model, src_model, data, device):
         tdata = self.calculator.data_to_device(data, device)
@@ -261,4 +187,5 @@ class Client(BasicClient):
         kl_loss = KL_divergence(
             representation_t, representation_s, device)        # KL divergence
         loss = self.lossfunc(output_s, tdata[1])
+        # print(loss, kl_loss)
         return loss, kl_loss

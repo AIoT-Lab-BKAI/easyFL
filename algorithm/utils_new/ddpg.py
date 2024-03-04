@@ -82,7 +82,7 @@ class DDPG_Agent(nn.Module):
         hidden_dim=128,
         value_lr=1e-3,
         policy_lr=1e-3,
-        replay_buffer_size=400,
+        replay_buffer_size=500,
         batch_size=4,
         log_dir="./log/epochs",
     ):
@@ -153,6 +153,7 @@ class DDPG_Agent(nn.Module):
         policy_loss = self.value_net(state, self.policy_net(state))
         # policy_loss = 1/(policy_loss.mean() + 0.001)
         policy_loss = -policy_loss.mean()
+        # policy_loss = torch.exp(-policy_loss.mean())
         next_action = self.target_policy_net(next_state)
         target_value = self.target_value_net(next_state, next_action.detach())
 
@@ -164,7 +165,7 @@ class DDPG_Agent(nn.Module):
         return policy_loss, value_loss
     
 
-    def ddpg_update(self, gamma=0.001, min_value=-np.inf, max_value=np.inf, soft_tau=0.005):
+    def ddpg_update(self, gamma=0.001, min_value=-np.inf, max_value=np.inf, soft_tau=0.02):
         for epoch in range(2):
             total_policy_loss, total_value_loss = self.compute_loss(self.replay_buffer, gamma, min_value, max_value)
 

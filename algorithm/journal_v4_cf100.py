@@ -87,12 +87,12 @@ class Server(BasicServer):
         min_grad, max_grad = torch.min(raw_state), torch.max(raw_state)
 
         # Áp dụng Min-Max Scaling
-        # scaled_losses = [(x - min_loss) / (max_loss - min_loss) for x in train_losses]
+        scaled_losses = [(x - min_loss) / (max_loss - min_loss) for x in train_losses]
         # scaled_num_client = [(x - min_num_client) / (max_num_client - min_num_client) for x in client_vol_t]
         scaled_grad = (raw_state - min_grad) / (max_grad - min_grad)
 
         impact_factor = self.agent.get_action(
-            (scaled_grad, train_losses, client_vol_t), reward if t > 0 else None, log=self.wandb)
+            (scaled_grad, scaled_losses, client_vol_t), reward if t > 0 else None, log=self.wandb)
             
         if not self.selected_clients:
             return
@@ -164,8 +164,8 @@ class Client(BasicClient):
                 loss.backward()
                 optimizer.step()
                 
-                src_model = copy.deepcopy(model).to(device)
-                src_model.freeze_grad()
+                # src_model = copy.deepcopy(model).to(device)
+                # src_model.freeze_grad()
         return
 
     def get_loss(self, model, src_model, data, device):
