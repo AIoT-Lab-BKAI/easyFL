@@ -36,7 +36,7 @@ class Server(BasicServer):
         self.paras_name = ['eps', 'kd_fct']
         self.client_epochs = option['num_epochs']
         self.client_batch_size = option['batch_size']
-
+        self.mean_loss = 1.0
         return
 
     # def run(self):
@@ -64,8 +64,9 @@ class Server(BasicServer):
         sum_client =sum(client_vol_t)
         client_vol_t = [self.client_vols[id]/sum_client for id in self.selected_clients]
         mean_loss = sum([self.client_vols[id] * loss for id, loss in zip(self.selected_clients, train_losses)])/sum_client
-        avg_loss = (np.mean(train_losses) + self.epsilon*(np.max(train_losses) - np.min(train_losses)))
+        avg_loss = (mean_loss + self.epsilon*(np.max(train_losses) - np.min(train_losses)))
         reward = np.exp(-avg_loss)
+        self.mean_loss = np.mean(train_losses)
 
         gradients = []
         alphas = []
@@ -87,12 +88,12 @@ class Server(BasicServer):
         min_grad, max_grad = torch.min(raw_state), torch.max(raw_state)
 
         # Áp dụng Min-Max Scaling
-        # scaled_losses = [(x - min_loss) / (max_loss - min_loss) for x in train_losses]
+        scaled_losses = [(x - min_loss) / (max_loss - min_loss) for x in train_losses]
         # scaled_num_client = [(x - min_num_client) / (max_num_client - min_num_client) for x in client_vol_t]
         scaled_grad = (raw_state - min_grad) / (max_grad - min_grad)
 
         impact_factor = self.agent.get_action(
-            (scaled_grad, train_losses, client_vol_t), reward if t > 0 else None, log=self.wandb)
+            (scaled_grad, scaled_losses, client_vol_t), reward if t > 0 else None, log=self.wandb)
             
         if not self.selected_clients:
             return
@@ -107,20 +108,16 @@ class Server(BasicServer):
         return
     
     def unpack(self, packages_received_from_clients):
-        """
-        Unpack the information from the received packages. Return models and losses as default.
-        :param
-            packages_received_from_clients:
-        :return:
-            models: a list of the locally improved model
-            losses: a list of the losses of the global model on each training dataset
-        """
         models = [cp["model"] for cp in packages_received_from_clients]
         train_losses = [cp["train_loss"] for cp in packages_received_from_clients]
         after_train_losses = [cp["after_train_loss"] for cp in packages_received_from_clients] 
         return models, train_losses, after_train_losses   
 
-
+    def pack(self, client_id):
+        return {
+            "model" : copy.deepcopy(self.model),
+            "mean_loss": self.mean_loss
+        }
 class Client(BasicClient):
     def __init__(self, option, name='', train_data=None, valid_data=None):
         super(Client, self).__init__(option, name, train_data, valid_data)
@@ -128,9 +125,10 @@ class Client(BasicClient):
         self.kd_fct = option['kd_fct']
 
     def reply(self, svr_pkg):
-        model = self.unpack(svr_pkg)
+        model, mean_loss = self.unpack(svr_pkg)
         loss = self.train_loss(model)
 
+        self.kd_fct = math.log((mean_loss/loss) * (self.datavol/self.batch_size))    
         self.train(model)
         after_train_loss = self.train_loss(model)
         cpkg = self.pack(model, loss, after_train_loss)
@@ -142,6 +140,11 @@ class Client(BasicClient):
             "train_loss": loss,
             "after_train_loss": after_train_loss
         }
+    
+    def unpack(self, received_pkg):
+        # unpack the received package
+        return received_pkg['model'], received_pkg["mean_loss"]
+
 
     def train(self, model, device='cuda'):
         model = model.to(device)

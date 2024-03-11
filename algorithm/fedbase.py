@@ -9,6 +9,7 @@ import os
 import utils.fflow as flw
 import wandb
 import torch
+from algorithm.cfmtx.cfmtx import cfmtx_test
 
 class BasicServer():
     def __init__(self, option, model, clients, test_data = None):
@@ -46,6 +47,9 @@ class BasicServer():
         self.log_folder = option['log_folder']
         self.wandb = option['wandb']
 
+        self.max_acc = 0
+        self.best_model = None
+
     def run(self):
         """
         Start the federated learning symtem where the global model is trained iteratively.
@@ -65,6 +69,13 @@ class BasicServer():
 
         print("=================End==================")
         logger.time_end('Total Time Cost')
+
+        acc, cfmtx = cfmtx_test(self.best_model, self.test_data)
+        savepath = f"./result/journal/{self.task}"
+        if not Path(savepath).exists():
+            os.makedirs(savepath)
+        np.savetxt(f"{savepath}/{self.name}.csv", cfmtx.T, fmt="%2.2f", delimiter=",")
+
         # save results as .json file
         filepath = os.path.join(self.log_folder, self.option['task'], self.option['dataidx_filename']).split('.')[0]
         if not Path(filepath).exists():
@@ -274,6 +285,11 @@ class BasicServer():
             eval_metric /= len(self.test_data)
             loss /= len(self.test_data)
             inference_metric /= len(self.test_data)
+
+            self.max_acc = max(self.max_acc, eval_metric)
+            if self.max_acc == eval_metric:
+                self.best_model = copy.deepcopy(self.model)
+
             return eval_metric, loss, inference_metric
         else: 
             return -1,-1,-1

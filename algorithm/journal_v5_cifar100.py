@@ -36,7 +36,7 @@ class Server(BasicServer):
         self.paras_name = ['eps', 'kd_fct']
         self.client_epochs = option['num_epochs']
         self.client_batch_size = option['batch_size']
-        self.beta = 0.7
+        self.beta = 0.2
         self.v = None
 
         return
@@ -106,13 +106,7 @@ class Server(BasicServer):
         ip2 = impact_factor.detach().cpu().numpy()
         ip_final = [ip2[id] for id in range(len(ip2))]
 
-        # self.model = self.aggregate(models, p=ip_final)
-        
-        if self.v == None:
-            self.v = copy.deepcopy(self.model - self.model)
-        delta = -self.aggregate(gradients, p=ip_final)
-        self.v = self.beta * self.v + delta
-        self.model = self.model - self.v
+        self.model = self.aggregate(models, p=ip_final)
         return
     
     def unpack(self, packages_received_from_clients):

@@ -232,7 +232,7 @@ class DDPG_Agent(nn.Module):
             self.replay_buffer.push(s, a, r, s_next, done)
 
             if len(self.replay_buffer) >= self.batch_size * 5:
-                pl, vl = self.ddpg_update()
+                pl, vl = self.ddpg_update(gamma=0.001)
                 sp_mean = -1 
                 # sp_mean = self.sp_update(update= not self.state_processor_frozen)
                 

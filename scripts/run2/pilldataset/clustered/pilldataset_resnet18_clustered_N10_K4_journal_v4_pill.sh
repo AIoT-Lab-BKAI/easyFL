@@ -1,7 +1,7 @@
 #!/bin/bash
 #$ -cwd
 #$ -l rt_G.small=1
-#$ -l h_rt=48:00:00
+#$ -l h_rt=96:00:00
 #$ -o /home/aaa10078nj/Federated_Learning/Ha_CADIS_FEDRL/logs/pilldataset/$JOB_NAME_$JOB_ID.log
 #$ -j y
 

@@ -112,8 +112,8 @@ class PolicyNetwork(nn.Module):
         #     for j in range(state.shape[1]):
         #         if torch.all(state[i, j, :, :] == 0):
         #             x[i, j] = -99999
-        if (x.shape[0] == 1):
-            print(x)
+        # if (x.shape[0] == 1):
+        #     print(x)
         x = F.softmax(x, dim=1)
         return x
     

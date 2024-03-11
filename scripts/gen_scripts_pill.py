@@ -27,7 +27,7 @@ epsilon = 0.5
 
 # algos = ["singleset", "cadis", "fedavg"]
 # algos = ["scaffold", "journal_v4_pill"]
-algos = ["scaffold", "fedavg", "fedprox", "fedfa", "cadis", "journal_v4_pill"]
+algos = ["fedavg", "fedprox", "fedfa", "cadis", "journal_v4_pill"]
 
 data_folder = f"./benchmark/{dataset}/data"
 log_folder = f"motiv/{dataset}"
@@ -38,7 +38,7 @@ header_text = "\
 #!/bin/bash\n\
 #$ -cwd\n\
 #$ -l rt_G.small=1\n\
-#$ -l h_rt=48:00:00\n\
+#$ -l h_rt=96:00:00\n\
 #$ -o /home/aaa10078nj/Federated_Learning/Ha_CADIS_FEDRL/logs/pilldataset/$JOB_NAME_$JOB_ID.log\n\
 #$ -j y\n\n\
 source /etc/profile.d/modules.sh\n\

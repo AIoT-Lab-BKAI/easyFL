@@ -15,7 +15,7 @@ def cfmtx_test(model, testing_data, device="cuda"):
     num_batches = len(test_loader)
     model.eval()
     test_loss, correct = 0, 0
-    confmat = ConfusionMatrix(num_classes=10).to(device)
+    confmat = ConfusionMatrix(task="multiclass", num_classes=10).to(device)
     cmtx = 0
 
     with torch.no_grad():
