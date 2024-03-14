@@ -255,35 +255,35 @@ class DDPG_Agent(nn.Module):
             
             # Policy
             try:
-                full_path = os.path.join(path, "MetaPolicyNet.pt")
+                full_path = os.path.join(path, "PolicyNet.pt")
                 self.policy_net.load_state_dict(torch.load(full_path))
-                print(f"Successfully loaded MetaPolicyNet from {full_path}")
+                print(f"Successfully loaded PolicyNet from {full_path}")
             except:
-                print("Failed to load MetaPolicyNet.")
+                print("Failed to load PolicyNet.")
             
             # Target Policy
             try:
-                full_path = os.path.join(path, "MetaTargetPolicyNet.pt")
+                full_path = os.path.join(path, "TargetPolicyNet.pt")
                 self.target_policy_net.load_state_dict(torch.load(full_path))
-                print(f"Successfully loaded MetaPolicyNet from {full_path}")
+                print(f"Successfully loaded TargetPolicyNet from {full_path}")
             except:
-                print("Failed to load MetaTargetPolicyNet.")
+                print("Failed to load TargetPolicyNet.")
             
             # Value
             try:
-                full_path = os.path.join(path, "MetaValueNet.pt")
+                full_path = os.path.join(path, "ValueNet.pt")
                 self.value_net.load_state_dict(torch.load(full_path))
-                print(f"Successfully loaded MetaValueNet from {full_path}")
+                print(f"Successfully loaded ValueNet from {full_path}")
             except:
-                print("Failed to load MetaValueNet.")
+                print("Failed to load ValueNet.")
             
             # Target Value
             try:
-                full_path = os.path.join(path, "MetaTargetValueNet.pt")
+                full_path = os.path.join(path, "TargetValueNet.pt")
                 self.target_value_net.load_state_dict(torch.load(full_path))
-                print(f"Successfully loaded MetaTargetValueNet from {full_path}")
+                print(f"Successfully loaded TargetValueNet from {full_path}")
             except:
-                print("Failed to load MetaTargetValueNet.")
+                print("Failed to load TargetValueNet.")
         else:
             print(f"{path} does not exist!")
         return
@@ -300,8 +300,8 @@ class DDPG_Agent(nn.Module):
         torch.save(self.state_processor.state_dict(), os.path.join(path, "StateProcessor.pt"))
         torch.save(self.policy_net.state_dict(), os.path.join(path, "PolicyNet.pt"))
         torch.save(self.value_net.state_dict(), os.path.join(path, "ValueNet.pt"))
-        torch.save(self.target_policy_net.state_dict(), os.path.join(path, "ValueNet.pt"))
-        torch.save(self.target_value_net.state_dict(), os.path.join(path, "ValueNet.pt"))
+        torch.save(self.target_policy_net.state_dict(), os.path.join(path, "TargetPolicyNet.pt"))
+        torch.save(self.target_value_net.state_dict(), os.path.join(path, "TargetValueNet.pt"))
         return
     
     

@@ -1,8 +1,8 @@
 #!/bin/bash
 #$ -cwd
 #$ -l rt_G.small=1
-#$ -l h_rt=96:00:00
-#$ -o /home/aaa10078nj/Federated_Learning/Ha_CADIS_FEDRL/logs/pilldataset/$JOB_NAME_$JOB_ID.log
+#$ -l h_rt=48:00:00
+#$ -o /home/aaa10078nj/Federated_Learning/Ha_CADIS_FEDRL/logs/mnist/$JOB_NAME_$JOB_ID.log
 #$ -j y
 
 source /etc/profile.d/modules.sh
@@ -24,30 +24,30 @@ PATH=/apps/centos7/python/3.10.4/bin:${PATH}
 
 source ~/venv/pytorch1.11+horovod/bin/activate
 python --version
-LOG_DIR="/home/aaa10078nj/Federated_Learning/Ha_CADIS_FEDRL/logs/pilldataset/$JOB_NAME_$JOB_ID"
+LOG_DIR="/home/aaa10078nj/Federated_Learning/Ha_CADIS_FEDRL/logs/mnist/$JOB_NAME_$JOB_ID"
 rm -r ${LOG_DIR}
 mkdir ${LOG_DIR}
 
 #Dataset
 DATA_DIR="$SGE_LOCALDIR/$JOB_ID/"
-cp -r ../2023_CCGRID_Hung/easyFL/benchmark/pilldataset/data/pill3/pill_dataset ${DATA_DIR}
+cp -r ../2023_CCGRID_Hung/easyFL/benchmark/mnist/data ${DATA_DIR}
 
-GROUP="pilldataset_resnet18_clustered_N10_K4"
-ALG="journal_v4_pill"
-MODEL="resnet18"
-STHR=0.9
-EPS=0.5
+GROUP="mnist_cnn_clustered_N100_K10"
+ALG="journal_v4"
+MODEL="cnn"
+STHR=0.975
+EPS=1.0
 WANDB=1
 ROUND=500
 EPOCH_PER_ROUND=5
 BATCH=8
-PROPOTION=0.4
+PROPOTION=0.1
 NUM_THRESH_PER_GPU=1
 NUM_GPUS=1
 SERVER_GPU_ID=0
-TASK="pilldataset_resnet18_clustered_N10_K4"
-DATA_IDX_FILE="benchmark/pilldataset/data/syndata3"
+TASK="mnist_cnn_clustered_N100_K10"
+DATA_IDX_FILE="CADIS/mnist/100client"
 
 cd easyFL
 
-python main.py  --task ${TASK}  --model ${MODEL}  --algorithm ${ALG} --eps ${EPS} --sthr ${STHR} --wandb ${WANDB} --data_folder ${DATA_DIR}  --log_folder ${LOG_DIR}   --dataidx_path ${DATA_IDX_FILE}   --num_rounds ${ROUND} --num_epochs ${EPOCH_PER_ROUND} --proportion ${PROPOTION} --batch_size ${BATCH} --num_threads_per_gpu ${NUM_THRESH_PER_GPU}  --num_gpus ${NUM_GPUS} --server_gpu_id ${SERVER_GPU_ID} 
+python main.py  --task ${TASK}  --model ${MODEL}  --algorithm ${ALG} --eps ${EPS} --sthr ${STHR} --wandb ${WANDB} --data_folder ${DATA_DIR}  --log_folder ${LOG_DIR}   --dataidx_filename ${DATA_IDX_FILE}   --num_rounds ${ROUND} --num_epochs ${EPOCH_PER_ROUND} --proportion ${PROPOTION} --batch_size ${BATCH} --num_threads_per_gpu ${NUM_THRESH_PER_GPU}  --num_gpus ${NUM_GPUS} --server_gpu_id ${SERVER_GPU_ID} 

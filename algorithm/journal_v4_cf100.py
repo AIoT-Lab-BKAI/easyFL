@@ -58,14 +58,17 @@ class Server(BasicServer):
         self.selected_clients = sorted(self.sample())
         models, train_losses, _ = self.communicate(self.selected_clients)
         print("Client loss after aggreation:", train_losses)
-        
+        print("Client loss after train:", _)
+
         # Calculate reward
         client_vol_t = [self.client_vols[id] for id in self.selected_clients]
         sum_client =sum(client_vol_t)
         client_vol_t = [self.client_vols[id]/sum_client for id in self.selected_clients]
         mean_loss = sum([self.client_vols[id] * loss for id, loss in zip(self.selected_clients, train_losses)])/sum_client
-        avg_loss = (np.mean(train_losses) + self.epsilon*(np.max(train_losses) - np.min(train_losses)))
+        avg_loss = (mean_loss + self.epsilon*(np.max(train_losses) - np.min(train_losses)))
         reward = np.exp(-avg_loss)
+        
+        train_losses = [loss/10.0 for loss in train_losses]
 
         gradients = []
         alphas = []
@@ -92,7 +95,7 @@ class Server(BasicServer):
         scaled_grad = (raw_state - min_grad) / (max_grad - min_grad)
 
         impact_factor = self.agent.get_action(
-            (scaled_grad, scaled_losses, client_vol_t), reward if t > 0 else None, log=self.wandb)
+            (scaled_grad, train_losses, client_vol_t), reward if t > 0 else None, log=self.wandb)
             
         if not self.selected_clients:
             return

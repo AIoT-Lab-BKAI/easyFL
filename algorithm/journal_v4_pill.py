@@ -36,28 +36,25 @@ class Server(BasicServer):
         self.paras_name = ['eps', 'kd_fct']
         self.client_epochs = option['num_epochs']
         self.client_batch_size = option['batch_size']
+        self.load_agent=option['load_agent']
+        self.save_agent=option['save_agent']
         self.mean_loss = 1.0
         return
 
-    # def run(self):
-    #     if self.load_agent:
-    #         self.agent.load_models(path=os.path.join(
-    #             self.storage_path, "meta_models", "checkpoint_gamma0.001_rnn"))
-    #         if self.is_infer:
-    #             print("Freeze the StateProcessor!")
-    #             self.agent.state_processor_frozen = True
-    #         else:
-    #             print("Unfreeze the StateProcessor!")
-    #             self.agent.state_processor_frozen = False
-
-    #     super().run()
-    #     return
+    def run(self):
+        if self.load_agent:
+            self.agent.load_models(path=os.path.join(
+                "./storage/", self.task, "models"))
+        super().run()
+        if self.save_agent:
+            self.agent.save_models(path=os.path.join("./storage/", self.task, "models"))
+        return
 
     def iterate(self, t):
-        print(self.num_clients)
         self.selected_clients = sorted(self.sample())
         models, train_losses, _ = self.communicate(self.selected_clients)
         print("Client loss after aggreation:", train_losses)
+        print("Client loss after train:", _)
         
         # Calculate reward
         client_vol_t = [self.client_vols[id] for id in self.selected_clients]
@@ -67,6 +64,8 @@ class Server(BasicServer):
         avg_loss = (mean_loss + self.epsilon*(np.max(train_losses) - np.min(train_losses)))
         reward = np.exp(-avg_loss)
         self.mean_loss = np.mean(train_losses)
+
+        train_losses = [loss/10.0 for loss in train_losses]
 
         gradients = []
         alphas = []
@@ -93,7 +92,7 @@ class Server(BasicServer):
         scaled_grad = (raw_state - min_grad) / (max_grad - min_grad)
 
         impact_factor = self.agent.get_action(
-            (scaled_grad, scaled_losses, client_vol_t), reward if t > 0 else None, log=self.wandb)
+            (scaled_grad, train_losses, client_vol_t), reward if t > 0 else None, log=self.wandb)
             
         if not self.selected_clients:
             return
@@ -128,7 +127,7 @@ class Client(BasicClient):
         model, mean_loss = self.unpack(svr_pkg)
         loss = self.train_loss(model)
 
-        self.kd_fct = math.log((mean_loss/loss) * (self.datavol/self.batch_size))    
+        # self.kd_fct = math.log((mean_loss/loss) * (self.datavol/self.batch_size))    
         self.train(model)
         after_train_loss = self.train_loss(model)
         cpkg = self.pack(model, loss, after_train_loss)

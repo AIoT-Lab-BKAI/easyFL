@@ -32,22 +32,22 @@ mkdir ${LOG_DIR}
 DATA_DIR="$SGE_LOCALDIR/$JOB_ID/"
 cp -r ../2023_CCGRID_Hung/easyFL/benchmark/pilldataset/data/pill3/pill_dataset ${DATA_DIR}
 
-GROUP="pilldataset_resnet18_clustered_N10_K5"
+GROUP="pilldataset_resnet18_clustered_N10_K4"
 ALG="journal_v4_pill"
 MODEL="resnet18"
 STHR=0.9
 EPS=0.5
 WANDB=1
-ROUND=500
+ROUND=250
 EPOCH_PER_ROUND=5
 BATCH=8
-PROPOTION=0.5
+PROPOTION=0.4
 NUM_THRESH_PER_GPU=1
 NUM_GPUS=1
 SERVER_GPU_ID=0
-TASK="pilldataset_resnet18_clustered_N10_K5"
+TASK="pilldataset_resnet18_clustered_N10_K4"
 DATA_IDX_FILE="benchmark/pilldataset/data/syndata3"
 
 cd easyFL
 
-python main.py  --task ${TASK}  --model ${MODEL}  --algorithm ${ALG} --eps ${EPS} --sthr ${STHR} --wandb ${WANDB} --data_folder ${DATA_DIR}  --log_folder ${LOG_DIR}   --dataidx_path ${DATA_IDX_FILE}   --num_rounds ${ROUND} --num_epochs ${EPOCH_PER_ROUND} --proportion ${PROPOTION} --batch_size ${BATCH} --num_threads_per_gpu ${NUM_THRESH_PER_GPU}  --num_gpus ${NUM_GPUS} --server_gpu_id ${SERVER_GPU_ID} 
+python main.py  --task ${TASK}  --model ${MODEL}  --algorithm ${ALG} --save_agent 1 --load_agent 1 --eps ${EPS} --sthr ${STHR} --wandb ${WANDB} --data_folder ${DATA_DIR}  --log_folder ${LOG_DIR}   --dataidx_path ${DATA_IDX_FILE}   --num_rounds ${ROUND} --num_epochs ${EPOCH_PER_ROUND} --proportion ${PROPOTION} --batch_size ${BATCH} --num_threads_per_gpu ${NUM_THRESH_PER_GPU}  --num_gpus ${NUM_GPUS} --server_gpu_id ${SERVER_GPU_ID} 
