@@ -36,6 +36,7 @@ class Server(BasicServer):
         self.paras_name = ['eps', 'kd_fct']
         self.client_epochs = option['num_epochs']
         self.client_batch_size = option['batch_size']
+        self.mean_loss = 1.0
 
         return
 
@@ -67,8 +68,8 @@ class Server(BasicServer):
         mean_loss = sum([self.client_vols[id] * loss for id, loss in zip(self.selected_clients, train_losses)])/sum_client
         avg_loss = (mean_loss + self.epsilon*(np.max(train_losses) - np.min(train_losses)))
         reward = np.exp(-avg_loss)
+        self.mean_loss = np.mean(train_losses)
         
-        train_losses = [loss/10.0 for loss in train_losses]
 
         gradients = []
         alphas = []
@@ -122,7 +123,12 @@ class Server(BasicServer):
         train_losses = [cp["train_loss"] for cp in packages_received_from_clients]
         after_train_losses = [cp["after_train_loss"] for cp in packages_received_from_clients] 
         return models, train_losses, after_train_losses   
-
+        
+    def pack(self, client_id):
+        return {
+            "model" : copy.deepcopy(self.model),
+            "mean_loss": self.mean_loss
+        }
 
 class Client(BasicClient):
     def __init__(self, option, name='', train_data=None, valid_data=None):
@@ -131,8 +137,10 @@ class Client(BasicClient):
         self.kd_fct = option['kd_fct']
 
     def reply(self, svr_pkg):
-        model = self.unpack(svr_pkg)
+        model, mean_loss = self.unpack(svr_pkg)
         loss = self.train_loss(model)
+
+        self.kd_fct = math.log((mean_loss/loss) * (self.datavol/self.batch_size))    
 
         self.train(model)
         after_train_loss = self.train_loss(model)
@@ -145,6 +153,10 @@ class Client(BasicClient):
             "train_loss": loss,
             "after_train_loss": after_train_loss
         }
+    
+    def unpack(self, received_pkg):
+        # unpack the received package
+        return received_pkg['model'], received_pkg["mean_loss"]
 
     def train(self, model, device='cuda'):
         model = model.to(device)

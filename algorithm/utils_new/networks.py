@@ -107,7 +107,7 @@ class PolicyNetwork(nn.Module):
 
         x = F.relu(self.linear1(x))
         x = F.relu(self.linear2(x))
-        x = F.tanh(self.linear3(x).squeeze(-1))
+        x = self.linear3(x).squeeze(-1)
         # for i in range(state.shape[0]):
         #     for j in range(state.shape[1]):
         #         if torch.all(state[i, j, :, :] == 0):

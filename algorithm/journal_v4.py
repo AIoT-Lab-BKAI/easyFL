@@ -57,9 +57,9 @@ class Server(BasicServer):
     def iterate(self, t):
 
         self.selected_clients = sorted(self.sample())
-        models, train_losses, _ = self.communicate(self.selected_clients)
+        models, train_losses, after_train = self.communicate(self.selected_clients)
         print("Client loss before train:", train_losses)
-        print("Client loss after train:", _)
+        print("Client loss after train:", after_train)
         
         # Calculate reward
         client_vol_t = [self.client_vols[id] for id in self.selected_clients]
@@ -70,7 +70,6 @@ class Server(BasicServer):
         reward = np.exp(-avg_loss)
         self.mean_loss = np.mean(train_losses)
 
-        train_losses = [loss/10.0 for loss in train_losses]
 
         gradients = []
         alphas = []

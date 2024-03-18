@@ -65,7 +65,6 @@ class Server(BasicServer):
         reward = np.exp(-avg_loss)
         self.mean_loss = np.mean(train_losses)
 
-        train_losses = [loss/10.0 for loss in train_losses]
 
         gradients = []
         alphas = []
