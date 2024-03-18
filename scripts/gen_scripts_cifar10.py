@@ -8,11 +8,12 @@ task_file = "main.py"
 
 dataset = "cifar10"
 sthr = 0.9
-epsilon = 1.0
+epsilon = 1
 
-# dataset_types = ["dirichlet_0.5", "pareto2_1"]
+dataset_types = ["dirichlet_0.1", "pareto2_1"]
 # dataset_types = ["uc1_nc5", "uc4_nc5"]
-dataset_types = ["pareto_1"]
+# dataset_types = ["uc1_nc5"]
+# dataset_types = ["clustered"]
 model = "cnn"
 
 # config parameters
@@ -21,12 +22,12 @@ rate = 0.1
 K = int(N*rate)
 E = 5
 batch_size = 8
-num_round = 3000
+num_round = 1000
 
 
-algos = ["singleset", "cadis", "fedavg", "journal_v4"]
+# algos = ["singleset", "cadis", "fedavg", "journal_v4"]
 # algos = ["journal_v4"]
-# algos = ["singleset","scaffold", "fedavg", "fedprox", "fedfa", "cadis"]
+algos = ["singleset","scaffold", "fedavg", "fedprox", "fedfa", "cadis", "journal_v4"]
 
 data_folder = f"./benchmark/{dataset}/data"
 log_folder = f"motiv/{dataset}"
@@ -103,6 +104,6 @@ for dataset_type in dataset_types:
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
     
-        file = open(dir_path + f"{task_name}_{algo}.sh", "w")
+        file = open(dir_path + f"{task_name}_{algo}_EP{epsilon}.sh", "w")
         file.write(header_text + textwrap.dedent(command) + body_text)
         file.close()

@@ -6,14 +6,14 @@ visible_cudas = [0, 1]
 cudas = ",".join([str(i) for i in visible_cudas])
 task_file = "main.py"
 
-dataset = "cifar100"
-sthr = 0.9
+dataset = "mnist"
+sthr = 0.975
+epsilon = 1.0
 
 dataset_types = ["dirichlet_0.1", "pareto2_1"]
-# dataset_types = ["pareto_1"]
 # dataset_types = ["uc1_nc5", "uc4_nc5"]
-model = "resnet9"
-# model = "cnn"
+# dataset_types = ["clustered"]
+model = "cnn"
 
 # config parameters
 N = 100
@@ -22,12 +22,11 @@ K = int(N*rate)
 E = 5
 batch_size = 8
 num_round = 1000
-epsilon = 0.5
 
 
-# algos = ["singleset", "cadis", "fedavg"]
-# algos = ["singleset"]
-algos = ["singleset", "scaffold", "fedavg", "fedprox", "fedfa", "cadis", "journal_v4_cf100"]
+# algos = ["singleset", "cadis", "fedavg", "journal_v4"]
+# algos = ["journal_v4"]
+algos = ["singleset","scaffold", "fedavg", "fedprox", "fedfa", "cadis","journal_v4"]
 
 data_folder = f"./benchmark/{dataset}/data"
 log_folder = f"motiv/{dataset}"
@@ -39,7 +38,7 @@ header_text = "\
 #$ -cwd\n\
 #$ -l rt_G.small=1\n\
 #$ -l h_rt=48:00:00\n\
-#$ -o /home/aaa10078nj/Federated_Learning/Ha_CADIS_FEDRL/logs/cifar100/$JOB_NAME_$JOB_ID.log\n\
+#$ -o /home/aaa10078nj/Federated_Learning/Ha_CADIS_FEDRL/logs/mnist/$JOB_NAME_$JOB_ID.log\n\
 #$ -j y\n\n\
 source /etc/profile.d/modules.sh\n\
 #module load gcc/11.2.0\n\
@@ -59,12 +58,12 @@ LD_LIBRARY_PATH=/apps/centos7/python/3.10.4/lib:${LD_LIBRARY_PATH}\n\
 PATH=/apps/centos7/python/3.10.4/bin:${PATH}\n\n\
 source ~/venv/pytorch1.11+horovod/bin/activate\n\
 python --version\n\
-LOG_DIR=\"/home/aaa10078nj/Federated_Learning/Ha_CADIS_FEDRL/logs/cifar100/$JOB_NAME_$JOB_ID\"\n\
+LOG_DIR=\"/home/aaa10078nj/Federated_Learning/Ha_CADIS_FEDRL/logs/mnist/$JOB_NAME_$JOB_ID\"\n\
 rm -r ${LOG_DIR}\n\
 mkdir ${LOG_DIR}\n\n\
 #Dataset\n\
 DATA_DIR=\"$SGE_LOCALDIR/$JOB_ID/\"\n\
-cp -r ../2023_CCGRID_Hung/easyFL/benchmark/cifar100/data ${DATA_DIR}\n\n\
+cp -r ../2023_CCGRID_Hung/easyFL/benchmark/mnist/data ${DATA_DIR}\n\n\
 "
 
 for dataset_type in dataset_types:
@@ -91,7 +90,6 @@ for dataset_type in dataset_types:
         DATA_IDX_FILE=\"journal/{dataset}/{dataset_type}/{N}client\"\n\n\
         cd easyFL\n\n\
         "
-
         # task_name = f"{dataset}_{dataset_type}_N{N}_K{K}_E{E}"
         # command = formated_command.format(
         #     task_name, algo, model, 1000, E, batch_size, K/N, task_name, dataset_type, N
