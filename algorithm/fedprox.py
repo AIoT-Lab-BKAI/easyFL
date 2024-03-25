@@ -2,6 +2,9 @@ from .fedbase import BasicServer, BasicClient
 import copy
 import torch
 import time, wandb, json
+import sys
+from pathlib import Path
+import os
 
 time_records = {"server_aggregation": {"overhead": [], "aggregation": []}, "local_training": {}}
 
@@ -26,7 +29,10 @@ class Server(BasicServer):
     
     def run(self):
         super().run()
-        json.dump(time_records, open(f"./measures/{self.option['algorithm']}.json", "w"))
+        savepath = f"./measures/{self.task}"
+        if not Path(savepath).exists():
+            os.makedirs(savepath)
+        json.dump(time_records, open(f"{savepath}/{self.option['algorithm']}.json", "w"))
         return
 
 class Client(BasicClient):

@@ -17,7 +17,10 @@ import numpy as np
 import torch
 import os
 import copy
-# import wandb, time, json
+import wandb, time, json
+import sys
+from pathlib import Path
+import os
 
 time_records = {"server_aggregation": {"overhead": [], "aggregation": []}, "local_training": {}}
 
@@ -98,10 +101,10 @@ class Server(BasicServer):
         
     def run(self):
         super().run()
-        # json.dump(time_records, open(f"./measures/{self.option['algorithm']}.json", "w"))
-        
-        # acc, cfmtx = cfmtx_test(self.model, self.test_data, "cuda")
-        # json.dump(cfmtx, open(f"./measures/{self.option['algorithm']}_cfmtx.json", "w"))
+        savepath = f"./measures/{self.task}"
+        if not Path(savepath).exists():
+            os.makedirs(savepath)
+        json.dump(time_records, open(f"{savepath}/{self.option['algorithm']}.json", "w"))
         return
     
     def iterate(self, t):
@@ -109,6 +112,7 @@ class Server(BasicServer):
                 
         # print("Selected:", self.selected_clients)
         models, train_losses = self.communicate(self.selected_clients)
+        start = time.time()
         models = [model.to(self.device) for model in models]
         
         self.model = self.model.to(self.device)                                     # type: ignore
@@ -117,17 +121,16 @@ class Server(BasicServer):
         if not self.selected_clients:
             return
         
-        # start = time.time()
         self.update_Q_matrix(model_diffs, self.selected_clients, t)
         if (len(self.selected_clients) < len(self.clients)) or (self.impact_factor is None):
             self.impact_factor, self.gamma = self.get_impact_factor(self.selected_clients, t)
-        # end = time.time()
-        # time_records['server_aggregation']["overhead"].append(end - start)
+        end = time.time()
+        time_records['server_aggregation']["overhead"].append(end - start)
         
-        # start = time.time()
+        start = time.time()
         self.model = self.aggregate(models, p=self.impact_factor)
-        # end = time.time()
-        # time_records['server_aggregation']["aggregation"].append(end - start)
+        end = time.time()
+        time_records['server_aggregation']["aggregation"].append(end - start)
         
         self.update_threshold(t)
         for cid in self.selected_clients: 
@@ -267,10 +270,10 @@ class Client(BasicClient):
         model = self.unpack(svr_pkg)
         loss = self.train_loss(model)
         
-        # start = time.time()
+        start = time.time()
         self.train(model)
-        # end = time.time()
-        # time_records['local_training'][self.name].append(end - start)
+        end = time.time()
+        time_records['local_training'][self.name].append(end - start)
         
         cpkg = self.pack(model, loss)
         return cpkg

@@ -1,6 +1,9 @@
 from .fedbase import BasicServer, BasicClient
 import time, wandb, json
 from algorithm.cfmtx.cfmtx import cfmtx_test
+import sys
+from pathlib import Path
+import os
 
 time_records = {"server_aggregation": {"overhead": [], "aggregation": []}, "local_training": {}}
 
@@ -24,10 +27,10 @@ class Server(BasicServer):
     
     def run(self):
         super().run()
-        json.dump(time_records, open(f"./measures/{self.option['algorithm']}.json", "w"))
-        
-        # acc, cfmtx = cfmtx_test(self.model, self.test_data, "cuda")
-        # json.dump(cfmtx, open(f"./measures/{self.option['algorithm']}_cfmtx.json", "w"))
+        savepath = f"./measures/{self.task}"
+        if not Path(savepath).exists():
+            os.makedirs(savepath)
+        json.dump(time_records, open(f"{savepath}/{self.option['algorithm']}.json", "w"))
         return
     
 class Client(BasicClient):

@@ -10,7 +10,8 @@ dataset = "cifar100"
 sthr = 0.9
 
 # dataset_types = ["dirichlet_0.1", "pareto2_1"]
-dataset_types = ["clustered"]
+# dataset_types = ["clustered"]
+dataset_types = ["uc1_nc5"]
 # dataset_types = ["uc1_nc5", "uc4_nc5"]
 
 model = "resnet9"
@@ -22,13 +23,13 @@ rate = 0.1
 K = int(N*rate)
 E = 5
 batch_size = 8
-num_round = 1000
+num_round = 100
 epsilon = 0.5
 
 
 # algos = ["singleset", "cadis", "fedavg"]
-algos = ["journal_v4_cf100"]
-# algos = ["singleset", "scaffold", "fedavg", "fedprox", "fedfa", "cadis", "journal_v4_cf100"]
+# algos = ["journal_v4_cf100"]
+algos = ["fedavg", "fedprox", "fedfa", "cadis", "journal_v4_cf100"]
 
 data_folder = f"./benchmark/{dataset}/data"
 log_folder = f"motiv/{dataset}"
@@ -100,7 +101,7 @@ for dataset_type in dataset_types:
             
         body_text = "python main.py  --task ${TASK}  --model ${MODEL}  --algorithm ${ALG} --eps ${EPS} --sthr ${STHR} --wandb ${WANDB} --data_folder ${DATA_DIR}  --log_folder ${LOG_DIR}   --dataidx_filename ${DATA_IDX_FILE}   --num_rounds ${ROUND} --num_epochs ${EPOCH_PER_ROUND} --proportion ${PROPOTION} --batch_size ${BATCH} --num_threads_per_gpu ${NUM_THRESH_PER_GPU}  --num_gpus ${NUM_GPUS} --server_gpu_id ${SERVER_GPU_ID} "
 
-        dir_path = f"./run1/cadis/{dataset}/{dataset_type}/"
+        dir_path = f"./overhead/{dataset}/{dataset_type}/"
         
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)

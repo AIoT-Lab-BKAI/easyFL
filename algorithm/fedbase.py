@@ -70,11 +70,11 @@ class BasicServer():
         print("=================End==================")
         logger.time_end('Total Time Cost')
 
-        acc, cfmtx = cfmtx_test(self.best_model, self.test_data)
-        savepath = f"./result/journal/{self.task}"
-        if not Path(savepath).exists():
-            os.makedirs(savepath)
-        np.savetxt(f"{savepath}/{self.name}.csv", cfmtx.T, fmt="%2.2f", delimiter=",")
+        # acc, cfmtx = cfmtx_test(self.best_model, self.test_data)
+        # savepath = f"./result/journal/{self.task}"
+        # if not Path(savepath).exists():
+        #     os.makedirs(savepath)
+        # np.savetxt(f"{savepath}/{self.name}.csv", cfmtx.T, fmt="%2.2f", delimiter=",")
 
         # save results as .json file
         filepath = os.path.join(self.log_folder, self.option['task'], self.option['dataidx_filename']).split('.')[0]

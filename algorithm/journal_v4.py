@@ -10,6 +10,10 @@ import torch
 import os
 import copy
 import math
+import wandb, time, json
+import sys
+from pathlib import Path
+import os
 
 
 def freeze(model: nn.Module):
@@ -34,10 +38,6 @@ class Server(BasicServer):
                                 action_dim=self.clients_per_round)
         self.epsilon = option['eps']
         self.paras_name = ['eps', 'kd_fct']
-        self.client_epochs = option['num_epochs']
-        self.client_batch_size = option['batch_size']
-        self.mean_loss = 1.0
-
         return
 
     # def run(self):
@@ -53,73 +53,75 @@ class Server(BasicServer):
 
     #     super().run()
     #     return
+    def run(self):
+        super().run()
+        savepath = f"./measures/{self.task}"
+        if not Path(savepath).exists():
+            os.makedirs(savepath)
+        json.dump(time_records, open(f"{savepath}/{self.option['algorithm']}.json", "w"))
+        return
 
     def iterate(self, t):
 
         self.selected_clients = sorted(self.sample())
-        models, train_losses, after_train = self.communicate(self.selected_clients)
-        print("Client loss before train:", train_losses)
-        print("Client loss after train:", after_train)
+        models, train_losses = self.communicate(self.selected_clients)
+        # print("Client loss before train:", train_losses)
+        # print("Client loss after train:", after_train)
         
+        start = time.time()
         # Calculate reward
+        classifier_diffs = []
         client_vol_t = [self.client_vols[id] for id in self.selected_clients]
         sum_client =sum(client_vol_t)
         client_vol_t = [self.client_vols[id]/sum_client for id in self.selected_clients]
+        
+        for cl_id, model in zip(self.selected_clients, models):
+            grad = get_penultimate_layer(model.to(self.device) - self.model)
+            classifier_diffs.append(grad) 
+        
         mean_loss = sum([self.client_vols[id] * loss for id, loss in zip(self.selected_clients, train_losses)])/sum_client
         avg_loss = (mean_loss + self.epsilon*(np.max(train_losses) - np.min(train_losses)))
         reward = np.exp(-avg_loss)
-        self.mean_loss = np.mean(train_losses)
-
-
-        gradients = []
-        alphas = []
-        classifier_diffs = []
-
-        for client_id, model, loss in zip(self.selected_clients, models, train_losses):
-            beta = self.client_epochs * math.ceil(self.client_vols[client_id] / self.client_batch_size)
-            alphas.append(beta*self.client_vols[client_id]/sum_client)
-            gradients.append((model.to(self.device) - self.model))
-            
-            grad = get_penultimate_layer(model.to(self.device) - self.model)
-            classifier_diffs.append(grad) 
 
         raw_state = torch.stack(classifier_diffs, dim=0)
 
         # Tính min và max của list
-        min_loss, max_loss = min(train_losses), max(train_losses)
-        min_num_client, max_num_client = min(client_vol_t), max(client_vol_t)
+        # min_loss, max_loss = min(train_losses), max(train_losses)
+        # min_num_client, max_num_client = min(client_vol_t), max(client_vol_t)
         min_grad, max_grad = torch.min(raw_state), torch.max(raw_state)
 
         # Áp dụng Min-Max Scaling
-        scaled_losses = [(x - min_loss) / (max_loss - min_loss) for x in train_losses]
+        # scaled_losses = [(x - min_loss) / (max_loss - min_loss) for x in train_losses]
         # scaled_num_client = [(x - min_num_client) / (max_num_client - min_num_client) for x in client_vol_t]
         scaled_grad = (raw_state - min_grad) / (max_grad - min_grad)
-
+        
         impact_factor = self.agent.get_action(
             (scaled_grad, train_losses, client_vol_t), reward if t > 0 else None, log=self.wandb)
-            
+        end = time.time()
+        time_records['server_aggregation']["overhead"].append(end - start)
         if not self.selected_clients:
             return
 
         # print("Clients: ", self.selected_clients)
-        print("Impact factor:", impact_factor.detach().cpu().numpy())
+        # print("Impact factor:", impact_factor.detach().cpu().numpy())
         
+        start = time.time()
         ip2 = impact_factor.detach().cpu().numpy()
         ip_final = [ip2[id] for id in range(len(ip2))]
-
         self.model = self.aggregate(models, p=ip_final)
+        end = time.time()
+        time_records['server_aggregation']["aggregation"].append(end - start)
         return
     
     def unpack(self, packages_received_from_clients):
         models = [cp["model"] for cp in packages_received_from_clients]
         train_losses = [cp["train_loss"] for cp in packages_received_from_clients]
-        after_train_losses = [cp["after_train_loss"] for cp in packages_received_from_clients] 
-        return models, train_losses, after_train_losses
+        # after_train_losses = [cp["after_train_loss"] for cp in packages_received_from_clients] 
+        return models, train_losses
     
     def pack(self, client_id):
         return {
             "model" : copy.deepcopy(self.model),
-            "mean_loss": self.mean_loss
         }
 
 
@@ -128,27 +130,29 @@ class Client(BasicClient):
         super(Client, self).__init__(option, name, train_data, valid_data)
         self.lossfunc = nn.CrossEntropyLoss()
         self.kd_fct = option['kd_fct']
+        time_records['local_training'][self.name] = []
 
     def reply(self, svr_pkg):
-        model, mean_loss = self.unpack(svr_pkg)
-        loss = self.train_loss(model)
+        model = self.unpack(svr_pkg)
+        acc, loss = self.test(model,'train')
 
         # self.kd_fct = math.log((mean_loss/loss) * (self.datavol/self.batch_size))    
+        start = time.time()
         self.train(model)
-        after_train_loss = self.train_loss(model)
-        cpkg = self.pack(model, loss, after_train_loss)
+        end = time.time()
+        time_records['local_training'][self.name].append(end - start)
+        cpkg = self.pack(model, loss)
         return cpkg
     
-    def pack(self, model, loss, after_train_loss):
+    def pack(self, model, loss):
         return {
             "model" : model,
             "train_loss": loss,
-            "after_train_loss": after_train_loss
         }
     
     def unpack(self, received_pkg):
         # unpack the received package
-        return received_pkg['model'], received_pkg["mean_loss"]
+        return received_pkg['model']
 
     def train(self, model, device='cuda'):
         model = model.to(device)
