@@ -63,7 +63,7 @@ class MPBasicServer(BasicServer):
     #     else:
     #         return False
     
-    def agg_fuction(self, client_models):
+    def agg_fuction(self, client_models, weights):
         print(self.agg_option)
         server_model = copy.deepcopy(self.model)
         server_param = []
@@ -76,9 +76,8 @@ class MPBasicServer(BasicServer):
             for name, param in client_model.state_dict().items():
                 client_param=param.view(-1) if not len(client_param) else torch.cat((client_param,param.view(-1)))
             client_params=client_param[None, :] if len(client_params)==0 else torch.cat((client_params,client_param[None,:]), 0)
-        
         for idx, client in enumerate(client_params):
-            client_params[idx] = torch.sub(client, server_param)
+            client_params[idx] = torch.mul(torch.sub(client, server_param), weights[idx])
 
         if self.agg_option=='median':
             agg_grads=torch.median(client_params,dim=0)[0]
@@ -97,7 +96,7 @@ class MPBasicServer(BasicServer):
                 nkrum = 3
             else: 
                 nkrum = 1
-            agg_grads, krum_candidate = multi_krum(client_params, nkrum, multi_k=multi_k)
+            agg_grads, krum_candidate, dist = multi_krum(client_params, nkrum, multi_k=multi_k)
             
         elif self.agg_option=='bulyan' or self.agg_option=='bulyan2':
             if self.agg_option=='bulyan': 
@@ -163,7 +162,7 @@ class MPBasicServer(BasicServer):
         logger.time_end('Total Time Cost')
         # # save results as .json file
         filepath = os.path.join(self.log_folder, 'log/' + self.option['task'] + '/' + self.option['noise_type'] + '/' + 'num_malicious_{}/dirty_rate_{}/attacked_class_{}/'.format( self.option['num_malicious'], self.option['dirty_rate'][0], len(self.option['attacked_class'])) + self.option['agg_algorithm'])
-        if not Path(filepath).exists():
+        if not os.path.exists(filepath):
             os.system(f"mkdir -p {filepath}")
         logger.save(os.path.join(filepath, 'logger.json'))
         # logger.save(os.path.join(filepath, flw.output_filename(self.option, self)))
@@ -559,9 +558,10 @@ class MPBasicServer(BasicServer):
             elif self.option['agg_algorithm'] != "fedavg":  
                 ours_server_time_start = time.time()
                 list_peak = []
+                list_kde_samples = []
                 list_confidence_score = []
-                
                 df_round = pd.DataFrame()
+                list_n_histogram = []
                 for idx,client in enumerate(self.selected_clients):
                         confidence_score_dict_client = self.confidence_score[round][int(client)]
                         df_client = pd.DataFrame.from_dict(confidence_score_dict_client, orient='index', columns=['Cs'])
@@ -572,20 +572,50 @@ class MPBasicServer(BasicServer):
                                 x = line.get_xdata() # Get the x data of the distribution
                                 y = line.get_ydata() # Get the y data of the distribution
                         maxid = np.argmax(y) 
+                        kde_sample = np.interp(np.linspace(0., 1., 50), x, y)
+                        list_kde_samples.append(kde_sample)
                         list_peak.append(y[maxid])
                         list_confidence_score.append(df_client.Cs.mean())
                         plt.close()
+                        # (n, bins, patches) = plt.hist(df_client['Cs'].values.tolist(), bins=20, label='hst')
+                        # list_n_histogram.append(n)
                         df_round = pd.concat([df_round, df_client])
 
                 mean_cs_global = sum(list_confidence_score)/len(list_confidence_score)
+                # global_n_histogram = []
+                # for i in range(20):
+                #     global_n_histogram.append(0)
+                #     for n_client in list_n_histogram:
+                #         global_n_histogram[i] += n_client[i]
+                # list_gen_x = []
+                # for i in range(20):
+                #     list_gen_x.append(np.random.random(int(global_n_histogram[i]))*0.05 + i*0.05)
+                # list_gen_cs_global = np.concatenate(list_gen_x, axis=None)
                 ax = sns.displot(df_round, x='Cs', kind="kde")
+                # ax = sns.displot(list_gen_cs_global, kind="kde")
                 for ax in ax.axes.flat:
                             # print (ax.lines)
                     for line in ax.lines:
                         x = line.get_xdata() # Get the x data of the distribution
                         y = line.get_ydata() # Get the y data of the distribution
                 maxid = np.argmax(y) 
-                peak_global = y[maxid]
+                # peak_global = y[maxid]
+                sum_sample = sum([self.client_vols[cid] for cid in self.selected_clients])
+                global_kde_sample = [0. for _ in range(len(list_kde_samples[0]))]
+                for id_client, kde in enumerate(list_kde_samples):
+                    frac_client = self.client_vols[client]/sum_sample
+                    for id, val in enumerate(kde): 
+                        global_kde_sample[id] += val * frac_client
+                peak_global = max(global_kde_sample)
+                print(f"Difference between true and appox global peak: {abs(peak_global-y[maxid])}")
+                # peak_global_ = 0 
+                # sum_sample_ = sum([self.client_vols[cid] for cid in self.selected_clients])
+                # for id, cid in enumerate(self.selected_clients):
+                #     peak_global_ += self.client_vols[cid]/sum_sample_*list_peak[id]
+                # print(f"mean list_peak = {peak_global_}")
+                # print(f"global peak = {peak_global}")
+                # print(f"Difference peak = {peak_global-peak_global_}")
+                # peak_global = peak_global_
                 plt.close()
                 predicted_normal = []
                 predicted_attacker = []
@@ -595,6 +625,10 @@ class MPBasicServer(BasicServer):
                 list_cs_attacker = []
                 # normal_models = []
                 # list_acc_attacker = []
+                p_ = []
+                max_cs = max(list_confidence_score)
+                min_cs = min(list_confidence_score)
+                sum_sample = sum([self.client_vols[cid] for cid in self.selected_clients])
                 for idx, client in enumerate(self.selected_clients):
                     # if self.option['agg_algorithm'] == "peak_or_cs_choose_normal":
                     #     if list_confidence_score[idx] > mean_cs_global or list_peak[idx] < peak_global:
@@ -702,15 +736,21 @@ class MPBasicServer(BasicServer):
                    
                     # if self.option['agg_algorithm'] in ["peak_and_cs_choose_attacker_aggregate_attacker_by_cs_csi",
                                                         #   "peak_and_cs_choose_attacker_aggregate_attacker_by_(tanhe(csi+0.05*mincs/maxcs))",
-                    if self.option['agg_algorithm'] == "peak_and_cs_choose_attacker_aggregate_attacker_by_(csi+0.05*mincs/maxcs)":
+                    if self.option['agg_algorithm'] in ["peak_and_cs_choose_attacker_aggregate_attacker_by_(csi+0.05*mincs/maxcs)",
+                                                        "peak_and_cs_choose_attacker_aggregate_only_benign_by_fedavg"]:
                         if list_confidence_score[idx] < mean_cs_global and list_peak[idx] > peak_global:
                             predicted_attacker.append(client)
                             list_peak_attacker.append(list_peak[idx])
                             list_cs_attacker.append(list_confidence_score[idx])
+                        
+                        # csi = (list_confidence_score[idx] - min_cs)/(max_cs-min_cs)
+                        # p_.append((csi+self.option['ours_beta']*min_cs/max_cs) * self.client_vols[client]/sum_sample)
                         else:
                             predicted_normal.append(client)
                             list_peak_normal.append(list_peak[idx])
                             list_cs_normal.append(list_confidence_score[idx])
+                        # p_.append(1.0 * self.client_vols[client]/sum_sample)
+
                     # elif self.option['agg_algorithm'] in ["peak_or_cs_choose_normal_aggregate_attacker_by_cs_csi",
                     #                                       "peak_or_cs_choose_normal_aggregate_attacker_by_cs_(csi+0.05)",
                     #                                       "peak_or_cs_choose_normal_aggregate_attacker_by_(tanhe(csi+0.05*mincs/maxcs))",
@@ -840,6 +880,17 @@ class MPBasicServer(BasicServer):
                             # else:
                             #     p_.append(csi * self.client_vols[client]/sum_sample)
 
+                            id_attacker +=1
+                
+                if self.option['agg_algorithm'] == "peak_and_cs_choose_attacker_aggregate_only_benign_by_fedavg":
+                    p_ = []
+                    sum_sample = sum([self.client_vols[cid] for cid in predicted_normal])
+                    id_attacker = 0
+                    for client in self.selected_clients:
+                        if client in predicted_normal:
+                            p_.append(self.client_vols[client]/sum_sample)
+                        else:
+                            p_.append(0.)
                             id_attacker +=1
                 # if self.option['agg_algorithm'] == "aggregate_attacker_exactly_by_(csi+0.05)":
                 #     p_ = []
@@ -1004,6 +1055,8 @@ class MPBasicServer(BasicServer):
                 if len(predicted_normal) > 0:
                     # self.model = self.aggregate(models, p = [1.0 * self.client_vols[cid]/sum_sample for cid in predicted_normal])
                     self.model = self.aggregate(models, p = p_)
+                # self.model = self.agg_fuction(models, weights = p_)
+
                 ours_server_time = time.time() - ours_server_time_start
                 self.computation_time[round]['server_aggregation_time'] = ours_server_time
                 # path_ = self.option['algorithm'] + '/' + self.option['agg_algorithm'] + '/' + 'attacked_class_{}/dirty_rate_{}/type_noise_{}/proportion_{}/num_malicious_{}/csv/{}'.format( len(self.option['attacked_class']), self.option['dirty_rate'][0],self.option['outside_noise'], self.option['proportion']*50, self.option['num_malicious'], 0)
@@ -1061,7 +1114,7 @@ class MPBasicServer(BasicServer):
                 with open(path_ + 'log.json', 'w') as json_file:
                     json.dump(listObj, json_file, indent=4)
                 if self.option['log_time'] == 1:
-                    with open(path_ + 'log_time.json', 'w') as f:
+                    with open("log_result/computation_time" + '/' + self.option['agg_algorithm'] + '/' + 'log_time.json', 'w') as f:
                         json.dump(self.computation_time, f, indent=4)
                 # thresholds
                 # 
@@ -1302,23 +1355,25 @@ class MPBasicServer(BasicServer):
                 # print("acc_client", acc_before_trains)
                 # print("loss_client", loss_before_trains)
                 fedavg_time_start = time.time()
-                self.model = self.aggregate(models, p = [1.0 * self.client_vols[cid]/self.data_vol for cid in self.selected_clients])
+                # self.model = self.aggregate(models, p = [1.0 * self.client_vols[cid]/self.data_vol for cid in self.selected_clients])
+                self.model = self.agg_fuction(models, weights = [1.0 * self.client_vols[cid]/self.data_vol for cid in self.selected_clients])
                 fedavg_time = time.time() - fedavg_time_start
                 self.computation_time[round]['server_aggregation_time'] = fedavg_time
                 
                 if self.option['log_time'] == 1:
-                    with open(path_ + 'log_time.json', 'w') as f:
+                    with open("log_result/computation_time" + '/' + self.option['agg_algorithm'] + '/' + 'log_time.json', 'w') as f:
                         json.dump(self.computation_time, f, indent=4)
             
             print(f'Done aggregate at round {self.current_round}')
         else:
             other_defense_time_start = time.time()
-            self.model = self.agg_fuction(models)
+
+            self.model = self.agg_fuction(models, weights = [1.0 for cid in self.selected_clients])
             other_defense_time = time.time() - other_defense_time_start
             self.computation_time[round]['server_aggregation_time'] = other_defense_time
             path_ = self.log_folder + '/' + self.option['task'] + '/' + self.option['noise_type'] + '/' + 'num_malicious_{}/dirty_rate_{}/attacked_class_{}/'.format( self.option['num_malicious'], self.option['dirty_rate'][0], len(self.option['attacked_class'])) + self.option['agg_algorithm'] + '/'
             if self.option['log_time'] == 1:
-                with open(path_ + 'log_time.json', 'w') as f:
+                with open("log_result/computation_time" + '/' + self.option['agg_algorithm'] + '/' + 'log_time.json', 'w') as f:
                     json.dump(self.computation_time, f, indent=4)
                 
             print(f'Done aggregate at round {self.current_round}')

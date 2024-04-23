@@ -88,8 +88,8 @@ def main():
         wandb.init(
             project="dirtyFL", 
             entity="aiotlab",
-            group=f"{option['task']}_{option['noise_type']}",
-            name=f"num_malicious_{option['num_malicious']}_dirty_rate_{option['dirty_rate'][0]}_attacked_class_{len(option['attacked_class'])}_{option['agg_algorithm']}_beta_{option['ours_beta']}",
+            group=f"NDAD-2_{option['task']}_{option['noise_type']}",
+            name=f"num_malicious_{option['num_malicious']}_dirty_rate_{option['dirty_rate'][0]}_attacked_class_{len(option['attacked_class'])}_{option['agg_algorithm']}_beta_{option['ours_beta']}_NDAD-2",
             config=option
         )
         
@@ -102,7 +102,6 @@ def main():
 
 if __name__ == '__main__':
     main()
-
 
 
 
