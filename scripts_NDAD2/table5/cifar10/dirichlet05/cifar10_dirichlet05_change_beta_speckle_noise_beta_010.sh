@@ -14,7 +14,7 @@ PATH=/apps/centos7/gcc/11.2.0/bin:${PATH}
 #Old mpi. Use intel mpi instead
 LD_LIBRARY_PATH=/apps/centos7/openmpi/4.1.3/gcc11.2.0/lib:${LD_LIBRARY_PATH}
 PATH=/apps/centos7/openmpi/4.1.3/gcc11.2.0/bin:${PATH}
-module load cuda/11.5/11.5.2
+module load cuda/11.6/11.6.2
 module load cudnn/8.3/8.3.3
 module load nccl/2.11/2.11.4-1
 #module load python/3.10/3.10.4
