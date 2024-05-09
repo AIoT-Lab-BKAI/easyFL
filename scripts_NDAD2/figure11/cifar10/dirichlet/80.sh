@@ -2,7 +2,7 @@
 #$ -cwd
 #$ -l rt_G.small=1
 #$ -l h_rt=36:00:00
-#$ -o /home/aaa10078nj/Federated_Learning/Cuong_AttackFL/logs/NDAD2/cifar10/$JOB_NAME_$JOB_ID.log
+#$ -o /home/aaa10078nj/Federated_Learning/Cuong_AttackFL/logs/NDAD2/figure11/cifar10/$JOB_NAME_$JOB_ID.log
 #$ -j y
 
 source /etc/profile.d/modules.sh
@@ -24,7 +24,7 @@ PATH=/apps/centos7/python/3.10.4/bin:${PATH}
 
 source ~/venv/pytorch1.11+horovod/bin/activate
 
-LOG_DIR="/home/aaa10078nj/Federated_Learning/Cuong_AttackFL/logs/NDAD2/cifar10/$JOB_NAME_$JOB_ID"
+LOG_DIR="/home/aaa10078nj/Federated_Learning/Cuong_AttackFL/logs/NDAD2/figure11/cifar10/$JOB_NAME_$JOB_ID"
 rm -r ${LOG_DIR}
 mkdir ${LOG_DIR}
 
