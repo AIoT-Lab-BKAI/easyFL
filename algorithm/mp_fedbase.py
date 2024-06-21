@@ -581,16 +581,8 @@ class MPBasicServer(BasicServer):
                         # list_n_histogram.append(n)
                         df_round = pd.concat([df_round, df_client])
 
-                mean_cs_global = sum(list_confidence_score)/len(list_confidence_score)
-                # global_n_histogram = []
-                # for i in range(20):
-                #     global_n_histogram.append(0)
-                #     for n_client in list_n_histogram:
-                #         global_n_histogram[i] += n_client[i]
-                # list_gen_x = []
-                # for i in range(20):
-                #     list_gen_x.append(np.random.random(int(global_n_histogram[i]))*0.05 + i*0.05)
-                # list_gen_cs_global = np.concatenate(list_gen_x, axis=None)
+                # mean_cs_global = sum(list_confidence_score)/len(list_confidence_score)
+                
                 ax = sns.displot(df_round, x='Cs', kind="kde")
                 # ax = sns.displot(list_gen_cs_global, kind="kde")
                 for ax in ax.axes.flat:
@@ -600,12 +592,14 @@ class MPBasicServer(BasicServer):
                         y = line.get_ydata() # Get the y data of the distribution
                 maxid = np.argmax(y) 
                 # peak_global = y[maxid]
+                mean_cs_global = 0
                 sum_sample = sum([self.client_vols[cid] for cid in self.selected_clients])
                 global_kde_sample = [0. for _ in range(len(list_kde_samples[0]))]
                 for id_client, kde in enumerate(list_kde_samples):
-                    frac_client = self.client_vols[client]/sum_sample
+                    frac_client = self.client_vols[self.selected_clients[id_client]]/sum_sample
                     for id, val in enumerate(kde): 
                         global_kde_sample[id] += val * frac_client
+                    mean_cs_global += list_confidence_score[id_client] * frac_client
                 peak_global = max(global_kde_sample)
                 print(f"Difference between true and appox global peak: {abs(peak_global-y[maxid])}")
                 # peak_global_ = 0 
